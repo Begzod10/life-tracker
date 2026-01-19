@@ -1,0 +1,82 @@
+<!-- static/swagger-custom.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Life Tracker API</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <link rel="stylesheet" href="/static/cyberpunk-swagger.css" id="theme-css">
+
+    <style>
+        .theme-switcher {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 9999;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .theme-switcher select {
+            padding: 5px 10px;
+            border-radius: 4px;
+            background: #1a1f3a;
+            color: #00ffff;
+            border: 1px solid #00ffff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Theme Switcher -->
+    <div class="theme-switcher">
+        <select id="theme-select">
+            <option value="cyberpunk-swagger.css">🎮 Cyberpunk</option>
+            <option value="material-swagger.css">📱 Material</option>
+            <option value="minimal-swagger.css">⚪ Minimal</option>
+            <option value="ocean-swagger.css">🌊 Ocean</option>
+            <option value="dark-purple-swagger.css">🌃 Dark Purple</option>
+        </select>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+
+    <script>
+        // Theme switcher
+        document.getElementById('theme-select').addEventListener('change', (e) => {
+            const themeLink = document.getElementById('theme-css');
+            themeLink.href = `/static/${e.target.value}`;
+            localStorage.setItem('swagger-theme', e.target.value);
+        });
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('swagger-theme');
+        if (savedTheme) {
+            document.getElementById('theme-css').href = `/static/${savedTheme}`;
+            document.getElementById('theme-select').value = savedTheme;
+        }
+
+        // Initialize Swagger UI
+        window.onload = function() {
+            window.ui = SwaggerUIBundle({
+                url: '/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout",
+                syntaxHighlight: { theme: "monokai" },
+                docExpansion: "list",
+                defaultModelsExpandDepth: -1,
+                filter: true,
+                displayRequestDuration: true
+            });
+        };
+    </script>
+</body>
+</html>
