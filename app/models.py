@@ -40,6 +40,8 @@ class Goal(Base):
     status = Column(String(20), default="active")  # active, completed, paused
     priority = Column(String(20), default="medium")  # high, medium, low
 
+    percentage = Column(Float, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
