@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, 
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
 class Person(Base):
@@ -40,7 +41,7 @@ class Goal(Base):
     status = Column(String(20), default="active")  # active, completed, paused
     priority = Column(String(20), default="medium")  # high, medium, low
 
-    percentage = Column(Float, default=0)
+    _stored_percentage = Column(Float, default=0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -49,6 +50,47 @@ class Goal(Base):
     person = relationship("Person", back_populates="goals")
     tasks = relationship("Task", back_populates="goal", cascade="all, delete-orphan")
     progress_logs = relationship("ProgressLog", back_populates="goal", cascade="all, delete-orphan")
+
+    @hybrid_property
+    def percentage(self):
+        """
+        Hybrid property that returns stored percentage.
+        This allows backward compatibility with existing code.
+        """
+        return self._stored_percentage if self._stored_percentage is not None else 0.0
+
+    @percentage.setter
+    def percentage(self, value):
+        """Setter for the percentage property"""
+        self._stored_percentage = value
+
+    def calculate_task_percentage(self):
+        """
+        Calculate percentage based on completed tasks.
+        This is a method that can be called when needed for real-time calculation.
+        """
+        if not self.tasks:
+            return 0.0
+
+        total_tasks = len(self.tasks)
+        completed_tasks = sum(1 for task in self.tasks if task.completed)
+
+        if total_tasks == 0:
+            return 0.0
+        self.percentage = round((completed_tasks / total_tasks) * 100, 2)
+
+        return self.percentage
+
+    def calculate_manual_percentage(self):
+        """
+        Calculate percentage based on target_value and current_value.
+        Returns None if target_value is not set.
+        """
+        if not self.target_value or self.target_value == 0:
+            return None
+
+        percentage = (self.current_value / self.target_value) * 100
+        return round(min(percentage, 100.0), 2)
 
 
 class Task(Base):
@@ -75,6 +117,7 @@ class Task(Base):
     goal = relationship("Goal", back_populates="tasks")
     progress_log_tasks = relationship("ProgressLogTask", back_populates="task", cascade="all, delete-orphan")
     sub_tasks = relationship("SubTasks", back_populates="task", cascade="all, delete-orphan")
+
 
 class SubTasks(Base):
     __tablename__ = "sub_tasks"

@@ -60,3 +60,20 @@ def delete_subtask(subtask_id: int, db: Session = Depends(get_db)):
 @router.get('/task/{task_id}', response_model=List[schemas.SubTask])
 def get_subtasks_by_task(task_id: int, db: Session = Depends(get_db)):
     return db.query(models.SubTasks).filter(models.SubTasks.task_id == task_id).all()
+
+
+@router.post('/{subtask_id}/mark_subtask', response_model=schemas.SubTask)
+def mark_subtask(subtask_id: int, db: Session = Depends(get_db)):
+    db_subtask = db.query(models.SubTasks).filter(models.SubTasks.id == subtask_id).first()
+    if not db_subtask:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subtask not found")
+
+    if db_subtask.completed:
+        db_subtask.completed = False
+        db_subtask.completed_at = None
+    else:
+        db_subtask.completed = True
+        db_subtask.completed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_subtask)
+    return db_subtask
