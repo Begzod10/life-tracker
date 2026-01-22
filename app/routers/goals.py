@@ -16,7 +16,7 @@ router = APIRouter(
 @router.post('/', response_model=schemas.Goal, status_code=status.HTTP_201_CREATED)
 def create_goal(goal: schemas.GoalCreate, db: Session = Depends(get_db)):
     """Create a new goal"""
-    new_goal = models.Goal(**goal.dict())
+    new_goal = models.Goal(**goal.model_dump())
     db.add(new_goal)
     db.commit()
     db.refresh(new_goal)
@@ -91,7 +91,7 @@ def update_goal(goal_id: int, goal: schemas.GoalUpdate, db: Session = Depends(ge
     if not db_goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
-    update_data = goal.dict(exclude_unset=True)
+    update_data = goal.model_dump(exclude_unset=True)
 
     # Track if current_value changed
     current_value_changed = 'current_value' in update_data
