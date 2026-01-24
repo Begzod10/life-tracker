@@ -6,6 +6,7 @@ from datetime import datetime
 from app import models, schemas
 from app.database import get_db
 from app.services.progress_service import ProgressService
+from app.dependencies import get_current_active_user
 
 router = APIRouter(
     prefix="/goals",
@@ -16,6 +17,7 @@ router = APIRouter(
 @router.post('/', response_model=schemas.Goal, status_code=status.HTTP_201_CREATED)
 def create_goal(goal: schemas.GoalCreate, db: Session = Depends(get_db)):
     """Create a new goal"""
+    current_user: models.Person = Depends(get_current_active_user)
     new_goal = models.Goal(**goal.model_dump())
     db.add(new_goal)
     db.commit()

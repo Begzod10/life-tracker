@@ -7,6 +7,7 @@ from app.routers import tasks
 from app.routers import subtasks
 from app.routers import progresslog
 from app.routers import progresslog_task
+from app.routers import auth
 from starlette.responses import FileResponse
 
 app = FastAPI(
@@ -25,6 +26,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router, prefix="/api")
 app.include_router(person.router, prefix="/api")
 app.include_router(goals.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")

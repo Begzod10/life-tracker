@@ -12,13 +12,32 @@ class Person(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(120), unique=True, nullable=False, index=True)
     timezone = Column(String(50), default="Asia/Tashkent")
+
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_verified = Column(Boolean, default=False)
+    last_login = Column(DateTime, nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     goals = relationship(
         "Goal",
         back_populates="person",
         cascade="all, delete-orphan"
     )
+
+    def __repr__(self):
+        return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
+
+    @property
+    def is_locked(self) -> bool:
+        """Check if account is locked due to failed login attempts"""
+        if self.locked_until is None:
+            return False
+        return datetime.utcnow() < self.locked_until
 
 
 class Goal(Base):
