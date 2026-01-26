@@ -2,12 +2,9 @@
 Application configuration settings
 Loaded from environment variables
 """
-import os
-from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
-from typing import Optional
 
-load_dotenv()
+from pydantic_settings import BaseSettings
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -21,10 +18,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL")
+    DATABASE_URL: str
 
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY")
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days
@@ -37,13 +34,21 @@ class Settings(BaseSettings):
     REQUIRE_SPECIAL_CHAR: bool = False
 
     # CORS
-    ALLOWED_ORIGINS: list = ["*"]
+    ALLOWED_ORIGINS: List[str] = ["*"]
 
     # Email (for future use)
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: Optional[int] = None
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+
+    # Frontend
+    FRONTEND_URL: str = "http://localhost:3000"
+    BACKEND_URL: str = "http://localhost:8000"
 
     class Config:
         env_file = ".env"

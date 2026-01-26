@@ -20,6 +20,9 @@ class Person(Base):
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime, nullable=True)
 
+    auth_provider = Column(String(20), default="google")
+    google_id = Column(String(255), unique=True, nullable=True, index=True)
+    profile_photo_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

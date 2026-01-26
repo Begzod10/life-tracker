@@ -7,14 +7,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
-
+from app.models import Person
+from fastapi.security import OAuth2PasswordBearer
 from app.database import get_db
 from app import models
 from app.core.security import verify_token
 
 # Security scheme for Swagger UI
 security = HTTPBearer()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 async def get_current_user(
@@ -160,3 +161,11 @@ def get_optional_current_user(
         return None
     except Exception:
         return None
+
+
+def get_current_user_dependency(
+        db: Session = Depends(get_db),
+        token: str = Depends(oauth2_scheme)
+) -> Person:
+    """Get current authenticated user - use in protected endpoints"""
+    return get_current_user(token, db)

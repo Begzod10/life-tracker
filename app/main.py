@@ -9,6 +9,7 @@ from app.routers import progresslog
 from app.routers import progresslog_task
 from app.routers import auth
 from starlette.responses import FileResponse
+from app.config import settings
 
 app = FastAPI(
     title="Life Tracker API",
@@ -21,7 +22,11 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify actual origins
+
+    allow_origins=[
+        "*",
+        # settings.FRONTEND_URL,
+    ],  # In production, specify actual origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

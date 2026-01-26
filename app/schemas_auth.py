@@ -11,6 +11,17 @@ import re
 
 # ========== AUTHENTICATION SCHEMAS ==========
 
+class GoogleAuthRequest(BaseModel):
+    token: str = Field(..., description="Google ID token from frontend")
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: dict
+
+
 class UserRegister(BaseModel):
     """Schema for user registration"""
     name: str = Field(..., min_length=1, max_length=100, description="Full name")

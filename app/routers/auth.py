@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional
+from app.models import Person
 
 from app.database import get_db
 from app import models, schemas_auth as schemas
@@ -20,6 +20,9 @@ from app.core.security import (
 )
 from app.dependencies import get_current_user, get_current_active_user
 from app.config import settings
+
+from app.schemas_auth import Token, GoogleAuthRequest, AuthResponse
+from app.core.security import verify_google_token, create_access_token, get_current_active_user
 
 router = APIRouter(
     prefix="/auth",
@@ -327,3 +330,77 @@ def deactivate_account(
         "message": "Account deactivated successfully",
         "note": "Contact support to reactivate your account"
     }
+
+
+@router.post('/google', response_model=AuthResponse)
+def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
+    try:
+        google_user_info = verify_google_token(auth_request.token)
+
+        email = google_user_info.get('email')
+        name = google_user_info.get('name')
+        google_id = google_user_info.get('sub')
+        picture = google_user_info.get('picture')
+        email_verified = google_user_info.get('email_verified', False)
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email not provided by Google"
+            )
+
+        user = db.query(Person).filter(Person.email == email).first()
+
+        if user:
+            user.name = name or user.name
+            user.google_id = google_id
+            user.profile_photo_url = picture
+            user.email_verified = email_verified
+            user.last_login = datetime.utcnow()
+            user.updated_at = datetime.utcnow()
+        else:
+            user = Person(
+                name=name or "User",
+                email=email,
+                auth_provider="google",
+                google_id=google_id,
+                profile_photo_url=picture,
+                email_verified=email_verified,
+                timezone="Asia/Tashkent",
+                last_login=datetime.utcnow()
+            )
+            db.add(user)
+
+        db.commit()
+        db.refresh(user)
+
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email, "user_id": user.id},
+            expires_delta=access_token_expires
+        )
+
+        user_data = {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "timezone": user.timezone,
+            "profile_photo_url": user.profile_photo_url,
+            "email_verified": user.email_verified,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        }
+
+        return AuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=user_data
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Authentication failed: {str(e)}"
+        )

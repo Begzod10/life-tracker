@@ -3,14 +3,23 @@ Security utilities for authentication
 Handles password hashing, JWT token generation and validation
 """
 
+from app.config import settings
+from app.database import get_db
+from app.models import Person
+
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from app.config import settings
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 # JWT Configuration
 ALGORITHM = "HS256"
@@ -130,3 +139,53 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
             return None
 
     return payload
+
+
+def verify_google_token(token: str) -> dict:
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+
+        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+            raise ValueError('Wrong issuer.')
+
+        return idinfo
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Google token: {str(e)}"
+        )
+
+
+def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)
+) -> Person:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    payload = verify_token(token)
+    email: str = payload.get("sub")
+
+    if email is None:
+        raise credentials_exception
+
+    user = db.query(Person).filter(Person.email == email).first()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
+def get_current_active_user(
+        current_user: Person = Depends(get_current_user)
+) -> Person:
+    return current_user
