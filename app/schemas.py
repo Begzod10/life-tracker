@@ -377,7 +377,7 @@ class ExpenseBase(BaseModel):
     subcategory: Optional[str] = Field(None, description="Subcategory for more specific classification")
     payment_type: Optional[str] = Field(None, description="Payment type: cash, card, transfer, crypto")
     payment_method: Optional[str] = Field(None, description="Specific card/wallet name")
-    date: date = Field(..., description="Date of expense")
+    expense_date: date = Field(..., description="Date of expense")  # This is fine now
     is_recurring: bool = Field(default=False, description="Is this a recurring expense")
     recurrence_frequency: Optional[str] = Field(None, description="Frequency: monthly, weekly, yearly")
     is_essential: bool = Field(default=False, description="Is this an essential expense")
@@ -421,13 +421,13 @@ class ExpenseUpdate(BaseModel):
     subcategory: Optional[str] = Field(None)
     payment_type: Optional[str] = Field(None)
     payment_method: Optional[str] = Field(None)
-    date: Optional[date] = Field(None)
+    expense_date: Optional[date] = Field(None)  # Make sure it's expense_date
     is_recurring: Optional[bool] = Field(None)
     recurrence_frequency: Optional[str] = Field(None)
     is_essential: Optional[bool] = Field(None)
     receipt_photo: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
-    tags: Optional[str] = Field(None)
+    expense_tags: Optional[str] = Field(None)
 
 
 class Expense(ExpenseBase):

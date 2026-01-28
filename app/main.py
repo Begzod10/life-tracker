@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
-from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth
+from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
+    financial_analytics, savings, salary_months, income_sources
 from app.config import settings
 
 app = FastAPI(
@@ -31,6 +32,14 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(subtasks.router, prefix="/api")
 app.include_router(progresslog.router, prefix="/api")
 app.include_router(progresslog_task.router, prefix="/api")
+
+app.include_router(jobs.router, prefix="/api")
+app.include_router(expenses.router, prefix="/api")
+app.include_router(budgets.router, prefix="/api")
+app.include_router(financial_analytics.router, prefix="/api")
+app.include_router(savings.router, prefix="/api")
+app.include_router(salary_months.router, prefix="/api")
+app.include_router(income_sources.router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

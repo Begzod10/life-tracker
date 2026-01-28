@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, date
 
 from app import models, schemas
@@ -339,12 +339,23 @@ def get_period_budget_summary(
 
 @router.post('/create-monthly-template', response_model=List[schemas.Budget])
 def create_monthly_budget_template(
-        period: str = Query(..., description="Period in YYYY-MM format"),
-        categories: dict = Query(..., description="Dictionary of category: amount"),
+        period: str,
+        categories: Dict[str, float] = Body(..., description="Dictionary of category: amount"),
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Create budgets for multiple categories at once"""
+    """Create budgets for multiple categories at once
+
+    Example request body:
+    {
+        "period": "2026-01",
+        "categories": {
+            "food": 1000000,
+            "transport": 500000,
+            "bills": 2000000
+        }
+    }
+    """
     created_budgets = []
 
     for category, amount in categories.items():
@@ -406,8 +417,8 @@ def _update_budget_totals(budget_id: int, db: Session):
     expenses = db.query(models.Expense).filter(
         models.Expense.person_id == budget.person_id,
         models.Expense.category == budget.category,
-        models.Expense.date >= start,
-        models.Expense.date < end
+        models.Expense.expense_date >= start,
+        models.Expense.expense_date < end
     ).all()
 
     spent = sum(expense.amount for expense in expenses)
