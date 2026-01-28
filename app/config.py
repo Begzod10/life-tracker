@@ -3,8 +3,9 @@ Application configuration settings
 Loaded from environment variables
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional, List
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -23,8 +24,8 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Password Requirements
     MIN_PASSWORD_LENGTH: int = 8
@@ -33,8 +34,8 @@ class Settings(BaseSettings):
     REQUIRE_DIGIT: bool = True
     REQUIRE_SPECIAL_CHAR: bool = False
 
-    # CORS
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    # CORS - Now properly handles string or list
+    ALLOWED_ORIGINS: str = "*"
 
     # Email (for future use)
     SMTP_HOST: Optional[str] = None
@@ -50,9 +51,20 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"  # Ignore extra fields in .env
+    )
+
+    def get_cors_origins(self) -> List[str]:
+        """
+        Parse ALLOWED_ORIGINS into a list
+        Handles both "*" and comma-separated values
+        """
+        if self.ALLOWED_ORIGINS == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
 # Create settings instance
