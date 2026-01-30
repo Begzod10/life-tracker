@@ -1,50 +1,128 @@
-"""
-Authentication Router
-Handles user registration, login, token refresh, password management
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.models import Person
+from typing import Optional
+from pydantic import BaseModel, EmailStr, Field
+import re
 
+from app import models
 from app.database import get_db
-from app import models, schemas_auth as schemas
 from app.core.security import (
-    get_password_hash,
     verify_password,
+    get_password_hash,
     create_access_token,
-    create_refresh_token,
-    verify_token
+    verify_token,
+    verify_google_token
 )
-from app.dependencies import get_current_user, get_current_active_user
 from app.config import settings
-
-from app.schemas_auth import Token, GoogleAuthRequest, AuthResponse
-from app.core.security import verify_google_token, create_access_token, get_current_active_user
 
 router = APIRouter(
     prefix="/auth",
-    tags=["Authentication"]
+    tags=["authentication"]
 )
 
-security = HTTPBearer()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
-@router.post('/register', response_model=schemas.LoginResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
-    """
-    Register a new user
+# ========== SCHEMAS ==========
 
-    - **name**: Full name of the user
-    - **email**: Valid email address (must be unique)
-    - **password**: Strong password (min 8 chars, uppercase, lowercase, digit)
-    - **confirm_password**: Must match password
-    - **timezone**: User's timezone (default: Asia/Tashkent)
+class UserRegister(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    timezone: str = Field(default="Asia/Tashkent")
 
-    Returns user information and authentication tokens
-    """
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    token: str = Field(..., description="Google ID token from frontend")
+
+
+class UserData(BaseModel):
+    id: int
+    name: str
+    email: str
+    timezone: str
+    profile_photo_url: Optional[str] = None
+    is_verified: bool
+    created_at: Optional[str] = None
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserData
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+# ========== HELPER FUNCTIONS ==========
+
+def validate_password_strength(password: str) -> bool:
+    """Validate password meets security requirements"""
+    if len(password) < 8:
+        return False
+    if not re.search(r"[A-Z]", password):
+        return False
+    if not re.search(r"[a-z]", password):
+        return False
+    if not re.search(r"\d", password):
+        return False
+    return True
+
+
+def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)
+) -> models.Person:
+    """Get current authenticated user from token"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = verify_token(token)
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+
+    user = db.query(models.Person).filter(models.Person.email == email).first()
+    if user is None:
+        raise credentials_exception
+
+    # Check if account is locked
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is locked due to too many failed login attempts"
+        )
+
+    return user
+
+
+# ========== ENDPOINTS ==========
+
+@router.post('/register', response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    """Register a new user with email and password"""
+
     # Check if email already exists
     existing_user = db.query(models.Person).filter(
         models.Person.email == user_data.email
@@ -56,51 +134,65 @@ def register(user_data: schemas.UserRegister, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
 
+    # Validate password strength
+    if not validate_password_strength(user_data.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters and contain uppercase, lowercase, and numbers"
+        )
+
     # Create new user
+    hashed_password = get_password_hash(user_data.password)
+
     new_user = models.Person(
         name=user_data.name,
         email=user_data.email,
+        hashed_password=hashed_password,
         timezone=user_data.timezone,
-        hashed_password=get_password_hash(user_data.password),
+        auth_provider="email",
         is_active=True,
         is_verified=False,
-        created_at=datetime.utcnow(),
-        last_login=datetime.utcnow()
+        failed_login_attempts=0
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Generate tokens
-    access_token = create_access_token(data={"sub": new_user.email})
-    refresh_token = create_refresh_token(data={"sub": new_user.email})
+    # Generate token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": new_user.email, "user_id": new_user.id},
+        expires_delta=access_token_expires
+    )
 
-    # Create user response
-    user_response = schemas.UserResponse.model_validate(new_user)
+    user_response = UserData(
+        id=new_user.id,
+        name=new_user.name,
+        email=new_user.email,
+        timezone=new_user.timezone,
+        profile_photo_url=new_user.profile_photo_url,
+        is_verified=new_user.is_verified,
+        created_at=new_user.created_at.isoformat() if new_user.created_at else None
+    )
 
-    return schemas.LoginResponse(
-        user=user_response,
+    return AuthResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user_response
     )
 
 
-@router.post('/login', response_model=schemas.LoginResponse)
-def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
-    """
-    Authenticate user and return tokens
+@router.post('/login', response_model=AuthResponse)
+def login(
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        db: Session = Depends(get_db)
+):
+    """Login with email and password"""
 
-    - **email**: User's email address
-    - **password**: User's password
-
-    Returns user information and authentication tokens
-    """
-    # Get user by email
     user = db.query(models.Person).filter(
-        models.Person.email == credentials.email
+        models.Person.email == form_data.username
     ).first()
 
     if not user:
@@ -111,38 +203,31 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
         )
 
     # Check if account is locked
-    if user.is_locked:
+    if user.locked_until and user.locked_until > datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account locked due to too many failed login attempts. Try again after {user.locked_until}"
+            detail="Account is locked due to too many failed login attempts. Please try again later."
+        )
+
+    # Check if user registered with Google (no password)
+    if user.auth_provider == "google" and not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account was created with Google. Please use Google Sign-In."
         )
 
     # Verify password
-    if not verify_password(credentials.password, user.hashed_password):
+    if not verify_password(form_data.password, user.hashed_password):
         # Increment failed login attempts
         user.failed_login_attempts += 1
-
-        # Lock account after 5 failed attempts
         if user.failed_login_attempts >= 5:
             user.locked_until = datetime.utcnow() + timedelta(minutes=30)
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account locked due to too many failed login attempts. Try again in 30 minutes."
-            )
-
         db.commit()
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check if user is active
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated. Please contact support."
         )
 
     # Reset failed login attempts on successful login
@@ -151,190 +236,36 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     user.last_login = datetime.utcnow()
     db.commit()
 
-    # Generate tokens
-    access_token = create_access_token(data={"sub": user.email})
-    refresh_token = create_refresh_token(data={"sub": user.email})
+    # Generate token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email, "user_id": user.id},
+        expires_delta=access_token_expires
+    )
 
-    # Create user response
-    user_response = schemas.UserResponse.model_validate(user)
+    user_response = UserData(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        timezone=user.timezone,
+        profile_photo_url=user.profile_photo_url,
+        is_verified=user.is_verified,
+        created_at=user.created_at.isoformat() if user.created_at else None
+    )
 
-    return schemas.LoginResponse(
-        user=user_response,
+    return AuthResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user_response
     )
-
-
-@router.post('/refresh', response_model=schemas.Token)
-def refresh_token(token_data: schemas.TokenRefresh, db: Session = Depends(get_db)):
-    """
-    Refresh access token using refresh token
-
-    - **refresh_token**: Valid refresh token
-
-    Returns new access token and refresh token
-    """
-    # Verify refresh token
-    payload = verify_token(token_data.refresh_token, token_type="refresh")
-
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    email: str = payload.get("sub")
-    if email is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Verify user still exists and is active
-    user = db.query(models.Person).filter(models.Person.email == email).first()
-
-    if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Generate new tokens
-    new_access_token = create_access_token(data={"sub": email})
-    new_refresh_token = create_refresh_token(data={"sub": email})
-
-    return schemas.Token(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-
-
-@router.get('/me', response_model=schemas.UserResponse)
-def get_current_user_info(current_user: models.Person = Depends(get_current_active_user)):
-    """
-    Get current authenticated user information
-
-    Requires valid access token in Authorization header
-    """
-    return schemas.UserResponse.model_validate(current_user)
-
-
-@router.put('/me', response_model=schemas.UserResponse)
-def update_current_user(
-        user_update: schemas.PersonUpdate,
-        current_user: models.Person = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
-):
-    """
-    Update current user's profile information
-
-    - **name**: Updated name (optional)
-    - **timezone**: Updated timezone (optional)
-
-    Requires valid access token
-    """
-    update_data = user_update.model_dump(exclude_unset=True)
-
-    # Don't allow email update through this endpoint
-    if 'email' in update_data:
-        del update_data['email']
-
-    for key, value in update_data.items():
-        setattr(current_user, key, value)
-
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(current_user)
-
-    return schemas.UserResponse.model_validate(current_user)
-
-
-@router.post('/change-password', status_code=status.HTTP_200_OK)
-def change_password(
-        password_data: schemas.PasswordChange,
-        current_user: models.Person = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
-):
-    """
-    Change user password
-
-    - **old_password**: Current password
-    - **new_password**: New password (must meet strength requirements)
-    - **confirm_password**: Confirm new password
-
-    Requires valid access token
-    """
-    # Verify old password
-    if not verify_password(password_data.old_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect current password"
-        )
-
-    # Check if new password is same as old
-    if verify_password(password_data.new_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be different from current password"
-        )
-
-    # Update password
-    current_user.hashed_password = get_password_hash(password_data.new_password)
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-
-    return {"message": "Password changed successfully"}
-
-
-@router.post('/logout', status_code=status.HTTP_200_OK)
-def logout(current_user: models.Person = Depends(get_current_active_user)):
-    """
-    Logout user
-
-    Note: Since we're using JWT, the token will remain valid until expiration.
-    Client should discard the token on logout.
-    For production, consider implementing token blacklisting.
-
-    Requires valid access token
-    """
-    return {
-        "message": "Logged out successfully",
-        "note": "Please discard your access and refresh tokens"
-    }
-
-
-@router.delete('/me', status_code=status.HTTP_200_OK)
-def deactivate_account(
-        current_user: models.Person = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
-):
-    """
-    Deactivate user account
-
-    This sets is_active to False. Account can be reactivated by admin.
-
-    Requires valid access token
-    """
-    current_user.is_active = False
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-
-    return {
-        "message": "Account deactivated successfully",
-        "note": "Contact support to reactivate your account"
-    }
 
 
 @router.post('/google', response_model=AuthResponse)
 def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Authenticate with Google OAuth"""
     try:
+        # Verify Google token
         google_user_info = verify_google_token(auth_request.token)
 
         email = google_user_info.get('email')
@@ -349,58 +280,133 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
                 detail="Email not provided by Google"
             )
 
-        user = db.query(Person).filter(Person.email == email).first()
+        # Check if user exists
+        user = db.query(models.Person).filter(models.Person.email == email).first()
 
         if user:
+            # Update existing user
             user.name = name or user.name
             user.google_id = google_id
             user.profile_photo_url = picture
-            user.email_verified = email_verified
+            user.is_verified = email_verified
             user.last_login = datetime.utcnow()
             user.updated_at = datetime.utcnow()
+
+            # If user was created with email but now using Google, update auth_provider
+            if user.auth_provider == "email":
+                user.auth_provider = "google"
         else:
-            user = Person(
+            # Create new user
+            # ⚠️ IMPORTANT: For Google OAuth users, we set a random password
+            # since hashed_password is NOT NULL in your model
+            import secrets
+            random_password = secrets.token_urlsafe(32)
+
+            user = models.Person(
                 name=name or "User",
                 email=email,
+                hashed_password=get_password_hash(random_password),  # ✅ Fixed: Set random password
                 auth_provider="google",
                 google_id=google_id,
                 profile_photo_url=picture,
-                email_verified=email_verified,
+                is_verified=email_verified,
                 timezone="Asia/Tashkent",
+                is_active=True,
                 last_login=datetime.utcnow()
             )
             db.add(user)
-
         db.commit()
         db.refresh(user)
 
+        # Generate token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.email, "user_id": user.id},
             expires_delta=access_token_expires
         )
 
-        user_data = {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "timezone": user.timezone,
-            "profile_photo_url": user.profile_photo_url,
-            "email_verified": user.email_verified,
-            "created_at": user.created_at.isoformat() if user.created_at else None
-        }
+        user_response = UserData(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            timezone=user.timezone,
+            profile_photo_url=user.profile_photo_url,
+            is_verified=user.is_verified,
+            created_at=user.created_at.isoformat() if user.created_at else None
+        )
 
         return AuthResponse(
             access_token=access_token,
             token_type="bearer",
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            user=user_data
+            user=user_response
         )
 
     except HTTPException:
         raise
     except Exception as e:
+        # This will be caught by the global exception handler in main.py
+        # and printed with full traceback
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication failed: {str(e)}"
         )
+
+
+@router.get('/me', response_model=UserData)
+def get_current_user_info(
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get current user information"""
+    return UserData(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        timezone=current_user.timezone,
+        profile_photo_url=current_user.profile_photo_url,
+        is_verified=current_user.is_verified,
+        created_at=current_user.created_at.isoformat() if current_user.created_at else None
+    )
+
+
+@router.post('/change-password')
+def change_password(
+        password_data: PasswordChange,
+        current_user: models.Person = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """Change password for authenticated user"""
+
+    # Check if user uses Google OAuth
+    if current_user.auth_provider == "google":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change password for Google OAuth users"
+        )
+
+    # Verify old password
+    if not verify_password(password_data.old_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect current password"
+        )
+
+    # Validate new password strength
+    if not validate_password_strength(password_data.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters and contain uppercase, lowercase, and numbers"
+        )
+
+    # Update password
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": "Password changed successfully"}
+
+
+@router.post('/logout')
+def logout(current_user: models.Person = Depends(get_current_user)):
+    """Logout (client should delete tokens)"""
+    return {"message": "Logged out successfully"}

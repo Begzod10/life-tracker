@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+import sys
+import traceback
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
     financial_analytics, savings, salary_months, income_sources
@@ -23,6 +26,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all errors and print detailed traceback"""
+
+    # Print to console with details
+    print("\n" + "=" * 80, file=sys.stderr)
+    print("🔴 ERROR OCCURRED!", file=sys.stderr)
+    print("=" * 80, file=sys.stderr)
+    print(f"URL: {request.url}", file=sys.stderr)
+    print(f"Method: {request.method}", file=sys.stderr)
+    print(f"Error Type: {type(exc).__name__}", file=sys.stderr)
+    print(f"Error Message: {str(exc)}", file=sys.stderr)
+    print("-" * 80, file=sys.stderr)
+    print("FULL TRACEBACK:", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    print("=" * 80 + "\n", file=sys.stderr)
+
+    # Return error to client
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": str(exc),
+            "type": type(exc).__name__
+        }
+    )
+
 
 # Include routers
 app.include_router(auth.router, prefix="/api")

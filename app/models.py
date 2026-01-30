@@ -25,7 +25,31 @@ class Person(Base):
     profile_photo_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    jobs = relationship(
+        "Job",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    expenses = relationship(
+        "Expense",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    income_sources = relationship(
+        "IncomeSource",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    savings = relationship(
+        "Saving",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    budgets = relationship(
+        "Budget",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
     goals = relationship(
         "Goal",
         back_populates="person",
