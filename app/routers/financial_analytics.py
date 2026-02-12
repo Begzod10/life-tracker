@@ -206,17 +206,13 @@ def calculate_net_worth(
 
     cash_in_hand = sum(sm.remaining_amount for sm in salary_months if sm.remaining_amount > 0)
 
-    # Add initial balance if set
-    initial_balance = current_user.initial_balance or 0
-
-    net_worth = total_savings + cash_in_hand + initial_balance
+    net_worth = total_savings + cash_in_hand
 
     return {
         "net_worth": net_worth,
         "breakdown": {
             "savings_accounts": total_savings,
             "cash_in_hand": cash_in_hand,
-            "initial_balance": initial_balance
         },
         "savings_by_type": {
             s.account_type: sum(acc.current_balance for acc in savings if acc.account_type == s.account_type)

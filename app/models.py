@@ -79,7 +79,7 @@ class Goal(Base):
 
     target_value = Column(Float)
     current_value = Column(Float, default=0)
-    unit = Column(String(20))  # "score", "%", "days"
+    # unit = Column(String(20))  # "score", "%", "days"
 
     start_date = Column(Date)
     target_date = Column(Date)

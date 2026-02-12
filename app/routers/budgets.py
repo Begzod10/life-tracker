@@ -417,8 +417,8 @@ def _update_budget_totals(budget_id: int, db: Session):
     expenses = db.query(models.Expense).filter(
         models.Expense.person_id == budget.person_id,
         models.Expense.category == budget.category,
-        models.Expense.expense_date >= start,
-        models.Expense.expense_date < end
+        models.Expense.date >= start,
+        models.Expense.date < end
     ).all()
 
     spent = sum(expense.amount for expense in expenses)

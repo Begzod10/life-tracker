@@ -35,7 +35,6 @@ class GoalBase(BaseModel):
     category: Optional[str] = Field(None, description="Category: Learning, Health, Career, Finance, Personal")
     target_value: Optional[float] = Field(None, description="Target value to achieve")
     current_value: float = Field(default=0, description="Current progress value")
-    unit: Optional[str] = Field(None, description="Unit of measurement: score, %, days, hours, count")
     start_date: Optional[date] = Field(None)
     target_date: Optional[date] = Field(None)
     priority: str = Field(default="medium", description="Priority: high, medium, low")
@@ -53,7 +52,6 @@ class GoalCreate(GoalBase):
                 "category": "Learning",
                 "target_value": 6.5,
                 "current_value": 5.5,
-                "unit": "score",
                 "start_date": "2026-01-01",
                 "target_date": "2026-03-31",
                 "priority": "high",
@@ -94,7 +92,6 @@ class Goal(GoalBase):
                 "category": "Learning",
                 "target_value": 6.5,
                 "current_value": 5.5,
-                "unit": "score",
                 "start_date": "2026-01-01",
                 "target_date": "2026-03-31",
                 "priority": "high",
@@ -377,7 +374,7 @@ class ExpenseBase(BaseModel):
     subcategory: Optional[str] = Field(None, description="Subcategory for more specific classification")
     payment_type: Optional[str] = Field(None, description="Payment type: cash, card, transfer, crypto")
     payment_method: Optional[str] = Field(None, description="Specific card/wallet name")
-    expense_date: date = Field(..., description="Date of expense")  # This is fine now
+    date: date = Field(..., description="Date of expense")
     is_recurring: bool = Field(default=False, description="Is this a recurring expense")
     recurrence_frequency: Optional[str] = Field(None, description="Frequency: monthly, weekly, yearly")
     is_essential: bool = Field(default=False, description="Is this an essential expense")
@@ -421,13 +418,13 @@ class ExpenseUpdate(BaseModel):
     subcategory: Optional[str] = Field(None)
     payment_type: Optional[str] = Field(None)
     payment_method: Optional[str] = Field(None)
-    expense_date: Optional[date] = Field(None)  # Make sure it's expense_date
+    date: Optional[date] = Field(None)
     is_recurring: Optional[bool] = Field(None)
     recurrence_frequency: Optional[str] = Field(None)
     is_essential: Optional[bool] = Field(None)
     receipt_photo: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
-    expense_tags: Optional[str] = Field(None)
+    tags: Optional[str] = Field(None)
 
 
 class Expense(ExpenseBase):

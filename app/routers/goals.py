@@ -17,7 +17,6 @@ router = APIRouter(
 @router.post('/', response_model=schemas.Goal, status_code=status.HTTP_201_CREATED)
 def create_goal(goal: schemas.GoalCreate, db: Session = Depends(get_db)):
     """Create a new goal"""
-    current_user: models.Person = Depends(get_current_active_user)
     new_goal = models.Goal(**goal.model_dump())
     db.add(new_goal)
     db.commit()

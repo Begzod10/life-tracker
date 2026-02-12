@@ -45,9 +45,9 @@ async def get_current_user(
     token = credentials.credentials
 
     # Verify and decode token
-    payload = verify_token(token, token_type="access")
-
-    if payload is None:
+    try:
+        payload = verify_token(token)
+    except ValueError:
         raise credentials_exception
 
     # Get user email from token
@@ -144,7 +144,7 @@ def get_optional_current_user(
 
     try:
         token = credentials.credentials
-        payload = verify_token(token, token_type="access")
+        payload = verify_token(token)
 
         if payload is None:
             return None
