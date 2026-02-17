@@ -4,7 +4,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse, JSONResponse
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
     financial_analytics, savings, salary_months, income_sources
@@ -76,13 +76,9 @@ app.include_router(income_sources.router, prefix="/api")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# @app.get("/")
-# def root():
-#     return {
-#         "message": settings.APP_NAME,
-#         "version": settings.VERSION,
-#         "docs": "/docs"
-#     }
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/docs", include_in_schema=False)

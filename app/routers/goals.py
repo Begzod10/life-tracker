@@ -3,10 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
+from sqlalchemy import or_
+
 from app import models, schemas
 from app.database import get_db
 from app.services.progress_service import ProgressService
 from app.dependencies import get_current_active_user
+
+not_deleted = or_(models.Goal.deleted == False, models.Goal.deleted.is_(None))
 
 router = APIRouter(
     prefix="/goals",
@@ -26,6 +30,7 @@ def create_goal(goal: schemas.GoalCreate, db: Session = Depends(get_db)):
 
 @router.get('/', response_model=List[schemas.Goal])
 def get_goals(
+        person_id: int = Query(..., description="Person ID"),
         status_filter: Optional[str] = Query(None, description="Filter by status: active, completed, paused"),
         category_filter: Optional[str] = Query(None, description="Filter by category"),
         db: Session = Depends(get_db)
@@ -34,7 +39,7 @@ def get_goals(
     Get all goals with optional filters.
     Percentage field shows the latest calculated progress.
     """
-    query = db.query(models.Goal)
+    query = db.query(models.Goal).filter(models.Goal.person_id == person_id, not_deleted)
 
     if status_filter:
         query = query.filter(models.Goal.status == status_filter)
@@ -45,10 +50,16 @@ def get_goals(
     return query.all()
 
 
+@router.get('/deleted/person/{person_id}', response_model=List[schemas.Goal])
+def get_deleted_goals(person_id: int, db: Session = Depends(get_db)):
+    """Get all soft-deleted goals for a specific person"""
+    return db.query(models.Goal).filter(models.Goal.person_id == person_id, models.Goal.deleted == True).all()
+
+
 @router.get('/{goal_id}', response_model=schemas.Goal)
 def get_goal(goal_id: int, db: Session = Depends(get_db)):
     """Get a specific goal by ID with current progress percentage"""
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
     return goal
@@ -63,7 +74,7 @@ def get_goal_with_statistics(goal_id: int, db: Session = Depends(get_db)):
     - Manual percentage (if target_value exists)
     - Current stored percentage
     """
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
@@ -88,12 +99,11 @@ def update_goal(goal_id: int, goal: schemas.GoalUpdate, db: Session = Depends(ge
     Update a goal. If current_value is updated and target_value exists,
     the percentage will be recalculated based on manual progress.
     """
-    db_goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    db_goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not db_goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
     update_data = goal.model_dump(exclude_unset=True)
-
     # Track if current_value changed
     current_value_changed = 'current_value' in update_data
 
@@ -112,15 +122,18 @@ def update_goal(goal_id: int, goal: schemas.GoalUpdate, db: Session = Depends(ge
     return db_goal
 
 
-@router.delete('/{goal_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{goal_id}')
 def delete_goal(goal_id: int, db: Session = Depends(get_db)):
     """Delete a goal and all associated tasks"""
     db_goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
     if not db_goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
-    db.delete(db_goal)
+    if db_goal.deleted:
+        db_goal.deleted = False
+    else:
+        db_goal.deleted = True
     db.commit()
-    return
+    return {"message": "Goal deleted"}
 
 
 @router.post('/{goal_id}/recalculate-progress', response_model=schemas.Goal)
@@ -138,7 +151,7 @@ def recalculate_goal_progress(
     - subtasks: Include subtask completion in calculation
     - hybrid: Use manual progress if available, otherwise use simple task counting
     """
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
@@ -166,7 +179,7 @@ def get_goal_progress_details(goal_id: int, db: Session = Depends(get_db)):
     - Priority breakdowns
     - Target vs current values
     """
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
@@ -180,7 +193,7 @@ def get_goals_by_person(
         db: Session = Depends(get_db)
 ):
     """Get all goals for a specific person"""
-    query = db.query(models.Goal).filter(models.Goal.person_id == person_id)
+    query = db.query(models.Goal).filter(models.Goal.person_id == person_id, not_deleted)
 
     if not include_completed:
         query = query.filter(models.Goal.status != 'completed')
@@ -194,7 +207,7 @@ def mark_goal_complete(goal_id: int, db: Session = Depends(get_db)):
     Mark a goal as completed.
     Sets status to 'completed' and percentage to 100.
     """
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, not_deleted).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 
@@ -231,7 +244,7 @@ def get_all_goals_overview(
     - Goals on track vs behind schedule
     - Total tasks and completion rate
     """
-    query = db.query(models.Goal)
+    query = db.query(models.Goal).filter(not_deleted)
 
     if person_id:
         query = query.filter(models.Goal.person_id == person_id)

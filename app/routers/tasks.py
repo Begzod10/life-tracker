@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-
+from sqlalchemy import or_
 from app import models, schemas
 from app.database import get_db
 from app.services.progress_service import ProgressService
 
+not_deleted = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
 router = APIRouter(
     prefix="/tasks",
     tags=["tasks"]
@@ -16,7 +17,13 @@ router = APIRouter(
 @router.get('/', response_model=List[schemas.Task])
 def get_tasks(db: Session = Depends(get_db)):
     """Get all tasks"""
-    return db.query(models.Task).all()
+    return db.query(models.Task).filter(models.Task.deleted == False).all()
+
+
+@router.get('/deleted/goal/{goal_id}', response_model=List[schemas.Task])
+def get_deleted_tasks(goal_id: int, db: Session = Depends(get_db)):
+    """Get all soft-deleted tasks for a specific goal"""
+    return db.query(models.Task).filter(models.Task.goal_id == goal_id, models.Task.deleted == True).all()
 
 
 @router.get('/{task_id}', response_model=schemas.Task)
@@ -118,10 +125,19 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     return
 
 
+@router.get('/person/{person_id}', response_model=List[schemas.Task])
+def get_tasks_by_person(person_id: int, db: Session = Depends(get_db)):
+    """Get all tasks for a specific person (across all their goals)"""
+    return db.query(models.Task).join(models.Goal).filter(
+        models.Goal.person_id == person_id,
+        not_deleted
+    ).all()
+
+
 @router.get('/goal/{goal_id}', response_model=List[schemas.Task])
 def get_tasks_by_goal(goal_id: int, db: Session = Depends(get_db)):
     """Get all tasks for a specific goal"""
-    return db.query(models.Task).filter(models.Task.goal_id == goal_id).all()
+    return db.query(models.Task).filter(models.Task.goal_id == goal_id, not_deleted).all()
 
 
 @router.post('/{task_id}/mark_task', response_model=schemas.Task)

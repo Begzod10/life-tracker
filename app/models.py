@@ -86,6 +86,7 @@ class Goal(Base):
 
     status = Column(String(20), default="active")  # active, completed, paused
     priority = Column(String(20), default="medium")  # high, medium, low
+    deleted = Column(Boolean, default=False)
 
     _stored_percentage = Column(Float, default=0)
 
@@ -96,6 +97,7 @@ class Goal(Base):
     person = relationship("Person", back_populates="goals")
     tasks = relationship("Task", back_populates="goal", cascade="all, delete-orphan")
     progress_logs = relationship("ProgressLog", back_populates="goal", cascade="all, delete-orphan")
+    color = Column(String(20), nullable=True)
 
     @hybrid_property
     def percentage(self):
@@ -156,6 +158,7 @@ class Task(Base):
 
     priority = Column(String(20), default="medium")
     estimated_duration = Column(Integer)  # minutes
+    deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -179,6 +182,8 @@ class SubTasks(Base):
 
     priority = Column(String(20), default="medium")
     estimated_duration = Column(Integer)  # minutes
+    order = Column(Integer, default=0)
+    deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

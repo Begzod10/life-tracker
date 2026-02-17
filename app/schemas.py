@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+import datetime as _dt
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -38,6 +39,7 @@ class GoalBase(BaseModel):
     start_date: Optional[date] = Field(None)
     target_date: Optional[date] = Field(None)
     priority: str = Field(default="medium", description="Priority: high, medium, low")
+    color: Optional[str] = Field(None)
 
 
 class GoalCreate(GoalBase):
@@ -66,8 +68,13 @@ class GoalUpdate(BaseModel):
     name: Optional[str] = Field(None)
     description: Optional[str] = None
     current_value: Optional[float] = Field(None)
+    target_value: Optional[float] = Field(None)
     status: Optional[str] = Field(None, description="Status: active, completed, paused")
     priority: Optional[str] = Field(None)
+    category: Optional[str] = Field(None)
+    start_date: Optional[date] = Field(None)
+    target_date: Optional[date] = Field(None)
+    color: Optional[str] = Field(None)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -107,6 +114,7 @@ class Goal(GoalBase):
     id: int
     person_id: int
     status: str
+    deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
     percentage: float = Field(default=0, description="Stored progress percentage")
@@ -139,6 +147,7 @@ class Task(TaskBase):
     goal_id: int = Field(..., description="Goal ID")
     completed: bool = Field(default=False, description="Task completion status")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    deleted: Optional[bool] = Field(default=False, description="Soft delete flag")
     created_at: datetime = Field(..., description="Creation timestamp")
 
     model_config = ConfigDict(from_attributes=True)
@@ -161,6 +170,7 @@ class SubTaskBase(BaseModel):
     description: Optional[str] = Field(None, description="Sub task description")
     priority: str = Field(default="medium", description="Priority: high, medium, low")
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
+    order: int = Field(default=0, description="Display order of the subtask")
 
 
 class SubTaskCreate(SubTaskBase):
@@ -172,6 +182,7 @@ class SubTask(SubTaskBase):
     task_id: int = Field(..., description="Task ID")
     completed: bool = Field(default=False, description="Sub task completion status")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    deleted: Optional[bool] = Field(default=False, description="Soft delete flag")
     created_at: datetime = Field(..., description="Creation timestamp")
 
     model_config = ConfigDict(from_attributes=True)
@@ -184,6 +195,7 @@ class SubTaskUpdate(BaseModel):
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
     completed: Optional[bool] = Field(None, description="Completion status")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    order: Optional[int] = Field(None, description="Display order of the subtask")
 
 
 # ========== PROGRESS LOG SCHEMAS ==========
@@ -374,7 +386,7 @@ class ExpenseBase(BaseModel):
     subcategory: Optional[str] = Field(None, description="Subcategory for more specific classification")
     payment_type: Optional[str] = Field(None, description="Payment type: cash, card, transfer, crypto")
     payment_method: Optional[str] = Field(None, description="Specific card/wallet name")
-    date: date = Field(..., description="Date of expense")
+    date: _dt.date = Field(..., description="Date of expense")
     is_recurring: bool = Field(default=False, description="Is this a recurring expense")
     recurrence_frequency: Optional[str] = Field(None, description="Frequency: monthly, weekly, yearly")
     is_essential: bool = Field(default=False, description="Is this an essential expense")
@@ -418,7 +430,7 @@ class ExpenseUpdate(BaseModel):
     subcategory: Optional[str] = Field(None)
     payment_type: Optional[str] = Field(None)
     payment_method: Optional[str] = Field(None)
-    date: Optional[date] = Field(None)
+    date: Optional[_dt.date] = Field(None)
     is_recurring: Optional[bool] = Field(None)
     recurrence_frequency: Optional[str] = Field(None)
     is_essential: Optional[bool] = Field(None)
