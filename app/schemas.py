@@ -128,6 +128,42 @@ class GoalWithStats(Goal):
     manual_percentage: Optional[float] = Field(None, description="Manual progress based on target/current value")
 
 
+# ========== MILESTONE SCHEMAS ==========
+
+class MilestoneBase(BaseModel):
+    name: str = Field(..., description="Milestone name", min_length=1, max_length=200)
+    description: Optional[str] = Field(None, description="Milestone description")
+    target_date: Optional[date] = Field(None, description="Target date to achieve this milestone")
+    completion_percentage: float = Field(default=0.0, description="Goal percentage needed to hit this milestone")
+    reward_description: Optional[str] = Field(None, description="Reward for achieving this milestone")
+    order_index: int = Field(default=0, description="Display order among milestones")
+
+
+class MilestoneCreate(MilestoneBase):
+    goal_id: int = Field(..., description="Goal ID this milestone belongs to")
+
+
+class Milestone(MilestoneBase):
+    id: int
+    goal_id: int
+    achieved: bool = Field(default=False)
+    achieved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MilestoneUpdate(BaseModel):
+    name: Optional[str] = Field(None)
+    description: Optional[str] = Field(None)
+    target_date: Optional[date] = Field(None)
+    completion_percentage: Optional[float] = Field(None)
+    reward_description: Optional[str] = Field(None)
+    order_index: Optional[int] = Field(None)
+    achieved: Optional[bool] = Field(None)
+
+
 # ========== TASK SCHEMAS ==========
 class TaskBase(BaseModel):
     name: str = Field(..., description="Task name")

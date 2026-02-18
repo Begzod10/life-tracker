@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
-    financial_analytics, savings, salary_months, income_sources
+    financial_analytics, savings, salary_months, income_sources, milestones
 from app.config import settings
 
 app = FastAPI(
@@ -63,6 +63,7 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(subtasks.router, prefix="/api")
 app.include_router(progresslog.router, prefix="/api")
 app.include_router(progresslog_task.router, prefix="/api")
+app.include_router(milestones.router, prefix="/api")
 
 app.include_router(jobs.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")

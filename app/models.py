@@ -98,6 +98,7 @@ class Goal(Base):
     tasks = relationship("Task", back_populates="goal", cascade="all, delete-orphan")
     progress_logs = relationship("ProgressLog", back_populates="goal", cascade="all, delete-orphan")
     color = Column(String(20), nullable=True)
+    milestones = relationship("Milestone", back_populates="goal", cascade="all, delete-orphan")
 
     @hybrid_property
     def percentage(self):
@@ -139,6 +140,31 @@ class Goal(Base):
 
         percentage = (self.current_value / self.target_value) * 100
         return round(min(percentage, 100.0), 2)
+
+
+class Milestone(Base):
+    __tablename__ = "milestones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=False)
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+
+    target_date = Column(Date)
+    completion_percentage = Column(Float, default=0.0)  # % of goal needed to hit this milestone
+
+    achieved = Column(Boolean, default=False)
+    achieved_at = Column(DateTime, nullable=True)
+
+    reward_description = Column(Text, nullable=True)  # e.g. "Buy a book", "Take a day off"
+    order_index = Column(Integer, default=0)  # display/logical order among milestones
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    goal = relationship("Goal", back_populates="milestones")
 
 
 class Task(Base):
