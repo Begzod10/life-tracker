@@ -47,14 +47,14 @@ def update_progress_log(progress_log_id: int, progress_log: schemas.ProgressLogU
     return db_progress_log
 
 
-@router.delete('/{progress_log_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{progress_log_id}', status_code=status.HTTP_200_OK)
 def delete_progress_log(progress_log_id: int, db: Session = Depends(get_db)):
     db_progress_log = db.query(models.ProgressLog).filter(models.ProgressLog.id == progress_log_id).first()
     if not db_progress_log:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Progress log not found")
     db.delete(db_progress_log)
     db.commit()
-    return
+    return {"message": "Progress log deleted"}
 
 
 @router.get('/goal/{goal_id}', response_model=List[schemas.ProgressLog])

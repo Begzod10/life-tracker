@@ -15,13 +15,16 @@ router = APIRouter(
 @router.get('/', response_model=List[schemas.Milestone])
 def get_milestones(db: Session = Depends(get_db)):
     """Get all milestones"""
-    return db.query(models.Milestone).all()
+    return db.query(models.Milestone).filter(models.Milestone.deleted == False).all()
 
 
 @router.get('/{milestone_id}', response_model=schemas.Milestone)
 def get_milestone(milestone_id: int, db: Session = Depends(get_db)):
     """Get a specific milestone by ID"""
-    milestone = db.query(models.Milestone).filter(models.Milestone.id == milestone_id).first()
+    milestone = db.query(models.Milestone).filter(
+        models.Milestone.id == milestone_id,
+        models.Milestone.deleted == False
+    ).first()
     if not milestone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
     return milestone
@@ -31,7 +34,8 @@ def get_milestone(milestone_id: int, db: Session = Depends(get_db)):
 def get_milestones_by_goal(goal_id: int, db: Session = Depends(get_db)):
     """Get all milestones for a specific goal"""
     return db.query(models.Milestone).filter(
-        models.Milestone.goal_id == goal_id
+        models.Milestone.goal_id == goal_id,
+        models.Milestone.deleted == False
     ).order_by(models.Milestone.order_index).all()
 
 
@@ -39,7 +43,32 @@ def get_milestones_by_goal(goal_id: int, db: Session = Depends(get_db)):
 def get_milestones_by_person(person_id: int, db: Session = Depends(get_db)):
     """Get all milestones for a specific person (across all their goals)"""
     return db.query(models.Milestone).join(models.Goal).filter(
-        models.Goal.person_id == person_id
+        models.Goal.person_id == person_id,
+        models.Milestone.deleted == False
+    ).order_by(models.Milestone.order_index).all()
+
+
+@router.get('/deleted', response_model=List[schemas.Milestone])
+def get_deleted_milestones(db: Session = Depends(get_db)):
+    """Get all deleted milestones"""
+    return db.query(models.Milestone).filter(models.Milestone.deleted == True).all()
+
+
+@router.get('/deleted/goal/{goal_id}', response_model=List[schemas.Milestone])
+def get_deleted_milestones_by_goal(goal_id: int, db: Session = Depends(get_db)):
+    """Get all deleted milestones for a specific goal"""
+    return db.query(models.Milestone).filter(
+        models.Milestone.goal_id == goal_id,
+        models.Milestone.deleted == True
+    ).order_by(models.Milestone.order_index).all()
+
+
+@router.get('/deleted/person/{person_id}', response_model=List[schemas.Milestone])
+def get_deleted_milestones_by_person(person_id: int, db: Session = Depends(get_db)):
+    """Get all deleted milestones for a specific person"""
+    return db.query(models.Milestone).join(models.Goal).filter(
+        models.Goal.person_id == person_id,
+        models.Milestone.deleted == True
     ).order_by(models.Milestone.order_index).all()
 
 
@@ -83,16 +112,16 @@ def update_milestone(milestone_id: int, milestone: schemas.MilestoneUpdate, db: 
     return db_milestone
 
 
-@router.delete('/{milestone_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{milestone_id}', status_code=status.HTTP_200_OK)
 def delete_milestone(milestone_id: int, db: Session = Depends(get_db)):
     """Delete a milestone"""
     db_milestone = db.query(models.Milestone).filter(models.Milestone.id == milestone_id).first()
     if not db_milestone:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found")
 
-    db.delete(db_milestone)
+    db_milestone.deleted = True
     db.commit()
-    return
+    return {"message": "Milestone deleted"}
 
 
 @router.post('/{milestone_id}/mark', response_model=schemas.Milestone)

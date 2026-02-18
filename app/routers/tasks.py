@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app import models, schemas
 from app.database import get_db
 from app.services.progress_service import ProgressService
@@ -49,6 +49,19 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
             detail=f"Goal with id {task.goal_id} not found"
         )
 
+    # Validate task value against goal's target_value
+    if task.value is not None and goal.target_value:
+        existing_values_sum = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
+            models.Task.goal_id == task.goal_id,
+            models.Task.value.isnot(None),
+            or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+        ).scalar()
+        if existing_values_sum + task.value > goal.target_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Total tasks value ({existing_values_sum + task.value}) would exceed goal's target value ({goal.target_value})"
+            )
+
     # Create the task
     new_task = models.Task(**task.dict())
     db.add(new_task)
@@ -89,6 +102,22 @@ def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(ge
             else:
                 # If unmarking completion, clear completed_at
                 update_data['completed_at'] = None
+
+    # Validate task value against goal's target_value
+    if 'value' in update_data and update_data['value'] is not None:
+        goal = db.query(models.Goal).filter(models.Goal.id == db_task.goal_id).first()
+        if goal and goal.target_value:
+            existing_values_sum = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
+                models.Task.goal_id == db_task.goal_id,
+                models.Task.id != db_task.id,
+                models.Task.value.isnot(None),
+                or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+            ).scalar()
+            if existing_values_sum + update_data['value'] > goal.target_value:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Total tasks value ({existing_values_sum + update_data['value']}) would exceed goal's target value ({goal.target_value})"
+                )
 
     # Apply updates to the task
     for key, value in update_data.items():
@@ -158,6 +187,18 @@ def mark_task(task_id: int, db: Session = Depends(get_db)):
         db_task.completed_at = datetime.utcnow()
     db.commit()
     db.refresh(db_task)
+
+    # Auto-update goal's current_value from completed tasks with values
+    goal = db.query(models.Goal).filter(models.Goal.id == db_task.goal_id).first()
+    if goal and goal.target_value:
+        total_value = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
+            models.Task.goal_id == db_task.goal_id,
+            models.Task.completed == True,
+            models.Task.value.isnot(None)
+        ).scalar()
+        goal.current_value = total_value
+        db.commit()
+        db.refresh(db_task)
 
     # Recalculate goal progress
     ProgressService.update_goal_percentage(db_task.goal_id, db, method='hybrid')

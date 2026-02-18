@@ -67,7 +67,6 @@ class GoalUpdate(BaseModel):
     """Update existing goal - all fields optional"""
     name: Optional[str] = Field(None)
     description: Optional[str] = None
-    current_value: Optional[float] = Field(None)
     target_value: Optional[float] = Field(None)
     status: Optional[str] = Field(None, description="Status: active, completed, paused")
     priority: Optional[str] = Field(None)
@@ -172,6 +171,7 @@ class TaskBase(BaseModel):
     due_date: Optional[date] = Field(None, description="Due date")
     priority: str = Field(default="medium", description="Priority: high, medium, low")
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
+    value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
 
 
 class TaskCreate(TaskBase):
@@ -183,6 +183,7 @@ class Task(TaskBase):
     goal_id: int = Field(..., description="Goal ID")
     completed: bool = Field(default=False, description="Task completion status")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
     deleted: Optional[bool] = Field(default=False, description="Soft delete flag")
     created_at: datetime = Field(..., description="Creation timestamp")
 
@@ -197,6 +198,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[str] = Field(None, description="Priority: high, medium, low")
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
     completed: Optional[bool] = Field(None, description="Completion status")
+    value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
 
 
 # ========== SUB TASK SCHEMAS ==========

@@ -159,6 +159,7 @@ class Milestone(Base):
 
     reward_description = Column(Text, nullable=True)  # e.g. "Buy a book", "Take a day off"
     order_index = Column(Integer, default=0)  # display/logical order among milestones
+    deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -184,6 +185,7 @@ class Task(Base):
 
     priority = Column(String(20), default="medium")
     estimated_duration = Column(Integer)  # minutes
+    value = Column(Float, nullable=True)  # contribution to goal's current_value when completed
     deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app import models, schemas
 from app.database import get_db
@@ -288,4 +288,121 @@ def get_all_goals_overview(
         'total_tasks': total_tasks,
         'total_completed_tasks': total_completed,
         'overall_task_completion': round((total_completed / total_tasks * 100), 2) if total_tasks > 0 else 0
+    }
+
+
+@router.get('/statistics/person/{person_id}')
+def get_goals_statistics_by_person(person_id: int, db: Session = Depends(get_db)):
+    """
+    Get detailed statistics of all goals for a specific person.
+
+    Returns:
+    - Summary: total goals, by status, by category, average completion
+    - Per-goal breakdown: tasks, milestones, progress, target vs current value
+    """
+    all_goals = db.query(models.Goal).filter(
+        models.Goal.person_id == person_id
+    ).all()
+
+    deleted_goals = sum(1 for g in all_goals if g.deleted)
+    goals = [g for g in all_goals if not g.deleted]
+
+    if not all_goals:
+        return {
+            'person_id': person_id,
+            'total_goals': 0,
+            'active_goals': 0,
+            'deleted_goals': 0,
+            'by_status': {},
+            'by_category': {},
+            'average_completion': 0,
+            'total_tasks': 0,
+            'total_completed_tasks': 0,
+            'overall_task_completion': 0,
+            'total_milestones': 0,
+            'total_achieved_milestones': 0,
+            'goals': []
+        }
+
+    by_status = {}
+    by_category = {}
+    total_percentage = 0
+    total_tasks = 0
+    total_completed_tasks = 0
+    total_milestones = 0
+    total_achieved_milestones = 0
+    goals_detail = []
+
+    for goal in goals:
+        # Count by status
+        by_status[goal.status] = by_status.get(goal.status, 0) + 1
+
+        # Count by category
+        cat = goal.category or 'uncategorized'
+        by_category[cat] = by_category.get(cat, 0) + 1
+
+        total_percentage += goal.percentage
+
+        # Task stats for this goal
+        goal_total_tasks = db.query(func.count(models.Task.id)).filter(
+            models.Task.goal_id == goal.id,
+            or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+        ).scalar()
+        goal_completed_tasks = db.query(func.count(models.Task.id)).filter(
+            models.Task.goal_id == goal.id,
+            models.Task.completed == True,
+            or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+        ).scalar()
+
+        total_tasks += goal_total_tasks
+        total_completed_tasks += goal_completed_tasks
+
+        # Milestone stats for this goal
+        goal_total_milestones = db.query(func.count(models.Milestone.id)).filter(
+            models.Milestone.goal_id == goal.id,
+            models.Milestone.deleted == False
+        ).scalar()
+        goal_achieved_milestones = db.query(func.count(models.Milestone.id)).filter(
+            models.Milestone.goal_id == goal.id,
+            models.Milestone.achieved == True,
+            models.Milestone.deleted == False
+        ).scalar()
+
+        total_milestones += goal_total_milestones
+        total_achieved_milestones += goal_achieved_milestones
+
+        goals_detail.append({
+            'id': goal.id,
+            'name': goal.name,
+            'category': goal.category,
+            'status': goal.status,
+            'priority': goal.priority,
+            'percentage': goal.percentage,
+            'target_value': goal.target_value,
+            'current_value': goal.current_value,
+            'total_tasks': goal_total_tasks,
+            'completed_tasks': goal_completed_tasks,
+            'task_completion': round((goal_completed_tasks / goal_total_tasks * 100), 2) if goal_total_tasks > 0 else 0,
+            'total_milestones': goal_total_milestones,
+            'achieved_milestones': goal_achieved_milestones,
+            'start_date': goal.start_date,
+            'target_date': goal.target_date,
+        })
+
+    avg_completion = round(total_percentage / len(goals), 2)
+
+    return {
+        'person_id': person_id,
+        'total_goals': len(all_goals),
+        'active_goals': len(goals),
+        'deleted_goals': deleted_goals,
+        'by_status': by_status,
+        'by_category': by_category,
+        'average_completion': avg_completion,
+        'total_tasks': total_tasks,
+        'total_completed_tasks': total_completed_tasks,
+        'overall_task_completion': round((total_completed_tasks / total_tasks * 100), 2) if total_tasks > 0 else 0,
+        'total_milestones': total_milestones,
+        'total_achieved_milestones': total_achieved_milestones,
+        'goals': goals_detail
     }
