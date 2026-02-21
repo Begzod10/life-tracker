@@ -169,7 +169,7 @@ def update_income_source(
     return db_income_source
 
 
-@router.delete('/{income_source_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{income_source_id}', status_code=status.HTTP_200_OK)
 def delete_income_source(
         income_source_id: int,
         db: Session = Depends(get_db),
@@ -189,7 +189,7 @@ def delete_income_source(
 
     db.delete(db_income_source)
     db.commit()
-    return
+    return {"message": "Income source deleted"}
 
 
 @router.get('/summary/by-type', response_model=dict)

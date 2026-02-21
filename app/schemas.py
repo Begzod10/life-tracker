@@ -238,6 +238,7 @@ class SubTaskUpdate(BaseModel):
 
 # ========== PROGRESS LOG SCHEMAS ==========
 class ProgressLogBase(BaseModel):
+    id: Optional[int]
     value_logged: Optional[float] = Field(None, description="Logged value")
     notes: Optional[str] = Field(None, description="Notes about the progress")
     mood: Optional[str] = Field(None, description="Mood: great, good, okay, struggling")
@@ -360,6 +361,7 @@ class Job(JobBase):
 
     id: int
     person_id: int
+    deleted: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -406,10 +408,25 @@ class SalaryMonth(SalaryMonthBase):
 
     id: int
     job_id: int
+    person_id: int
     total_spent: float = Field(default=0.0, description="Total amount spent from this salary")
     remaining_amount: float = Field(default=0.0, description="Remaining amount from this salary")
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class SalaryMonthWithJob(SalaryMonth):
+    """Salary month with associated job info"""
+    job_name: Optional[str] = None
+    company: Optional[str] = None
+
+
+class SalaryMonthGenerateResponse(BaseModel):
+    """Response for bulk salary month generation"""
+    created_count: int
+    skipped_count: int
+    created: List[SalaryMonth]
+    skipped_months: List[str] = Field(description="Months that already had records")
 
 
 # ==================== EXPENSE SCHEMAS ====================

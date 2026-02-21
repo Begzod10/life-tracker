@@ -129,7 +129,7 @@ def update_saving(
     return db_saving
 
 
-@router.delete('/{saving_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{saving_id}', status_code=status.HTTP_200_OK)
 def delete_saving(
         saving_id: int,
         db: Session = Depends(get_db),
@@ -149,7 +149,7 @@ def delete_saving(
 
     db.delete(db_saving)
     db.commit()
-    return
+    return {"message": "Saving deleted"}
 
 
 @router.get('/{saving_id}/transactions', response_model=List[schemas.SavingTransaction])
@@ -360,7 +360,7 @@ def get_saving_progress(
     }
 
 
-@router.delete('/{saving_id}/transactions/{transaction_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{saving_id}/transactions/{transaction_id}', status_code=status.HTTP_200_OK)
 def delete_saving_transaction(
         saving_id: int,
         transaction_id: int,
@@ -401,4 +401,4 @@ def delete_saving_transaction(
     db.delete(transaction)
     db.commit()
 
-    return
+    return {"message": "Transaction deleted"}

@@ -190,7 +190,7 @@ def update_budget(
     return db_budget
 
 
-@router.delete('/{budget_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{budget_id}', status_code=status.HTTP_200_OK)
 def delete_budget(
         budget_id: int,
         db: Session = Depends(get_db),
@@ -210,7 +210,7 @@ def delete_budget(
 
     db.delete(db_budget)
     db.commit()
-    return
+    return {"message": "Budget deleted"}
 
 
 @router.get('/{budget_id}/adherence', response_model=dict)

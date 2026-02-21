@@ -227,7 +227,7 @@ def update_expense(
     return db_expense
 
 
-@router.delete('/{expense_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{expense_id}', status_code=status.HTTP_200_OK)
 def delete_expense(
         expense_id: int,
         db: Session = Depends(get_db),
@@ -254,7 +254,7 @@ def delete_expense(
     if salary_month_id:
         _update_salary_month_totals(salary_month_id, db)
 
-    return
+    return {"message": "Expense deleted"}
 
 
 @router.get('/summary/by-category', response_model=dict)

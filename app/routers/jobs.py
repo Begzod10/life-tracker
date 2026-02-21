@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services.job_service import JobService
 
 router = APIRouter(
     prefix="/jobs",
@@ -31,6 +32,10 @@ def create_job(
     db.add(new_job)
     db.commit()
     db.refresh(new_job)
+
+    # Auto-generate a SalaryMonth record for every month the job covers
+    JobService.generate_salary_months(new_job, db)
+
     return new_job
 
 
@@ -41,7 +46,10 @@ def get_jobs(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Get all jobs for the current user"""
-    query = db.query(models.Job).filter(models.Job.person_id == current_user.id)
+    query = db.query(models.Job).filter(
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
+    )
 
     if active_only:
         query = query.filter(models.Job.active == True)
@@ -57,7 +65,52 @@ def get_active_jobs(
     """Get only active jobs for the current user"""
     return db.query(models.Job).filter(
         models.Job.person_id == current_user.id,
-        models.Job.active == True
+        models.Job.active == True,
+        models.Job.deleted == False
+    ).order_by(models.Job.start_date.desc()).all()
+
+
+@router.get('/by-person/{person_id}', response_model=List[schemas.Job])
+def get_jobs_by_person(
+        person_id: int,
+        active_only: bool = Query(False, description="Filter only active jobs"),
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all jobs for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view jobs for yourself"
+        )
+
+    query = db.query(models.Job).filter(
+        models.Job.person_id == person_id,
+        models.Job.deleted == False
+    )
+
+    if active_only:
+        query = query.filter(models.Job.active == True)
+
+    return query.order_by(models.Job.start_date.desc()).all()
+
+
+@router.get('/deleted/by-person/{person_id}', response_model=List[schemas.Job])
+def get_deleted_jobs_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all soft-deleted jobs for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view jobs for yourself"
+        )
+
+    return db.query(models.Job).filter(
+        models.Job.person_id == person_id,
+        models.Job.deleted == True
     ).order_by(models.Job.start_date.desc()).all()
 
 
@@ -70,7 +123,8 @@ def get_job(
     """Get a specific job by ID"""
     job = db.query(models.Job).filter(
         models.Job.id == job_id,
-        models.Job.person_id == current_user.id
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
     ).first()
 
     if not job:
@@ -91,7 +145,8 @@ def update_job(
     """Update a job"""
     db_job = db.query(models.Job).filter(
         models.Job.id == job_id,
-        models.Job.person_id == current_user.id
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
     ).first()
 
     if not db_job:
@@ -109,16 +164,17 @@ def update_job(
     return db_job
 
 
-@router.delete('/{job_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{job_id}', status_code=status.HTTP_200_OK)
 def delete_job(
         job_id: int,
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Delete a job"""
+    """Soft-delete a job"""
     db_job = db.query(models.Job).filter(
         models.Job.id == job_id,
-        models.Job.person_id == current_user.id
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
     ).first()
 
     if not db_job:
@@ -127,9 +183,9 @@ def delete_job(
             detail="Job not found"
         )
 
-    db.delete(db_job)
+    db_job.deleted = True if db_job.deleted == False else False
     db.commit()
-    return
+    return {"message": "Job deleted"}
 
 
 @router.get('/{job_id}/salary-months', response_model=List[schemas.SalaryMonth])
@@ -142,7 +198,8 @@ def get_job_salary_months(
     # Verify job ownership
     job = db.query(models.Job).filter(
         models.Job.id == job_id,
-        models.Job.person_id == current_user.id
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
     ).first()
 
     if not job:
@@ -166,7 +223,8 @@ def deactivate_job(
     """Mark a job as inactive (ended)"""
     db_job = db.query(models.Job).filter(
         models.Job.id == job_id,
-        models.Job.person_id == current_user.id
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
     ).first()
 
     if not db_job:
@@ -175,11 +233,46 @@ def deactivate_job(
             detail="Job not found"
         )
 
-    db_job.active = False
+    db_job.active = True if db_job.active == False else False
+
     if end_date:
-        from datetime import datetime
         db_job.end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
 
     db.commit()
     db.refresh(db_job)
     return db_job
+
+
+@router.post('/{job_id}/generate-salary-months', response_model=schemas.SalaryMonthGenerateResponse,
+             status_code=status.HTTP_201_CREATED)
+def generate_salary_months(
+        job_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Re-run salary month generation for an existing job.
+
+    Delegates to JobService.generate_salary_months — the same function
+    that runs automatically when a job is created.
+    Already-existing months are skipped without error.
+    """
+    job = db.query(models.Job).filter(
+        models.Job.id == job_id,
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False
+    ).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found"
+        )
+
+    created, skipped = JobService.generate_salary_months(job, db)
+
+    return schemas.SalaryMonthGenerateResponse(
+        created_count=len(created),
+        skipped_count=len(skipped),
+        created=created,
+        skipped_months=skipped,
+    )

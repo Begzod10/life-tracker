@@ -133,7 +133,7 @@ def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(ge
     return db_task
 
 
-@router.delete('/{task_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{task_id}', status_code=status.HTTP_200_OK)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     """
     Delete a task and recalculate goal progress.
@@ -151,7 +151,7 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     # Recalculate goal progress (removing a task changes the total)
     ProgressService.update_goal_percentage(goal_id, db, method='hybrid')
 
-    return
+    return {"message": "Task deleted"}
 
 
 @router.get('/person/{person_id}', response_model=List[schemas.Task])

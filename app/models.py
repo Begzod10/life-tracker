@@ -267,6 +267,7 @@ class Job(Base):
     # Employment type
     employment_type = Column(String(50), default="full-time")  # full-time, part-time, freelance, contract
     active = Column(Boolean, default=True)
+    deleted = Column(Boolean, default=False)
 
     notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -287,6 +288,7 @@ class SalaryMonth(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
 
     # Month identifier
     month = Column(String(7), nullable=False)  # Format: YYYY-MM (e.g., "2026-01")

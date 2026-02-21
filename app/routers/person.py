@@ -55,11 +55,11 @@ def update_person(person_id: int, person: schemas.PersonUpdate, db: Session = De
     return db_person
 
 
-@router.delete('/{person_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{person_id}', status_code=status.HTTP_200_OK)
 def delete_person(person_id: int, db: Session = Depends(get_db)):
     db_person = db.query(models.Person).filter(models.Person.id == person_id).first()
     if not db_person:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Person not found")
     db.delete(db_person)
     db.commit()
-    return
+    return {"message": "Person deleted"}

@@ -122,7 +122,7 @@ def update_goal(goal_id: int, goal: schemas.GoalUpdate, db: Session = Depends(ge
     return db_goal
 
 
-@router.delete('/{goal_id}')
+@router.delete('/{goal_id}', status_code=status.HTTP_200_OK)
 def delete_goal(goal_id: int, db: Session = Depends(get_db)):
     """Delete a goal and all associated tasks"""
     db_goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()

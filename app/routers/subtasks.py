@@ -73,7 +73,7 @@ def update_subtask(subtask_id: int, subtask: schemas.SubTaskUpdate, db: Session 
     return db_subtask
 
 
-@router.delete('/{subtask_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{subtask_id}', status_code=status.HTTP_200_OK)
 def delete_subtask(subtask_id: int, db: Session = Depends(get_db)):
     db_subtask = db.query(models.SubTasks).filter(models.SubTasks.id == subtask_id).first()
     if not db_subtask:
@@ -82,7 +82,7 @@ def delete_subtask(subtask_id: int, db: Session = Depends(get_db)):
     db_subtask.deleted = True
     db.commit()
     _reorder_subtasks(task_id, db)
-    return
+    return {"message": "Subtask deleted"}
 
 
 @router.get('/person/{person_id}', response_model=List[schemas.SubTask])

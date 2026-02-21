@@ -1,21 +1,51 @@
 import sys
 import traceback
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
     financial_analytics, savings, salary_months, income_sources, milestones
 from app.config import settings
+from app.services.job_service import JobService
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run once at startup to fill any gap (e.g. server was down on the 1st)
+    try:
+        JobService.create_current_month_for_all_jobs()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Startup salary-month generation failed")
+
+    # Schedule to run at 00:05 on the 1st of every month
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        JobService.create_current_month_for_all_jobs,
+        CronTrigger(day=1, hour=0, minute=5),
+        id="monthly_salary_months",
+        replace_existing=True,
+    )
+    scheduler.start()
+
+    yield
+
+    scheduler.shutdown()
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Personal life tracking and self-improvement system",
     version=settings.VERSION,
     docs_url=None,
-    redoc_url=None
+    redoc_url=None,
+    lifespan=lifespan,
 )
 
 # CORS middleware - Using settings.get_cors_origins()

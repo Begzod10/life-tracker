@@ -50,7 +50,7 @@ def update_progress_log_task(progress_log_task_id: int, progress_log_task: schem
     return db_progress_log_task
 
 
-@router.delete('/{progress_log_task_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{progress_log_task_id}', status_code=status.HTTP_200_OK)
 def delete_progress_log_task(progress_log_task_id: int, db: Session = Depends(get_db)):
     db_progress_log_task = db.query(models.ProgressLogTask).filter(
 
@@ -59,7 +59,7 @@ def delete_progress_log_task(progress_log_task_id: int, db: Session = Depends(ge
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Progress log task not found")
     db.delete(db_progress_log_task)
     db.commit()
-    return
+    return {"message": "Progress log task deleted"}
 
 
 @router.get('/task/{task_id}', response_model=List[schemas.ProgressLogBase])
