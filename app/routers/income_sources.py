@@ -20,7 +20,6 @@ def create_income_source(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Create a new income source"""
-    # Verify income source belongs to current user
     if income_source.person_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -45,10 +44,10 @@ def get_income_sources(
 ):
     """Get all income sources for current user"""
     query = db.query(models.IncomeSource).filter(
-        models.IncomeSource.person_id == current_user.id
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
     )
 
-    # Apply filters
     if source_type:
         query = query.filter(models.IncomeSource.source_type == source_type)
 
@@ -75,7 +74,6 @@ def get_current_month_income(
     today = date.today()
     start_of_month = today.replace(day=1)
 
-    # Calculate end of month
     if today.month == 12:
         end_of_month = today.replace(year=today.year + 1, month=1, day=1)
     else:
@@ -83,6 +81,7 @@ def get_current_month_income(
 
     return db.query(models.IncomeSource).filter(
         models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False,
         models.IncomeSource.received_date >= start_of_month,
         models.IncomeSource.received_date < end_of_month
     ).order_by(models.IncomeSource.received_date.desc()).all()
@@ -99,6 +98,7 @@ def get_income_by_type(
     """Get income sources by type"""
     query = db.query(models.IncomeSource).filter(
         models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False,
         models.IncomeSource.source_type == source_type
     )
 
@@ -121,75 +121,42 @@ def get_income_by_type(
     return query.order_by(models.IncomeSource.received_date.desc()).all()
 
 
-@router.get('/{income_source_id}', response_model=schemas.IncomeSource)
-def get_income_source(
-        income_source_id: int,
+@router.get('/by-person/{person_id}', response_model=List[schemas.IncomeSource])
+def get_income_sources_by_person(
+        person_id: int,
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Get a specific income source by ID"""
-    income_source = db.query(models.IncomeSource).filter(
-        models.IncomeSource.id == income_source_id,
-        models.IncomeSource.person_id == current_user.id
-    ).first()
-
-    if not income_source:
+    """Get all active income sources for a specific person"""
+    if person_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Income source not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own income sources"
         )
-    return income_source
+
+    return db.query(models.IncomeSource).filter(
+        models.IncomeSource.person_id == person_id,
+        models.IncomeSource.deleted == False
+    ).order_by(models.IncomeSource.received_date.desc()).all()
 
 
-@router.put('/{income_source_id}', response_model=schemas.IncomeSource)
-def update_income_source(
-        income_source_id: int,
-        income_source: schemas.IncomeSourceUpdate,
+@router.get('/by-person/{person_id}/deleted', response_model=List[schemas.IncomeSource])
+def get_deleted_income_sources_by_person(
+        person_id: int,
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Update an income source"""
-    db_income_source = db.query(models.IncomeSource).filter(
-        models.IncomeSource.id == income_source_id,
-        models.IncomeSource.person_id == current_user.id
-    ).first()
-
-    if not db_income_source:
+    """Get all deleted income sources for a specific person"""
+    if person_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Income source not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own income sources"
         )
 
-    update_data = income_source.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_income_source, key, value)
-
-    db.commit()
-    db.refresh(db_income_source)
-    return db_income_source
-
-
-@router.delete('/{income_source_id}', status_code=status.HTTP_200_OK)
-def delete_income_source(
-        income_source_id: int,
-        db: Session = Depends(get_db),
-        current_user: models.Person = Depends(get_current_user)
-):
-    """Delete an income source"""
-    db_income_source = db.query(models.IncomeSource).filter(
-        models.IncomeSource.id == income_source_id,
-        models.IncomeSource.person_id == current_user.id
-    ).first()
-
-    if not db_income_source:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Income source not found"
-        )
-
-    db.delete(db_income_source)
-    db.commit()
-    return {"message": "Income source deleted"}
+    return db.query(models.IncomeSource).filter(
+        models.IncomeSource.person_id == person_id,
+        models.IncomeSource.deleted == True
+    ).order_by(models.IncomeSource.received_date.desc()).all()
 
 
 @router.get('/summary/by-type', response_model=dict)
@@ -201,10 +168,10 @@ def get_income_summary_by_type(
 ):
     """Get income summary grouped by source type"""
     query = db.query(models.IncomeSource).filter(
-        models.IncomeSource.person_id == current_user.id
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
     )
 
-    # Apply date filters
     if year and month:
         start = date(year, month, 1)
         if month == 12:
@@ -223,23 +190,17 @@ def get_income_summary_by_type(
 
     income_sources = query.all()
 
-    # Group by source type
     summary = {}
     total = 0
 
     for income in income_sources:
         source_type = income.source_type or "uncategorized"
         if source_type not in summary:
-            summary[source_type] = {
-                "total": 0,
-                "count": 0,
-                "average": 0
-            }
+            summary[source_type] = {"total": 0, "count": 0, "average": 0}
         summary[source_type]["total"] += income.amount
         summary[source_type]["count"] += 1
         total += income.amount
 
-    # Calculate averages and percentages
     for source_type in summary:
         summary[source_type]["average"] = summary[source_type]["total"] / summary[source_type]["count"]
         summary[source_type]["percentage"] = (summary[source_type]["total"] / total * 100) if total > 0 else 0
@@ -260,7 +221,8 @@ def get_total_income_for_period(
 ):
     """Get total income for a specific period"""
     query = db.query(models.IncomeSource).filter(
-        models.IncomeSource.person_id == current_user.id
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
     )
 
     if month:
@@ -289,3 +251,102 @@ def get_total_income_for_period(
         "total_income": total,
         "count": len(income_sources)
     }
+
+
+@router.patch('/deleted/{income_source_id}/restore', response_model=schemas.IncomeSource)
+def restore_income_source(
+        income_source_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Restore a soft-deleted income source"""
+    db_income_source = db.query(models.IncomeSource).filter(
+        models.IncomeSource.id == income_source_id,
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == True
+    ).first()
+
+    if not db_income_source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deleted income source not found"
+        )
+
+    db_income_source.deleted = False
+    db.commit()
+    db.refresh(db_income_source)
+    return db_income_source
+
+
+@router.get('/{income_source_id}', response_model=schemas.IncomeSource)
+def get_income_source(
+        income_source_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get a specific income source by ID"""
+    income_source = db.query(models.IncomeSource).filter(
+        models.IncomeSource.id == income_source_id,
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
+    ).first()
+
+    if not income_source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Income source not found"
+        )
+    return income_source
+
+
+@router.put('/{income_source_id}', response_model=schemas.IncomeSource)
+def update_income_source(
+        income_source_id: int,
+        income_source: schemas.IncomeSourceUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Update an income source"""
+    db_income_source = db.query(models.IncomeSource).filter(
+        models.IncomeSource.id == income_source_id,
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
+    ).first()
+
+    if not db_income_source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Income source not found"
+        )
+
+    update_data = income_source.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_income_source, key, value)
+
+    db.commit()
+    db.refresh(db_income_source)
+    return db_income_source
+
+
+@router.delete('/{income_source_id}', status_code=status.HTTP_200_OK)
+def delete_income_source(
+        income_source_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Soft-delete an income source"""
+    db_income_source = db.query(models.IncomeSource).filter(
+        models.IncomeSource.id == income_source_id,
+        models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False
+    ).first()
+
+    if not db_income_source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Income source not found"
+        )
+
+    db_income_source.deleted = True
+    db.commit()
+    return {"message": "Income source deleted"}

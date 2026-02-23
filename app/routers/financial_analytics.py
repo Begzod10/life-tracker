@@ -47,6 +47,7 @@ def get_monthly_summary(
     # Calculate other income
     income_sources = db.query(models.IncomeSource).filter(
         models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False,
         models.IncomeSource.received_date >= start_date,
         models.IncomeSource.received_date < end_date
     ).all()
@@ -55,6 +56,7 @@ def get_monthly_summary(
     # Calculate total expenses
     expenses = db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False,
         models.Expense.date >= start_date,
         models.Expense.date < end_date
     ).all()
@@ -68,7 +70,8 @@ def get_monthly_summary(
 
     # Calculate total savings (current balances)
     savings_accounts = db.query(models.Saving).filter(
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).all()
     total_savings = sum(s.current_balance for s in savings_accounts)
 
@@ -119,6 +122,7 @@ def get_monthly_report(
     # Get other income
     income_sources = db.query(models.IncomeSource).filter(
         models.IncomeSource.person_id == current_user.id,
+        models.IncomeSource.deleted == False,
         models.IncomeSource.received_date >= start_date,
         models.IncomeSource.received_date < end_date
     ).all()
@@ -127,6 +131,7 @@ def get_monthly_report(
     # Get expenses
     expenses = db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False,
         models.Expense.date >= start_date,
         models.Expense.date < end_date
     ).all()
@@ -149,7 +154,8 @@ def get_monthly_report(
     # Budget adherence
     budgets = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
-        models.Budget.period == month
+        models.Budget.period == month,
+        models.Budget.deleted == False
     ).all()
 
     budget_adherence = {}
@@ -193,7 +199,8 @@ def calculate_net_worth(
     """Calculate total net worth"""
     # Get all savings
     savings = db.query(models.Saving).filter(
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).all()
 
     total_savings = sum(s.current_balance for s in savings)
@@ -251,6 +258,7 @@ def get_spending_trends(
         # Get expenses for this month
         expenses = db.query(models.Expense).filter(
             models.Expense.person_id == current_user.id,
+            models.Expense.deleted == False,
             models.Expense.date >= start_date,
             models.Expense.date < end_date
         ).all()
@@ -309,6 +317,7 @@ def analyze_category_spending(
 
         expenses = db.query(models.Expense).filter(
             models.Expense.person_id == current_user.id,
+            models.Expense.deleted == False,
             models.Expense.category == category,
             models.Expense.date >= start_date,
             models.Expense.date < end_date
@@ -344,7 +353,8 @@ def analyze_savings_growth(
 ):
     """Analyze savings growth over time"""
     savings_accounts = db.query(models.Saving).filter(
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).all()
 
     growth_by_account = {}
@@ -428,6 +438,7 @@ def compare_income_expenses(
 
         other_income = db.query(models.IncomeSource).filter(
             models.IncomeSource.person_id == current_user.id,
+            models.IncomeSource.deleted == False,
             models.IncomeSource.received_date >= start_date,
             models.IncomeSource.received_date < end_date
         ).all()
@@ -438,6 +449,7 @@ def compare_income_expenses(
         # Calculate expenses
         expenses = db.query(models.Expense).filter(
             models.Expense.person_id == current_user.id,
+            models.Expense.deleted == False,
             models.Expense.date >= start_date,
             models.Expense.date < end_date
         ).all()

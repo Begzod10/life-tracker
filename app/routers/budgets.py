@@ -31,7 +31,8 @@ def create_budget(
     existing = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
         models.Budget.period == budget.period,
-        models.Budget.category == budget.category
+        models.Budget.category == budget.category,
+        models.Budget.deleted == False
     ).first()
 
     if existing:
@@ -64,7 +65,8 @@ def get_budgets(
 ):
     """Get all budgets for current user"""
     query = db.query(models.Budget).filter(
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     )
 
     if period:
@@ -97,6 +99,7 @@ def get_current_month_budgets(
 
     budgets = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False,
         models.Budget.period == current_period,
         models.Budget.period_type == "monthly"
     ).order_by(models.Budget.category).all()
@@ -119,6 +122,7 @@ def get_budgets_by_period(
     """Get all budgets for a specific period"""
     budgets = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False,
         models.Budget.period == period
     ).order_by(models.Budget.category).all()
 
@@ -131,6 +135,76 @@ def get_budgets_by_period(
     return budgets
 
 
+@router.patch('/deleted/{budget_id}/restore', response_model=schemas.Budget)
+def restore_budget(
+        budget_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Restore a soft-deleted budget"""
+    db_budget = db.query(models.Budget).filter(
+        models.Budget.id == budget_id,
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == True
+    ).first()
+
+    if not db_budget:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deleted budget not found"
+        )
+
+    db_budget.deleted = False
+    db.commit()
+    db.refresh(db_budget)
+
+    return db_budget
+
+
+@router.get('/by-person/{person_id}', response_model=List[schemas.Budget])
+def get_budgets_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all active budgets for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own budgets"
+        )
+
+    budgets = db.query(models.Budget).filter(
+        models.Budget.person_id == person_id,
+        models.Budget.deleted == False
+    ).order_by(models.Budget.period.desc(), models.Budget.category).all()
+
+    for budget in budgets:
+        _update_budget_totals(budget.id, db)
+    db.commit()
+
+    return budgets
+
+
+@router.get('/by-person/{person_id}/deleted', response_model=List[schemas.Budget])
+def get_deleted_budgets_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted budgets for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own budgets"
+        )
+
+    return db.query(models.Budget).filter(
+        models.Budget.person_id == person_id,
+        models.Budget.deleted == True
+    ).order_by(models.Budget.period.desc(), models.Budget.category).all()
+
+
 @router.get('/{budget_id}', response_model=schemas.Budget)
 def get_budget(
         budget_id: int,
@@ -140,7 +214,8 @@ def get_budget(
     """Get a specific budget by ID"""
     budget = db.query(models.Budget).filter(
         models.Budget.id == budget_id,
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     ).first()
 
     if not budget:
@@ -167,7 +242,8 @@ def update_budget(
     """Update a budget"""
     db_budget = db.query(models.Budget).filter(
         models.Budget.id == budget_id,
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     ).first()
 
     if not db_budget:
@@ -199,7 +275,8 @@ def delete_budget(
     """Delete a budget"""
     db_budget = db.query(models.Budget).filter(
         models.Budget.id == budget_id,
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     ).first()
 
     if not db_budget:
@@ -208,7 +285,7 @@ def delete_budget(
             detail="Budget not found"
         )
 
-    db.delete(db_budget)
+    db_budget.deleted = True
     db.commit()
     return {"message": "Budget deleted"}
 
@@ -222,7 +299,8 @@ def get_budget_adherence(
     """Get detailed budget adherence report"""
     budget = db.query(models.Budget).filter(
         models.Budget.id == budget_id,
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     ).first()
 
     if not budget:
@@ -261,6 +339,24 @@ def get_budget_adherence(
     }
 
 
+@router.post('/recalculate-all', response_model=dict)
+def recalculate_all_budgets(
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Recalculate spent_amount and remaining_amount for all active budgets"""
+    budgets = db.query(models.Budget).filter(
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
+    ).all()
+
+    for budget in budgets:
+        _update_budget_totals(budget.id, db)
+    db.commit()
+
+    return {"message": f"Recalculated {len(budgets)} budgets"}
+
+
 @router.post('/{budget_id}/recalculate', response_model=schemas.Budget)
 def recalculate_budget(
         budget_id: int,
@@ -270,7 +366,8 @@ def recalculate_budget(
     """Manually trigger budget recalculation"""
     budget = db.query(models.Budget).filter(
         models.Budget.id == budget_id,
-        models.Budget.person_id == current_user.id
+        models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False
     ).first()
 
     if not budget:
@@ -295,6 +392,7 @@ def get_period_budget_summary(
     """Get summary of all budgets for a period"""
     budgets = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
+        models.Budget.deleted == False,
         models.Budget.period == period
     ).all()
 
@@ -359,11 +457,12 @@ def create_monthly_budget_template(
     created_budgets = []
 
     for category, amount in categories.items():
-        # Check if already exists
+        # Check if already exists (ignore deleted ones)
         existing = db.query(models.Budget).filter(
             models.Budget.person_id == current_user.id,
             models.Budget.period == period,
-            models.Budget.category == category
+            models.Budget.category == category,
+            models.Budget.deleted == False
         ).first()
 
         if not existing:
@@ -416,6 +515,7 @@ def _update_budget_totals(budget_id: int, db: Session):
     # Get expenses for this category and period
     expenses = db.query(models.Expense).filter(
         models.Expense.person_id == budget.person_id,
+        models.Expense.deleted == False,
         models.Expense.category == budget.category,
         models.Expense.date >= start,
         models.Expense.date < end

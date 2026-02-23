@@ -333,7 +333,8 @@ def get_salary_month_expenses(
         )
 
     return db.query(models.Expense).filter(
-        models.Expense.salary_month_id == salary_month_id
+        models.Expense.salary_month_id == salary_month_id,
+        models.Expense.deleted == False
     ).order_by(models.Expense.date.desc()).all()
 
 
@@ -357,7 +358,8 @@ def recalculate_salary_month(
 
     # Calculate total spent from expenses
     expenses = db.query(models.Expense).filter(
-        models.Expense.salary_month_id == salary_month_id
+        models.Expense.salary_month_id == salary_month_id,
+        models.Expense.deleted == False
     ).all()
 
     total_spent = sum(expense.amount for expense in expenses)

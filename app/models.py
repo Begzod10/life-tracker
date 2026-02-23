@@ -353,6 +353,8 @@ class Expense(Base):
     location = Column(String(200))
     tags = Column(Text)  # JSON array of strings, stored as text
 
+    deleted = Column(Boolean, default=False)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -379,6 +381,7 @@ class IncomeSource(Base):
     received_date = Column(Date, nullable=False)
 
     description = Column(Text)
+    deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -412,6 +415,7 @@ class Saving(Base):
     platform = Column(String(200))  # Bank name, broker, exchange, etc.
 
     notes = Column(Text)
+    deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -467,6 +471,7 @@ class Budget(Base):
     remaining_amount = Column(Float, default=0.0)
 
     notes = Column(Text)
+    deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

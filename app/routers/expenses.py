@@ -54,6 +54,9 @@ def create_expense(
     if new_expense.salary_month_id:
         _update_salary_month_totals(new_expense.salary_month_id, db)
 
+    # Update matching budget if exists
+    _update_matching_budget(new_expense, db)
+
     return new_expense
 
 
@@ -73,7 +76,8 @@ def get_expenses(
 ):
     """Get all expenses for current user with filters"""
     query = db.query(models.Expense).filter(
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     )
 
     # Apply filters
@@ -120,6 +124,7 @@ def get_current_month_expenses(
 
     return db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False,
         models.Expense.date >= start_of_month,
         models.Expense.date < end_of_month
     ).order_by(models.Expense.date.desc()).all()
@@ -136,6 +141,7 @@ def get_expenses_by_category(
     """Get expenses by category"""
     query = db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False,
         models.Expense.category == category
     )
 
@@ -166,8 +172,91 @@ def get_recurring_expenses(
     """Get all recurring expenses"""
     return db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False,
         models.Expense.is_recurring == True
     ).order_by(models.Expense.date.desc()).all()
+
+
+@router.get('/by-person/{person_id}', response_model=List[schemas.Expense])
+def get_expenses_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all active expenses for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own expenses"
+        )
+
+    return db.query(models.Expense).filter(
+        models.Expense.person_id == person_id,
+        models.Expense.deleted == False
+    ).order_by(models.Expense.date.desc()).all()
+
+
+@router.get('/by-person/{person_id}/deleted', response_model=List[schemas.Expense])
+def get_deleted_expenses_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted expenses for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own expenses"
+        )
+
+    return db.query(models.Expense).filter(
+        models.Expense.person_id == person_id,
+        models.Expense.deleted == True
+    ).order_by(models.Expense.date.desc()).all()
+
+
+@router.get('/deleted/list', response_model=List[schemas.Expense])
+def get_deleted_expenses(
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all soft-deleted expenses for the current user"""
+    return db.query(models.Expense).filter(
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == True
+    ).order_by(models.Expense.date.desc()).all()
+
+
+@router.patch('/deleted/{expense_id}/restore', response_model=schemas.Expense)
+def restore_expense(
+        expense_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Restore a soft-deleted expense"""
+    db_expense = db.query(models.Expense).filter(
+        models.Expense.id == expense_id,
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == True
+    ).first()
+
+    if not db_expense:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deleted expense not found"
+        )
+
+    db_expense.deleted = False
+    db.commit()
+    db.refresh(db_expense)
+
+    if db_expense.salary_month_id:
+        _update_salary_month_totals(db_expense.salary_month_id, db)
+
+    # Update matching budget
+    _update_matching_budget(db_expense, db)
+
+    return db_expense
 
 
 @router.get('/{expense_id}', response_model=schemas.Expense)
@@ -179,7 +268,8 @@ def get_expense(
     """Get a specific expense by ID"""
     expense = db.query(models.Expense).filter(
         models.Expense.id == expense_id,
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     ).first()
 
     if not expense:
@@ -200,7 +290,8 @@ def update_expense(
     """Update an expense"""
     db_expense = db.query(models.Expense).filter(
         models.Expense.id == expense_id,
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     ).first()
 
     if not db_expense:
@@ -210,6 +301,8 @@ def update_expense(
         )
 
     old_salary_month_id = db_expense.salary_month_id
+    old_category = db_expense.category
+    old_date = db_expense.date
 
     update_data = expense.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -224,6 +317,13 @@ def update_expense(
     if db_expense.salary_month_id and db_expense.salary_month_id != old_salary_month_id:
         _update_salary_month_totals(db_expense.salary_month_id, db)
 
+    # Update old budget if category or date changed
+    if old_category != db_expense.category or old_date != db_expense.date:
+        _update_matching_budget_by_fields(db_expense.person_id, old_category, old_date, db)
+
+    # Update current matching budget
+    _update_matching_budget(db_expense, db)
+
     return db_expense
 
 
@@ -236,7 +336,8 @@ def delete_expense(
     """Delete an expense"""
     db_expense = db.query(models.Expense).filter(
         models.Expense.id == expense_id,
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     ).first()
 
     if not db_expense:
@@ -247,12 +348,15 @@ def delete_expense(
 
     salary_month_id = db_expense.salary_month_id
 
-    db.delete(db_expense)
+    db_expense.deleted = True
     db.commit()
 
     # Update salary month totals if linked
     if salary_month_id:
         _update_salary_month_totals(salary_month_id, db)
+
+    # Update matching budget
+    _update_matching_budget(db_expense, db)
 
     return {"message": "Expense deleted"}
 
@@ -266,7 +370,8 @@ def get_expense_summary_by_category(
 ):
     """Get expense summary grouped by category"""
     query = db.query(models.Expense).filter(
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     )
 
     # Apply date filters
@@ -326,7 +431,8 @@ def get_top_expenses(
 ):
     """Get top N expenses by amount"""
     query = db.query(models.Expense).filter(
-        models.Expense.person_id == current_user.id
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == False
     )
 
     if year and month:
@@ -349,6 +455,27 @@ def get_top_expenses(
 
 
 # Helper function
+def _update_matching_budget(expense: models.Expense, db: Session):
+    """Find and update the budget matching this expense's person, category and month"""
+    _update_matching_budget_by_fields(expense.person_id, expense.category, expense.date, db)
+
+
+def _update_matching_budget_by_fields(person_id: int, category: str, expense_date, db: Session):
+    """Find and update the budget matching the given person, category and date"""
+    period = expense_date.strftime("%Y-%m")
+    budget = db.query(models.Budget).filter(
+        models.Budget.person_id == person_id,
+        models.Budget.category == category,
+        models.Budget.period == period,
+        models.Budget.deleted == False
+    ).first()
+
+    if budget:
+        from app.routers.budgets import _update_budget_totals
+        _update_budget_totals(budget.id, db)
+        db.commit()
+
+
 def _update_salary_month_totals(salary_month_id: int, db: Session):
     """Update total_spent and remaining_amount for a salary month"""
     salary_month = db.query(models.SalaryMonth).filter(
@@ -357,7 +484,8 @@ def _update_salary_month_totals(salary_month_id: int, db: Session):
 
     if salary_month:
         expenses = db.query(models.Expense).filter(
-            models.Expense.salary_month_id == salary_month_id
+            models.Expense.salary_month_id == salary_month_id,
+            models.Expense.deleted == False
         ).all()
 
         total_spent = sum(expense.amount for expense in expenses)

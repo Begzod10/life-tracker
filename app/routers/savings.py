@@ -20,7 +20,6 @@ def create_saving(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Create a new savings account"""
-    # Verify saving belongs to current user
     if saving.person_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -43,7 +42,8 @@ def get_savings(
 ):
     """Get all savings accounts for current user"""
     query = db.query(models.Saving).filter(
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     )
 
     if account_type:
@@ -60,9 +60,10 @@ def get_total_balance(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Get total balance across all savings accounts"""
+    """Get total balance across all active savings accounts"""
     savings = db.query(models.Saving).filter(
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).all()
 
     total = sum(saving.current_balance for saving in savings)
@@ -81,6 +82,69 @@ def get_total_balance(
     }
 
 
+@router.get('/by-person/{person_id}', response_model=List[schemas.Saving])
+def get_savings_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all active savings accounts for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own savings"
+        )
+
+    return db.query(models.Saving).filter(
+        models.Saving.person_id == person_id,
+        models.Saving.deleted == False
+    ).order_by(models.Saving.created_at.desc()).all()
+
+
+@router.get('/by-person/{person_id}/deleted', response_model=List[schemas.Saving])
+def get_deleted_savings_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted savings accounts for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own savings"
+        )
+
+    return db.query(models.Saving).filter(
+        models.Saving.person_id == person_id,
+        models.Saving.deleted == True
+    ).order_by(models.Saving.created_at.desc()).all()
+
+
+@router.patch('/deleted/{saving_id}/restore', response_model=schemas.Saving)
+def restore_saving(
+        saving_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Restore a soft-deleted savings account"""
+    db_saving = db.query(models.Saving).filter(
+        models.Saving.id == saving_id,
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == True
+    ).first()
+
+    if not db_saving:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deleted saving account not found"
+        )
+
+    db_saving.deleted = False
+    db.commit()
+    db.refresh(db_saving)
+    return db_saving
+
+
 @router.get('/{saving_id}', response_model=schemas.Saving)
 def get_saving(
         saving_id: int,
@@ -90,7 +154,8 @@ def get_saving(
     """Get a specific savings account by ID"""
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -111,7 +176,8 @@ def update_saving(
     """Update a savings account"""
     db_saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not db_saving:
@@ -135,10 +201,11 @@ def delete_saving(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Delete a savings account"""
+    """Soft-delete a savings account"""
     db_saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not db_saving:
@@ -147,7 +214,7 @@ def delete_saving(
             detail="Saving account not found"
         )
 
-    db.delete(db_saving)
+    db_saving.deleted = True
     db.commit()
     return {"message": "Saving deleted"}
 
@@ -161,10 +228,10 @@ def get_saving_transactions(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Get transaction history for a savings account"""
-    # Verify ownership
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -186,10 +253,10 @@ def create_saving_transaction(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Create a new transaction for a savings account"""
-    # Verify ownership and get saving account
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -198,25 +265,21 @@ def create_saving_transaction(
             detail="Saving account not found"
         )
 
-    # Verify the transaction's saving_id matches the URL parameter
     if transaction.saving_id != saving_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Transaction saving_id doesn't match URL parameter"
         )
 
-    # Validate transaction
     if transaction.transaction_type == "withdrawal" and transaction.amount > saving.current_balance:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Insufficient balance for withdrawal"
         )
 
-    # Create transaction
     new_transaction = models.SavingTransaction(**transaction.model_dump())
     db.add(new_transaction)
 
-    # Update saving account balance
     if transaction.transaction_type == "deposit" or transaction.transaction_type == "interest":
         saving.current_balance += transaction.amount
     elif transaction.transaction_type == "withdrawal":
@@ -241,7 +304,8 @@ def deposit_to_saving(
     """Make a deposit to a savings account"""
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -285,7 +349,8 @@ def withdraw_from_saving(
     """Make a withdrawal from a savings account"""
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -332,7 +397,8 @@ def get_saving_progress(
     """Get progress towards savings goal"""
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -368,10 +434,10 @@ def delete_saving_transaction(
         current_user: models.Person = Depends(get_current_user)
 ):
     """Delete a transaction (and reverse its effect on balance)"""
-    # Verify saving ownership
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
-        models.Saving.person_id == current_user.id
+        models.Saving.person_id == current_user.id,
+        models.Saving.deleted == False
     ).first()
 
     if not saving:
@@ -380,7 +446,6 @@ def delete_saving_transaction(
             detail="Saving account not found"
         )
 
-    # Get transaction
     transaction = db.query(models.SavingTransaction).filter(
         models.SavingTransaction.id == transaction_id,
         models.SavingTransaction.saving_id == saving_id
@@ -392,7 +457,6 @@ def delete_saving_transaction(
             detail="Transaction not found"
         )
 
-    # Reverse the transaction effect
     if transaction.transaction_type == "deposit" or transaction.transaction_type == "interest":
         saving.current_balance -= transaction.amount
     elif transaction.transaction_type == "withdrawal":

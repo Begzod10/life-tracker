@@ -501,6 +501,7 @@ class Expense(ExpenseBase):
     id: int
     person_id: int
     salary_month_id: Optional[int] = None
+    deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -554,6 +555,7 @@ class IncomeSource(IncomeSourceBase):
 
     id: int
     person_id: int
+    deleted: Optional[bool] = Field(default=False)
     created_at: datetime
 
 
@@ -616,6 +618,7 @@ class Saving(SavingBase):
 
     id: int
     person_id: int
+    deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -706,6 +709,7 @@ class Budget(BudgetBase):
     person_id: int
     spent_amount: float = Field(default=0.0, description="Amount spent in this category")
     remaining_amount: float = Field(default=0.0, description="Remaining budget")
+    deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
 
