@@ -40,7 +40,8 @@ def get_monthly_summary(
     job_ids = [j.id for j in db.query(models.Job).filter(models.Job.person_id == current_user.id).all()]
     salary_months = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id.in_(job_ids),
-        models.SalaryMonth.month == month
+        models.SalaryMonth.month == month,
+        models.SalaryMonth.deleted == False
     ).all()
     total_salary = sum(sm.net_amount for sm in salary_months)
 
@@ -68,12 +69,21 @@ def get_monthly_summary(
         category = exp.category or "uncategorized"
         expense_by_category[category] = expense_by_category.get(category, 0) + exp.amount
 
-    # Calculate total savings (current balances)
+    # Calculate total savings balance at end of the queried month
     savings_accounts = db.query(models.Saving).filter(
         models.Saving.person_id == current_user.id,
         models.Saving.deleted == False
     ).all()
-    total_savings = sum(s.current_balance for s in savings_accounts)
+    total_savings = 0.0
+    for saving in savings_accounts:
+        last_tx = db.query(models.SavingTransaction).filter(
+            models.SavingTransaction.saving_id == saving.id,
+            models.SavingTransaction.transaction_date < end_date
+        ).order_by(
+            models.SavingTransaction.transaction_date.desc(),
+            models.SavingTransaction.id.desc()
+        ).first()
+        total_savings += last_tx.balance_after if last_tx else saving.initial_amount
 
     # Calculate metrics
     total_income = total_salary + total_other_income
@@ -115,7 +125,8 @@ def get_monthly_report(
     job_ids = [j.id for j in db.query(models.Job).filter(models.Job.person_id == current_user.id).all()]
     salary_months = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id.in_(job_ids),
-        models.SalaryMonth.month == month
+        models.SalaryMonth.month == month,
+        models.SalaryMonth.deleted == False
     ).all()
     salary_received = sum(sm.net_amount for sm in salary_months)
 
@@ -205,15 +216,22 @@ def calculate_net_worth(
 
     total_savings = sum(s.current_balance for s in savings)
 
-    # Get latest salary remaining amounts
+    # Get current month's remaining salary across all jobs
+    current_month = date.today().strftime("%Y-%m")
     job_ids = [j.id for j in db.query(models.Job).filter(models.Job.person_id == current_user.id).all()]
     salary_months = db.query(models.SalaryMonth).filter(
-        models.SalaryMonth.job_id.in_(job_ids)
-    ).order_by(models.SalaryMonth.month.desc()).limit(3).all()
+        models.SalaryMonth.job_id.in_(job_ids),
+        models.SalaryMonth.month == current_month,
+        models.SalaryMonth.deleted == False
+    ).all()
 
     cash_in_hand = sum(sm.remaining_amount for sm in salary_months if sm.remaining_amount > 0)
 
     net_worth = total_savings + cash_in_hand
+
+    savings_by_type = {}
+    for s in savings:
+        savings_by_type[s.account_type] = savings_by_type.get(s.account_type, 0) + s.current_balance
 
     return {
         "net_worth": net_worth,
@@ -221,10 +239,7 @@ def calculate_net_worth(
             "savings_accounts": total_savings,
             "cash_in_hand": cash_in_hand,
         },
-        "savings_by_type": {
-            s.account_type: sum(acc.current_balance for acc in savings if acc.account_type == s.account_type)
-            for s in savings
-        }
+        "savings_by_type": savings_by_type
     }
 
 
@@ -432,7 +447,8 @@ def compare_income_expenses(
         job_ids = [j.id for j in db.query(models.Job).filter(models.Job.person_id == current_user.id).all()]
         salary = db.query(models.SalaryMonth).filter(
             models.SalaryMonth.job_id.in_(job_ids),
-            models.SalaryMonth.month == period
+            models.SalaryMonth.month == period,
+            models.SalaryMonth.deleted == False
         ).all()
         salary_income = sum(s.net_amount for s in salary)
 

@@ -305,6 +305,8 @@ class SalaryMonth(Base):
     total_spent = Column(Float, default=0.0)
     remaining_amount = Column(Float, default=0.0)
 
+    deleted = Column(Boolean, default=False)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -347,6 +349,11 @@ class Expense(Base):
 
     # Classification
     is_essential = Column(Boolean, default=False)  # Necessity vs luxury
+
+    # Source tracking
+    source = Column(String(20), default="salary")  # salary, savings, other
+    saving_id = Column(Integer, ForeignKey("savings.id"), nullable=True)
+    saving_transaction_id = Column(Integer, ForeignKey("saving_transactions.id"), nullable=True)
 
     # Additional data
     receipt_photo = Column(String(500))  # URL/path to receipt image

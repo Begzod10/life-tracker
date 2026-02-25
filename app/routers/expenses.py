@@ -45,8 +45,53 @@ def create_expense(
                     detail="Salary month doesn't belong to you"
                 )
 
+    # Validate savings source
+    saving = None
+    if expense.source == "savings":
+        if not expense.saving_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="saving_id is required when source is 'savings'"
+            )
+        saving = db.query(models.Saving).filter(
+            models.Saving.id == expense.saving_id,
+            models.Saving.person_id == current_user.id,
+            models.Saving.deleted == False
+        ).first()
+        if not saving:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Savings account not found"
+            )
+        if saving.current_balance < expense.amount:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Insufficient savings balance. Available: {saving.current_balance}, Required: {expense.amount}"
+            )
+
     new_expense = models.Expense(**expense.model_dump())
     db.add(new_expense)
+    db.flush()  # get ID before commit
+
+    # Auto-create savings withdrawal if source is savings
+    if expense.source == "savings" and saving:
+        balance_before = saving.current_balance
+        saving.current_balance -= expense.amount
+        balance_after = saving.current_balance
+
+        saving_tx = models.SavingTransaction(
+            saving_id=saving.id,
+            transaction_type="withdrawal",
+            amount=expense.amount,
+            transaction_date=expense.date,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            description=f"Expense: {expense.name} (expense_id={new_expense.id})"
+        )
+        db.add(saving_tx)
+        db.flush()
+        new_expense.saving_transaction_id = saving_tx.id
+
     db.commit()
     db.refresh(new_expense)
 
@@ -347,6 +392,20 @@ def delete_expense(
         )
 
     salary_month_id = db_expense.salary_month_id
+
+    # Reverse savings withdrawal if this expense was funded from savings
+    if db_expense.source == "savings" and db_expense.saving_transaction_id:
+        saving_tx = db.query(models.SavingTransaction).filter(
+            models.SavingTransaction.id == db_expense.saving_transaction_id
+        ).first()
+        if saving_tx:
+            saving = db.query(models.Saving).filter(
+                models.Saving.id == saving_tx.saving_id
+            ).first()
+            if saving:
+                saving.current_balance += db_expense.amount
+            db.delete(saving_tx)
+            db_expense.saving_transaction_id = None
 
     db_expense.deleted = True
     db.commit()

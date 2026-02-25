@@ -65,7 +65,8 @@ def get_salary_months(
     query = db.query(models.SalaryMonth).options(
         joinedload(models.SalaryMonth.job)
     ).filter(
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     )
 
     # Apply filters
@@ -99,7 +100,8 @@ def get_current_month_salary(
 
     salary = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.person_id == current_user.id,
-        models.SalaryMonth.month == current_month
+        models.SalaryMonth.month == current_month,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not salary:
@@ -109,6 +111,92 @@ def get_current_month_salary(
         )
 
     return salary
+
+
+@router.get('/deleted', response_model=List[schemas.SalaryMonthWithJob])
+def get_deleted_salary_months(
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted salary months for current user"""
+    salary_months = db.query(models.SalaryMonth).options(
+        joinedload(models.SalaryMonth.job)
+    ).filter(
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == True
+    ).order_by(models.SalaryMonth.month.desc()).all()
+
+    result = []
+    for sm in salary_months:
+        data = schemas.SalaryMonthWithJob.model_validate(sm)
+        data = data.model_copy(update={
+            'job_name': sm.job.name if sm.job else None,
+            'company': sm.job.company if sm.job else None,
+        })
+        result.append(data)
+    return result
+
+
+@router.get('/by-person/{person_id}', response_model=List[schemas.SalaryMonthWithJob])
+def get_salary_months_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all active salary months for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own salary months"
+        )
+
+    salary_months = db.query(models.SalaryMonth).options(
+        joinedload(models.SalaryMonth.job)
+    ).filter(
+        models.SalaryMonth.person_id == person_id,
+        models.SalaryMonth.deleted == False
+    ).order_by(models.SalaryMonth.month.desc()).all()
+
+    result = []
+    for sm in salary_months:
+        data = schemas.SalaryMonthWithJob.model_validate(sm)
+        data = data.model_copy(update={
+            'job_name': sm.job.name if sm.job else None,
+            'company': sm.job.company if sm.job else None,
+        })
+        result.append(data)
+    return result
+
+
+@router.get('/by-person/{person_id}/deleted', response_model=List[schemas.SalaryMonthWithJob])
+def get_deleted_salary_months_by_person(
+        person_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted salary months for a specific person"""
+    if person_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own salary months"
+        )
+
+    salary_months = db.query(models.SalaryMonth).options(
+        joinedload(models.SalaryMonth.job)
+    ).filter(
+        models.SalaryMonth.person_id == person_id,
+        models.SalaryMonth.deleted == True
+    ).order_by(models.SalaryMonth.month.desc()).all()
+
+    result = []
+    for sm in salary_months:
+        data = schemas.SalaryMonthWithJob.model_validate(sm)
+        data = data.model_copy(update={
+            'job_name': sm.job.name if sm.job else None,
+            'company': sm.job.company if sm.job else None,
+        })
+        result.append(data)
+    return result
 
 
 @router.get('/by-job/{job_id}', response_model=List[schemas.SalaryMonth])
@@ -130,7 +218,8 @@ def get_salary_months_by_job(
         )
 
     return db.query(models.SalaryMonth).filter(
-        models.SalaryMonth.job_id == job_id
+        models.SalaryMonth.job_id == job_id,
+        models.SalaryMonth.deleted == False
     ).order_by(models.SalaryMonth.month.desc()).all()
 
 
@@ -155,7 +244,8 @@ def get_salary_month_by_job_and_month(
 
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id == job_id,
-        models.SalaryMonth.month == month
+        models.SalaryMonth.month == month,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not salary_month:
@@ -189,7 +279,8 @@ def update_salary_month_by_job_and_month(
 
     db_salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id == job_id,
-        models.SalaryMonth.month == month
+        models.SalaryMonth.month == month,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not db_salary_month:
@@ -228,7 +319,8 @@ def delete_salary_month_by_job_and_month(
 
     db_salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id == job_id,
-        models.SalaryMonth.month == month
+        models.SalaryMonth.month == month,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not db_salary_month:
@@ -237,7 +329,7 @@ def delete_salary_month_by_job_and_month(
             detail=f"No salary record found for job {job_id} in {month}"
         )
 
-    db.delete(db_salary_month)
+    db_salary_month.deleted = True
     db.commit()
     return {"message": "Salary month deleted"}
 
@@ -251,7 +343,8 @@ def get_salary_month(
     """Get a specific salary month by ID"""
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not salary_month:
@@ -273,7 +366,8 @@ def update_salary_month(
     """Update a salary month"""
     db_salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not db_salary_month:
@@ -300,7 +394,8 @@ def delete_salary_month(
     """Delete a salary month"""
     db_salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not db_salary_month:
@@ -309,7 +404,7 @@ def delete_salary_month(
             detail="Salary month not found"
         )
 
-    db.delete(db_salary_month)
+    db_salary_month.deleted = True
     db.commit()
     return {"message": "Salary month deleted"}
 
@@ -323,7 +418,8 @@ def get_salary_month_expenses(
     """Get all expenses linked to a salary month"""
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not salary_month:
@@ -347,7 +443,8 @@ def recalculate_salary_month(
     """Recalculate total_spent and remaining_amount for a salary month"""
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
-        models.SalaryMonth.person_id == current_user.id
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
     ).first()
 
     if not salary_month:

@@ -411,6 +411,7 @@ class SalaryMonth(SalaryMonthBase):
     person_id: int
     total_spent: float = Field(default=0.0, description="Total amount spent from this salary")
     remaining_amount: float = Field(default=0.0, description="Remaining amount from this salary")
+    deleted: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -448,12 +449,14 @@ class ExpenseBase(BaseModel):
     receipt_photo: Optional[str] = Field(None, description="URL/path to receipt photo")
     location: Optional[str] = Field(None, description="Location where expense occurred")
     tags: Optional[str] = Field(None, description="Tags as JSON array string")
+    source: str = Field(default="salary", description="Expense source: salary, savings, other")
 
 
 class ExpenseCreate(ExpenseBase):
     """Create a new expense"""
     person_id: int = Field(..., description="ID of the person")
     salary_month_id: Optional[int] = Field(None, description="ID of the salary month (if applicable)")
+    saving_id: Optional[int] = Field(None, description="ID of the savings account (required when source=savings)")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -492,6 +495,7 @@ class ExpenseUpdate(BaseModel):
     receipt_photo: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
     tags: Optional[str] = Field(None)
+    source: Optional[str] = Field(None, description="Expense source: salary, savings, other")
 
 
 class Expense(ExpenseBase):
@@ -501,6 +505,8 @@ class Expense(ExpenseBase):
     id: int
     person_id: int
     salary_month_id: Optional[int] = None
+    saving_id: Optional[int] = None
+    saving_transaction_id: Optional[int] = None
     deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -564,7 +570,6 @@ class IncomeSource(IncomeSourceBase):
 class SavingBase(BaseModel):
     account_name: str = Field(..., description="Account name", min_length=1, max_length=200)
     account_type: str = Field(..., description="Type: savings, investment, crypto, real-estate, other")
-    current_balance: float = Field(..., description="Current balance", ge=0)
     initial_amount: float = Field(..., description="Initial deposit amount", ge=0)
     target_amount: Optional[float] = Field(None, description="Target savings goal", ge=0)
     currency: str = Field(default="UZS", description="Currency code")
@@ -578,22 +583,19 @@ class SavingBase(BaseModel):
 
 class SavingCreate(SavingBase):
     """Create a new saving account"""
-    person_id: int = Field(..., description="ID of the person")
-
     model_config = ConfigDict(
+        extra="forbid",
         json_schema_extra={
             "example": {
                 "account_name": "Emergency Fund",
                 "account_type": "savings",
-                "current_balance": 5000000,
                 "initial_amount": 5000000,
                 "target_amount": 20000000,
                 "currency": "UZS",
                 "interest_rate": 12.0,
                 "start_date": "2026-01-01",
                 "risk_level": "low",
-                "platform": "National Bank",
-                "person_id": 1
+                "platform": "National Bank"
             }
         }
     )
@@ -603,7 +605,6 @@ class SavingUpdate(BaseModel):
     """Update saving account"""
     account_name: Optional[str] = Field(None)
     account_type: Optional[str] = Field(None)
-    current_balance: Optional[float] = Field(None, ge=0)
     target_amount: Optional[float] = Field(None, ge=0)
     interest_rate: Optional[float] = Field(None, ge=0)
     maturity_date: Optional[date] = Field(None)
@@ -618,6 +619,7 @@ class Saving(SavingBase):
 
     id: int
     person_id: int
+    current_balance: float
     deleted: Optional[bool] = Field(default=False)
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -629,8 +631,6 @@ class SavingTransactionBase(BaseModel):
     transaction_type: str = Field(..., description="Type: deposit, withdrawal, interest")
     amount: float = Field(..., description="Transaction amount", gt=0)
     transaction_date: date = Field(..., description="Transaction date")
-    balance_before: float = Field(..., description="Balance before transaction", ge=0)
-    balance_after: float = Field(..., description="Balance after transaction", ge=0)
     description: Optional[str] = Field(None, description="Transaction description")
 
 
@@ -645,8 +645,6 @@ class SavingTransactionCreate(SavingTransactionBase):
                 "transaction_type": "deposit",
                 "amount": 1000000,
                 "transaction_date": "2026-01-15",
-                "balance_before": 5000000,
-                "balance_after": 6000000,
                 "description": "Monthly savings contribution"
             }
         }
@@ -664,7 +662,44 @@ class SavingTransaction(SavingTransactionBase):
 
     id: int
     saving_id: int
+    balance_before: float
+    balance_after: float
     created_at: datetime
+
+
+# ==================== SAVING MONTHLY SUMMARY SCHEMAS ====================
+
+class SavingMonthlySummaryItem(BaseModel):
+    period: str
+    total_deposited: float
+    total_withdrawn: float
+    interest_earned: float
+    net_change: float
+    closing_balance: float
+
+
+class SavingAccountMonthlySummary(BaseModel):
+    saving_id: int
+    account_name: str
+    account_type: str
+    currency: str
+    months_analyzed: int
+    summaries: List[SavingMonthlySummaryItem]
+
+
+class SavingsAggregatedMonthlySummaryItem(BaseModel):
+    period: str
+    total_deposited: float
+    total_withdrawn: float
+    interest_earned: float
+    net_change: float
+    total_closing_balance: float
+    by_account: dict
+
+
+class SavingsAggregatedMonthlySummary(BaseModel):
+    months_analyzed: int
+    summaries: List[SavingsAggregatedMonthlySummaryItem]
 
 
 # ==================== BUDGET SCHEMAS ====================
