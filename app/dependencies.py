@@ -75,6 +75,14 @@ async def get_current_user(
             detail=f"Account is locked until {user.locked_until}. Too many failed login attempts."
         )
 
+    # Check if token was issued before the user's last logout (invalidated token)
+    iat = payload.get("iat")
+    if iat and user.last_logout_at:
+        from datetime import timezone
+        token_issued_at = datetime.utcfromtimestamp(iat)
+        if token_issued_at <= user.last_logout_at:
+            raise credentials_exception
+
     return user
 
 

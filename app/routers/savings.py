@@ -431,12 +431,6 @@ def create_saving_transaction(
             detail="Saving account not found"
         )
 
-    if transaction.saving_id != saving_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Transaction saving_id doesn't match URL parameter"
-        )
-
     if transaction.transaction_type not in ("deposit", "withdrawal", "interest"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -457,6 +451,7 @@ def create_saving_transaction(
 
     new_transaction = models.SavingTransaction(
         **transaction.model_dump(),
+        saving_id=saving_id,
         balance_before=balance_before,
         balance_after=balance_after
     )
@@ -473,9 +468,7 @@ def create_saving_transaction(
 @router.post('/{saving_id}/deposit', response_model=schemas.SavingTransaction)
 def deposit_to_saving(
         saving_id: int,
-        amount: float = Query(..., gt=0, description="Deposit amount"),
-        transaction_date: Optional[str] = Query(None, description="Transaction date (YYYY-MM-DD)"),
-        description: Optional[str] = Query(None, description="Transaction description"),
+        body: schemas.SavingDepositWithdrawBody,
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
@@ -492,18 +485,18 @@ def deposit_to_saving(
             detail="Saving account not found"
         )
 
-    trans_date = datetime.strptime(transaction_date, "%Y-%m-%d").date() if transaction_date else date.today()
+    trans_date = body.transaction_date or date.today()
     balance_before = saving.current_balance
-    balance_after = balance_before + amount
+    balance_after = balance_before + body.amount
 
     transaction = models.SavingTransaction(
         saving_id=saving_id,
         transaction_type="deposit",
-        amount=amount,
+        amount=body.amount,
         transaction_date=trans_date,
         balance_before=balance_before,
         balance_after=balance_after,
-        description=description
+        description=body.description
     )
 
     db.add(transaction)
@@ -518,9 +511,7 @@ def deposit_to_saving(
 @router.post('/{saving_id}/withdraw', response_model=schemas.SavingTransaction)
 def withdraw_from_saving(
         saving_id: int,
-        amount: float = Query(..., gt=0, description="Withdrawal amount"),
-        transaction_date: Optional[str] = Query(None, description="Transaction date (YYYY-MM-DD)"),
-        description: Optional[str] = Query(None, description="Transaction description"),
+        body: schemas.SavingDepositWithdrawBody,
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
@@ -537,24 +528,24 @@ def withdraw_from_saving(
             detail="Saving account not found"
         )
 
-    if amount > saving.current_balance:
+    if body.amount > saving.current_balance:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Insufficient balance. Available: {saving.current_balance}"
         )
 
-    trans_date = datetime.strptime(transaction_date, "%Y-%m-%d").date() if transaction_date else date.today()
+    trans_date = body.transaction_date or date.today()
     balance_before = saving.current_balance
-    balance_after = balance_before - amount
+    balance_after = balance_before - body.amount
 
     transaction = models.SavingTransaction(
         saving_id=saving_id,
         transaction_type="withdrawal",
-        amount=amount,
+        amount=body.amount,
         transaction_date=trans_date,
         balance_before=balance_before,
         balance_after=balance_after,
-        description=description
+        description=body.description
     )
 
     db.add(transaction)

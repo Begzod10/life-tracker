@@ -635,13 +635,10 @@ class SavingTransactionBase(BaseModel):
 
 
 class SavingTransactionCreate(SavingTransactionBase):
-    """Create a new saving transaction"""
-    saving_id: int = Field(..., description="ID of the saving account")
-
+    """Create a new saving transaction (saving_id taken from URL path)"""
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "saving_id": 1,
                 "transaction_type": "deposit",
                 "amount": 1000000,
                 "transaction_date": "2026-01-15",
@@ -649,6 +646,13 @@ class SavingTransactionCreate(SavingTransactionBase):
             }
         }
     )
+
+
+class SavingDepositWithdrawBody(BaseModel):
+    """Body for deposit and withdraw endpoints"""
+    amount: float = Field(..., gt=0, description="Amount")
+    transaction_date: Optional[date] = Field(None, description="Transaction date (defaults to today)")
+    description: Optional[str] = Field(None, description="Transaction description")
 
 
 class SavingTransactionUpdate(BaseModel):

@@ -1,6 +1,7 @@
 <!-- static/swagger-custom.html -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Life Tracker API</title>
@@ -17,6 +18,7 @@
             padding: 10px;
             border-radius: 8px;
         }
+
         .theme-switcher select {
             padding: 5px 10px;
             border-radius: 4px;
@@ -25,8 +27,48 @@
             border: 1px solid #00ffff;
             cursor: pointer;
         }
+
+        /* ── Tag sections in a wrapping 3-column row ── */
+        .swagger-ui .opblock-tag-section {
+            display: inline-block !important;
+            width: calc(33.333% - 12px) !important;
+            vertical-align: top !important;
+            margin: 6px !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Container that holds all tag sections — switch to flex-wrap */
+        .swagger-ui .filter-container+div,
+        .swagger-ui section.models~div,
+        .swagger-ui .scheme-container~.wrapper>section {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            align-items: flex-start !important;
+        }
+
+        /* Wrapper around all route groups */
+        #swagger-ui .swagger-ui>div>div:nth-child(2) {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+            padding: 12px !important;
+        }
+
+        /* Each tag section fills one third of the row */
+        #swagger-ui .swagger-ui .opblock-tag-section {
+            flex: 0 0 calc(33.333% - 8px) !important;
+            min-width: 280px !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Full-width when the section is expanded (so routes don't get squashed) */
+        #swagger-ui .swagger-ui .opblock-tag-section.is-open {
+            flex: 0 0 100% !important;
+        }
     </style>
 </head>
+
 <body>
     <!-- Theme Switcher -->
     <div class="theme-switcher">
@@ -60,7 +102,7 @@
         }
 
         // Initialize Swagger UI
-        window.onload = function() {
+        window.onload = function () {
             window.ui = SwaggerUIBundle({
                 url: '/openapi.json',
                 dom_id: '#swagger-ui',
@@ -71,7 +113,7 @@
                 ],
                 layout: "BaseLayout",
                 syntaxHighlight: { theme: "monokai" },
-                docExpansion: "list",
+                docExpansion: "none",
                 defaultModelsExpandDepth: -1,
                 filter: true,
                 displayRequestDuration: true
@@ -79,4 +121,5 @@
         };
     </script>
 </body>
+
 </html>

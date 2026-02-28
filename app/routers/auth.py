@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -8,11 +10,13 @@ import re
 
 from app import models
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
-    verify_token,
+    create_refresh_token,
+    verify_refresh_token,
     verify_google_token
 )
 from app.config import settings
@@ -55,12 +59,13 @@ class UserData(BaseModel):
 
 class AuthResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     expires_in: int
     user: UserData
 
 
-class RefreshTokenRequest(BaseModel):
+class TokenRefreshRequest(BaseModel):
     refresh_token: str
 
 
@@ -82,39 +87,6 @@ def validate_password_strength(password: str) -> bool:
     if not re.search(r"\d", password):
         return False
     return True
-
-
-def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
-) -> models.Person:
-    """Get current authenticated user from token"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = verify_token(token)
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except Exception:
-        raise credentials_exception
-
-    user = db.query(models.Person).filter(models.Person.email == email).first()
-    if user is None:
-        raise credentials_exception
-
-    # Check if account is locked
-    if user.locked_until and user.locked_until > datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is locked due to too many failed login attempts"
-        )
-
-    return user
 
 
 # ========== ENDPOINTS ==========
@@ -159,12 +131,13 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # Generate token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Generate tokens
+    token_data = {"sub": new_user.email, "user_id": new_user.id}
     access_token = create_access_token(
-        data={"sub": new_user.email, "user_id": new_user.id},
-        expires_delta=access_token_expires
+        data=token_data,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
+    refresh_token = create_refresh_token(data=token_data)
 
     user_response = UserData(
         id=new_user.id,
@@ -178,6 +151,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
     return AuthResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user_response
@@ -202,7 +176,20 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if account is locked
+    # Check if account is active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated"
+        )
+
+    # Reset expired lockout before checking
+    if user.locked_until and user.locked_until <= datetime.utcnow():
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        db.commit()
+
+    # Check if account is still locked
     if user.locked_until and user.locked_until > datetime.utcnow():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -218,7 +205,6 @@ def login(
 
     # Verify password
     if not verify_password(form_data.password, user.hashed_password):
-        # Increment failed login attempts
         user.failed_login_attempts += 1
         if user.failed_login_attempts >= 5:
             user.locked_until = datetime.utcnow() + timedelta(minutes=30)
@@ -236,12 +222,13 @@ def login(
     user.last_login = datetime.utcnow()
     db.commit()
 
-    # Generate token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Generate tokens
+    token_data = {"sub": user.email, "user_id": user.id}
     access_token = create_access_token(
-        data={"sub": user.email, "user_id": user.id},
-        expires_delta=access_token_expires
+        data=token_data,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
+    refresh_token = create_refresh_token(data=token_data)
 
     user_response = UserData(
         id=user.id,
@@ -255,6 +242,7 @@ def login(
 
     return AuthResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user_response
@@ -296,16 +284,13 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
             if user.auth_provider == "email":
                 user.auth_provider = "google"
         else:
-            # Create new user
-            # ⚠️ IMPORTANT: For Google OAuth users, we set a random password
-            # since hashed_password is NOT NULL in your model
-            import secrets
+            # Create new Google user with a random unusable password
             random_password = secrets.token_urlsafe(32)
 
             user = models.Person(
                 name=name or "User",
                 email=email,
-                hashed_password=get_password_hash(random_password),  # ✅ Fixed: Set random password
+                hashed_password=get_password_hash(random_password),
                 auth_provider="google",
                 google_id=google_id,
                 profile_photo_url=picture,
@@ -318,12 +303,13 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-        # Generate token
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        # Generate tokens
+        token_data = {"sub": user.email, "user_id": user.id}
         access_token = create_access_token(
-            data={"sub": user.email, "user_id": user.id},
-            expires_delta=access_token_expires
+            data=token_data,
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
+        refresh_token = create_refresh_token(data=token_data)
 
         user_response = UserData(
             id=user.id,
@@ -337,6 +323,7 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
 
         return AuthResponse(
             access_token=access_token,
+            refresh_token=refresh_token,
             token_type="bearer",
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             user=user_response
@@ -345,8 +332,6 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        # This will be caught by the global exception handler in main.py
-        # and printed with full traceback
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication failed: {str(e)}"
@@ -406,7 +391,77 @@ def change_password(
     return {"message": "Password changed successfully"}
 
 
+@router.post('/refresh', response_model=AuthResponse)
+def refresh_token(
+        body: TokenRefreshRequest,
+        db: Session = Depends(get_db)
+):
+    """Get a new access token using a refresh token"""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = verify_refresh_token(body.refresh_token)
+    except ValueError:
+        raise credentials_exception
+
+    email: str = payload.get("sub")
+    if not email:
+        raise credentials_exception
+
+    user = db.query(models.Person).filter(models.Person.email == email).first()
+    if not user:
+        raise credentials_exception
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+
+    if user.is_locked:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is locked")
+
+    # Reject refresh tokens issued before the last logout
+    iat = payload.get("iat")
+    if iat and user.last_logout_at:
+        token_issued_at = datetime.utcfromtimestamp(iat)
+        if token_issued_at <= user.last_logout_at:
+            raise credentials_exception
+
+    # Issue new access token and rotate the refresh token
+    token_data = {"sub": user.email, "user_id": user.id}
+    new_access_token = create_access_token(
+        data=token_data,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    new_refresh_token = create_refresh_token(data=token_data)
+
+    user_response = UserData(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        timezone=user.timezone,
+        profile_photo_url=user.profile_photo_url,
+        is_verified=user.is_verified,
+        created_at=user.created_at.isoformat() if user.created_at else None
+    )
+
+    return AuthResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=user_response
+    )
+
+
 @router.post('/logout')
-def logout(current_user: models.Person = Depends(get_current_user)):
-    """Logout (client should delete tokens)"""
+def logout(
+        current_user: models.Person = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """Logout — invalidates the current token by recording logout timestamp"""
+    current_user.last_logout_at = datetime.utcnow()
+    db.commit()
     return {"message": "Logged out successfully"}

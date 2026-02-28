@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+import time
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from google.auth.transport import requests
@@ -36,6 +37,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     
     to_encode.update({
         "exp": expire,
+        "iat": int(time.time()),
         "type": "access"
     })
     
@@ -43,13 +45,44 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     return encoded_jwt
 
 
+def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create JWT refresh token (long-lived)"""
+    to_encode = data.copy()
+
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    to_encode.update({
+        "exp": expire,
+        "iat": int(time.time()),
+        "type": "refresh"
+    })
+
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def verify_token(token: str) -> Dict[str, Any]:
-    """Verify and decode JWT token"""
+    """Verify and decode JWT access token"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "access":
+            raise ValueError("Not an access token")
         return payload
     except JWTError:
         raise ValueError("Invalid token")
+
+
+def verify_refresh_token(token: str) -> Dict[str, Any]:
+    """Verify and decode JWT refresh token"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise ValueError("Not a refresh token")
+        return payload
+    except JWTError:
+        raise ValueError("Invalid refresh token")
 
 
 def verify_google_token(token: str) -> Dict[str, Any]:
