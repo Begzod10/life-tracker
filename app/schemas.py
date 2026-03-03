@@ -14,7 +14,7 @@ class PersonBase(BaseModel):
 
 
 class PersonCreate(PersonBase):
-    pass
+    password: str = Field(..., description="Password", min_length=6)
 
 
 class PersonUpdate(BaseModel):
