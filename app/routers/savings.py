@@ -14,6 +14,50 @@ router = APIRouter(
 )
 
 
+def _sync_balance(saving: models.Saving, db: Session) -> float:
+    """
+    Compute the true balance from the transaction log, backfill any missing
+    withdrawal transactions for orphaned savings-funded expenses, and sync
+    current_balance if it has drifted.
+    """
+    # Authoritative starting point: last committed transaction
+    last_tx = db.query(models.SavingTransaction).filter(
+        models.SavingTransaction.saving_id == saving.id
+    ).order_by(models.SavingTransaction.id.desc()).first()
+
+    running_balance = last_tx.balance_after if last_tx else saving.initial_amount
+
+    # Find active savings expenses that have no withdrawal transaction (orphaned)
+    orphaned = db.query(models.Expense).filter(
+        models.Expense.saving_id == saving.id,
+        models.Expense.saving_transaction_id == None,
+        models.Expense.source == "savings",
+        models.Expense.deleted == False
+    ).order_by(models.Expense.id).all()
+
+    for expense in orphaned:
+        balance_after = running_balance - expense.amount
+        saving_tx = models.SavingTransaction(
+            saving_id=saving.id,
+            transaction_type="withdrawal",
+            amount=expense.amount,
+            transaction_date=expense.date,
+            balance_before=running_balance,
+            balance_after=balance_after,
+            description=f"Expense: {expense.name} (expense_id={expense.id}) [backfilled]"
+        )
+        db.add(saving_tx)
+        db.flush()
+        expense.saving_transaction_id = saving_tx.id
+        running_balance = balance_after
+
+    if saving.current_balance != running_balance:
+        saving.current_balance = running_balance
+        db.add(saving)
+
+    return running_balance
+
+
 @router.post('/', response_model=schemas.Saving, status_code=status.HTTP_201_CREATED)
 def create_saving(
         saving: schemas.SavingCreate,
@@ -79,14 +123,19 @@ def get_total_balance(
         models.Saving.deleted == False
     ).all()
 
-    total = sum(saving.current_balance for saving in savings)
+    total = 0.0
     by_type = {}
+    any_synced = False
 
     for saving in savings:
-        account_type = saving.account_type
-        if account_type not in by_type:
-            by_type[account_type] = 0
-        by_type[account_type] += saving.current_balance
+        balance = _sync_balance(saving, db)
+        if saving in db.dirty:
+            any_synced = True
+        total += balance
+        by_type[saving.account_type] = by_type.get(saving.account_type, 0) + balance
+
+    if any_synced:
+        db.commit()
 
     return {
         "total_balance": total,
@@ -248,6 +297,11 @@ def get_saving(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Saving account not found"
         )
+
+    _sync_balance(saving, db)
+    db.commit()
+    db.refresh(saving)
+
     return saving
 
 

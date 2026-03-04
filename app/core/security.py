@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from google.auth.transport import requests
 from google.oauth2 import id_token
+from google.auth import exceptions as google_exceptions
 from app.config import settings
 
 # Password hashing context
@@ -18,7 +19,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against its hash"""
+    
     return pwd_context.verify(plain_password, hashed_password)
+
 
 
 def get_password_hash(password: str) -> str:
@@ -87,38 +90,18 @@ def verify_refresh_token(token: str) -> Dict[str, Any]:
 
 def verify_google_token(token: str) -> Dict[str, Any]:
     """
-    Verify Google OAuth token and return user info
-    
-    Args:
-        token: Google ID token from frontend
-        
-    Returns:
-        Dict containing user info (email, name, sub, picture, etc.)
-        
-    Raises:
-        ValueError: If token is invalid or verification fails
+    Verify Google ID token and return user info.
+    The frontend MUST send the `id_token` (not access_token) from Google Sign-In.
     """
     try:
-        # Verify the token
         idinfo = id_token.verify_oauth2_token(
             token,
             requests.Request(),
             settings.GOOGLE_CLIENT_ID
         )
-        
-        # Verify the token is for our app
-        if idinfo['aud'] != settings.GOOGLE_CLIENT_ID:
-            raise ValueError("Invalid token audience")
-        
-        # Verify issuer
-        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-            raise ValueError("Invalid token issuer")
-        
         return idinfo
-        
-    except ValueError as e:
-        # Invalid token
+
+    except (ValueError, google_exceptions.GoogleAuthError, google_exceptions.MalformedError) as e:
         raise ValueError(f"Google token verification failed: {str(e)}")
     except Exception as e:
-        # Other errors
-        raise ValueError(f"Error verifying Google token: {str(e)}")
+        raise ValueError(f"Error verifying Google token: {type(e).__name__}: {str(e)}")

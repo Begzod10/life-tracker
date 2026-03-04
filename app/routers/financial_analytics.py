@@ -6,6 +6,7 @@ from datetime import datetime, date, timedelta
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.routers.savings import _sync_balance
 
 router = APIRouter(
     prefix="/financial-analytics",
@@ -54,18 +55,24 @@ def get_monthly_summary(
     ).all()
     total_other_income = sum(inc.amount for inc in income_sources)
 
-    # Calculate total expenses
-    expenses = db.query(models.Expense).filter(
+    # Calculate expenses — split by funding source
+    all_expenses = db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
         models.Expense.deleted == False,
         models.Expense.date >= start_date,
         models.Expense.date < end_date
     ).all()
-    total_expenses = sum(exp.amount for exp in expenses)
+    # Income-funded: no saving_id (paid from salary/other income)
+    income_expenses = [e for e in all_expenses if e.saving_id is None]
+    # Savings-funded: has saving_id (paid from savings withdrawal)
+    savings_expenses = [e for e in all_expenses if e.saving_id is not None]
 
-    # Expense breakdown by category
+    total_expenses = sum(e.amount for e in income_expenses)
+    savings_funded_total = sum(e.amount for e in savings_expenses)
+
+    # Expense breakdown by category (income-funded only)
     expense_by_category = {}
-    for exp in expenses:
+    for exp in income_expenses:
         category = exp.category or "uncategorized"
         expense_by_category[category] = expense_by_category.get(category, 0) + exp.amount
 
@@ -85,7 +92,7 @@ def get_monthly_summary(
         ).first()
         total_savings += last_tx.balance_after if last_tx else saving.initial_amount
 
-    # Calculate metrics
+    # Calculate metrics (income-funded expenses only)
     total_income = total_salary + total_other_income
     net_income = total_income - total_expenses
     savings_rate = (net_income / total_income * 100) if total_income > 0 else 0
@@ -94,6 +101,7 @@ def get_monthly_summary(
         period=month,
         total_income=total_income,
         total_expenses=total_expenses,
+        savings_funded_total=savings_funded_total,
         net_income=net_income,
         total_savings=total_savings,
         expense_by_category=expense_by_category,
@@ -139,16 +147,19 @@ def get_monthly_report(
     ).all()
     other_income = sum(inc.amount for inc in income_sources)
 
-    # Get expenses
-    expenses = db.query(models.Expense).filter(
+    # Get expenses — split by funding source
+    all_expenses = db.query(models.Expense).filter(
         models.Expense.person_id == current_user.id,
         models.Expense.deleted == False,
         models.Expense.date >= start_date,
         models.Expense.date < end_date
     ).all()
-    total_expenses = sum(exp.amount for exp in expenses)
+    income_expenses = [e for e in all_expenses if e.saving_id is None]
+    savings_expenses = [e for e in all_expenses if e.saving_id is not None]
+    total_expenses = sum(e.amount for e in income_expenses)
+    savings_funded_total = sum(e.amount for e in savings_expenses)
 
-    # Get savings contributions (deposits)
+    # Get savings contributions (deposits only — not expense-withdrawals)
     saving_ids = [s.id for s in db.query(models.Saving).filter(models.Saving.person_id == current_user.id).all()]
     savings_transactions = db.query(models.SavingTransaction).filter(
         models.SavingTransaction.saving_id.in_(saving_ids),
@@ -158,11 +169,11 @@ def get_monthly_report(
     ).all()
     total_savings_contributions = sum(st.amount for st in savings_transactions)
 
-    # Calculate net change
+    # Calculate net change (income-funded expenses only)
     total_income = salary_received + other_income
     net_change = total_income - total_expenses - total_savings_contributions
 
-    # Budget adherence
+    # Budget adherence — uses ALL expenses per category (savings-funded spending still counts)
     budgets = db.query(models.Budget).filter(
         models.Budget.person_id == current_user.id,
         models.Budget.period == month,
@@ -171,14 +182,13 @@ def get_monthly_report(
 
     budget_adherence = {}
     for budget in budgets:
-        # Calculate spent amount
-        cat_expenses = [e for e in expenses if e.category == budget.category]
+        cat_expenses = [e for e in all_expenses if e.category == budget.category]
         spent = sum(e.amount for e in cat_expenses)
         adherence = (spent / budget.allocated_amount * 100) if budget.allocated_amount > 0 else 0
         budget_adherence[budget.category] = round(adherence, 2)
 
-    # Top 10 expenses
-    top_expenses = sorted(expenses, key=lambda x: x.amount, reverse=True)[:10]
+    # Top 10 income-funded expenses
+    top_expenses = sorted(income_expenses, key=lambda x: x.amount, reverse=True)[:10]
     top_expenses_list = [
         {
             "name": exp.name,
@@ -195,6 +205,7 @@ def get_monthly_report(
         other_income=other_income,
         total_income=total_income,
         total_expenses=total_expenses,
+        savings_funded_total=savings_funded_total,
         total_savings_contributions=total_savings_contributions,
         net_change=net_change,
         budget_adherence=budget_adherence,
@@ -214,7 +225,18 @@ def calculate_net_worth(
         models.Saving.deleted == False
     ).all()
 
-    total_savings = sum(s.current_balance for s in savings)
+    any_synced = False
+    total_savings = 0.0
+    savings_by_type = {}
+    for s in savings:
+        balance = _sync_balance(s, db)
+        if s in db.dirty:
+            any_synced = True
+        total_savings += balance
+        savings_by_type[s.account_type] = savings_by_type.get(s.account_type, 0) + balance
+
+    if any_synced:
+        db.commit()
 
     # Get current month's remaining salary across all jobs
     current_month = date.today().strftime("%Y-%m")
@@ -228,10 +250,6 @@ def calculate_net_worth(
     cash_in_hand = sum(sm.remaining_amount for sm in salary_months if sm.remaining_amount > 0)
 
     net_worth = total_savings + cash_in_hand
-
-    savings_by_type = {}
-    for s in savings:
-        savings_by_type[s.account_type] = savings_by_type.get(s.account_type, 0) + s.current_balance
 
     return {
         "net_worth": net_worth,
@@ -270,26 +288,30 @@ def get_spending_trends(
         else:
             end_date = date(target_year, target_month + 1, 1)
 
-        # Get expenses for this month
-        expenses = db.query(models.Expense).filter(
+        # Get expenses for this month — split by source
+        all_expenses = db.query(models.Expense).filter(
             models.Expense.person_id == current_user.id,
             models.Expense.deleted == False,
             models.Expense.date >= start_date,
             models.Expense.date < end_date
         ).all()
+        income_expenses = [e for e in all_expenses if e.saving_id is None]
+        savings_expenses = [e for e in all_expenses if e.saving_id is not None]
 
-        total = sum(exp.amount for exp in expenses)
+        total = sum(e.amount for e in income_expenses)
+        savings_funded = sum(e.amount for e in savings_expenses)
 
-        # Category breakdown
+        # Category breakdown (income-funded only)
         by_category = {}
-        for exp in expenses:
+        for exp in income_expenses:
             cat = exp.category or "uncategorized"
             by_category[cat] = by_category.get(cat, 0) + exp.amount
 
         trends.append({
             "period": period,
             "total_spent": total,
-            "expense_count": len(expenses),
+            "savings_funded": savings_funded,
+            "expense_count": len(income_expenses),
             "by_category": by_category
         })
 
@@ -375,10 +397,6 @@ def analyze_savings_growth(
     growth_by_account = {}
 
     for saving in savings_accounts:
-        transactions = db.query(models.SavingTransaction).filter(
-            models.SavingTransaction.saving_id == saving.id
-        ).order_by(models.SavingTransaction.transaction_date.desc()).all()
-
         monthly_balances = []
         today = date.today()
 
@@ -462,14 +480,17 @@ def compare_income_expenses(
 
         total_income = salary_income + other_income_total
 
-        # Calculate expenses
-        expenses = db.query(models.Expense).filter(
+        # Calculate expenses — split by source
+        all_expenses = db.query(models.Expense).filter(
             models.Expense.person_id == current_user.id,
             models.Expense.deleted == False,
             models.Expense.date >= start_date,
             models.Expense.date < end_date
         ).all()
-        total_expenses = sum(exp.amount for exp in expenses)
+        income_expenses = [e for e in all_expenses if e.saving_id is None]
+        savings_expenses = [e for e in all_expenses if e.saving_id is not None]
+        total_expenses = sum(e.amount for e in income_expenses)
+        savings_funded = sum(e.amount for e in savings_expenses)
 
         net = total_income - total_expenses
         savings_rate = (net / total_income * 100) if total_income > 0 else 0
@@ -478,6 +499,7 @@ def compare_income_expenses(
             "period": period,
             "income": total_income,
             "expenses": total_expenses,
+            "savings_funded": savings_funded,
             "net": net,
             "savings_rate": round(savings_rate, 2)
         })

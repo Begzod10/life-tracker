@@ -1,7 +1,7 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
@@ -160,13 +160,13 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @router.post('/login', response_model=AuthResponse)
 def login(
-        form_data: OAuth2PasswordRequestForm = Depends(),
+        login_data: UserLogin,
         db: Session = Depends(get_db)
 ):
     """Login with email and password"""
 
     user = db.query(models.Person).filter(
-        models.Person.email == form_data.username
+        models.Person.email == login_data.email
     ).first()
 
     if not user:
@@ -204,7 +204,7 @@ def login(
         )
 
     # Verify password
-    if not verify_password(form_data.password, user.hashed_password):
+    if not verify_password(login_data.password, user.hashed_password):
         user.failed_login_attempts += 1
         if user.failed_login_attempts >= 5:
             user.locked_until = datetime.utcnow() + timedelta(minutes=30)
@@ -331,10 +331,16 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
 
     except HTTPException:
         raise
+    except ValueError as e:
+        # Invalid / expired Google token — client error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Authentication failed: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Authentication failed: {str(e)}"
+            detail=f"Unexpected authentication error: {type(e).__name__}: {str(e)}"
         )
 
 

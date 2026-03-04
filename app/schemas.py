@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 import datetime as _dt
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 
 
@@ -449,7 +449,7 @@ class ExpenseBase(BaseModel):
     receipt_photo: Optional[str] = Field(None, description="URL/path to receipt photo")
     location: Optional[str] = Field(None, description="Location where expense occurred")
     tags: Optional[str] = Field(None, description="Tags as JSON array string")
-    source: str = Field(default="salary", description="Expense source: salary, savings, other")
+    source: Literal["salary", "savings", "other"] = Field(default="salary", description="Expense source: salary, savings, other")
 
 
 class ExpenseCreate(ExpenseBase):
@@ -457,6 +457,16 @@ class ExpenseCreate(ExpenseBase):
     person_id: int = Field(..., description="ID of the person")
     salary_month_id: Optional[int] = Field(None, description="ID of the salary month (if applicable)")
     saving_id: Optional[int] = Field(None, description="ID of the savings account (required when source=savings)")
+
+    @model_validator(mode='after')
+    def validate_source_fields(self):
+        if self.source == "savings":
+            if not self.saving_id:
+                raise ValueError("saving_id is required when source is 'savings'")
+        else:
+            if self.saving_id is not None:
+                raise ValueError(f"saving_id must not be provided when source is '{self.source}'")
+        return self
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -495,7 +505,7 @@ class ExpenseUpdate(BaseModel):
     receipt_photo: Optional[str] = Field(None)
     location: Optional[str] = Field(None)
     tags: Optional[str] = Field(None)
-    source: Optional[str] = Field(None, description="Expense source: salary, savings, other")
+    source: Optional[Literal["salary", "savings", "other"]] = Field(None, description="Expense source: salary, savings, other")
 
 
 class Expense(ExpenseBase):
@@ -759,7 +769,8 @@ class FinancialSummary(BaseModel):
     """Summary of financial data for a period"""
     period: str
     total_income: float
-    total_expenses: float
+    total_expenses: float          # Income-funded expenses only (saving_id IS NULL)
+    savings_funded_total: Optional[float] = 0.0  # Expenses paid from savings
     net_income: float
     total_savings: float
     expense_by_category: dict
@@ -791,10 +802,11 @@ class MonthlyFinancialReport(BaseModel):
     salary_received: float
     other_income: float
     total_income: float
-    total_expenses: float
+    total_expenses: float                        # Income-funded expenses only
+    savings_funded_total: Optional[float] = 0.0  # Expenses paid from savings
     total_savings_contributions: float
     net_change: float
-    budget_adherence: dict  # Category -> adherence percentage
+    budget_adherence: dict  # Category -> adherence percentage (uses ALL expenses)
     top_expenses: List[dict]
 
     model_config = ConfigDict(from_attributes=True)

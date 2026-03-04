@@ -48,11 +48,6 @@ def create_expense(
     # Validate savings source
     saving = None
     if expense.source == "savings":
-        if not expense.saving_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="saving_id is required when source is 'savings'"
-            )
         saving = db.query(models.Saving).filter(
             models.Saving.id == expense.saving_id,
             models.Saving.person_id == current_user.id,
@@ -266,7 +261,7 @@ def get_expenses_by_saving(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Get all expenses funded from a specific savings account"""
+    """Get all active expenses funded from a specific savings account"""
     saving = db.query(models.Saving).filter(
         models.Saving.id == saving_id,
         models.Saving.person_id == current_user.id
@@ -282,6 +277,31 @@ def get_expenses_by_saving(
         models.Expense.saving_id == saving_id,
         models.Expense.person_id == current_user.id,
         models.Expense.deleted == False
+    ).order_by(models.Expense.date.desc()).all()
+
+
+@router.get('/by-saving/{saving_id}/deleted', response_model=List[schemas.Expense])
+def get_deleted_expenses_by_saving(
+        saving_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """Get all deleted expenses that were funded from a specific savings account"""
+    saving = db.query(models.Saving).filter(
+        models.Saving.id == saving_id,
+        models.Saving.person_id == current_user.id
+    ).first()
+
+    if not saving:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Saving account not found"
+        )
+
+    return db.query(models.Expense).filter(
+        models.Expense.saving_id == saving_id,
+        models.Expense.person_id == current_user.id,
+        models.Expense.deleted == True
     ).order_by(models.Expense.date.desc()).all()
 
 

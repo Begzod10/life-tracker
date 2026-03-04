@@ -10,7 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
-    financial_analytics, savings, salary_months, income_sources, milestones
+    financial_analytics, savings, salary_months, income_sources, milestones, profile
 from app.config import settings
 from app.services.job_service import JobService
 
@@ -102,6 +102,7 @@ app.include_router(financial_analytics.router, prefix="/api")
 app.include_router(savings.router, prefix="/api")
 app.include_router(salary_months.router, prefix="/api")
 app.include_router(income_sources.router, prefix="/api")
+app.include_router(profile.router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -109,11 +110,17 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url=settings.FRONTEND_URL)
 
 
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui():
+    return FileResponse("static/swagger-custom.html")
+
+
+@app.get("/api-docs", include_in_schema=False)
+async def api_swagger_ui():
+    """API documentation (access at /api-docs when frontend is running)"""
     return FileResponse("static/swagger-custom.html")
 
 
