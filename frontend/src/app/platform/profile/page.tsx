@@ -410,6 +410,20 @@ function QuickActionsCard() {
             <div className="p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-2">
+                    <a
+                        href="https://t.me/life_tracker_notify_bot"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-between p-3 bg-[#0f0f1a] rounded-lg hover:bg-[#2a2b36] transition-colors text-left"
+                    >
+                        <span className="text-blue-400 font-medium flex items-center gap-2">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.1 13.126l-2.94-.918c-.64-.203-.653-.64.136-.954l11.49-4.43c.533-.194 1.001.131.828.396z"/>
+                            </svg>
+                            Telegram Bot
+                        </span>
+                        <ChevronRight size={16} className="text-gray-500" />
+                    </a>
                     {actions.map((action, idx) => (
                         <button
                             key={idx}
