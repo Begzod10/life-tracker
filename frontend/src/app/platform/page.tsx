@@ -61,7 +61,7 @@ const categories: categoryType[] = [
         title: 'Timetable',
         icon: CalendarDays,
         color: 'from-teal-500 to-cyan-500',
-        description: 'Plan your day hour by hour - v11'
+        description: 'Plan your day hour by hour'
     },
     {
         id: 'finances',
