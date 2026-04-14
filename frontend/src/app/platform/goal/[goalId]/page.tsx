@@ -27,7 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 
 import { useGoalProfile } from '@/lib/hooks/use-goals'
-import { useTasksByGoal, useTaskCreate } from '@/lib/hooks/use-tasks'
+import { useTasksByGoal, useTaskCreate, useRecurringCompletions } from '@/lib/hooks/use-tasks'
 import { useProgressLogsByGoal, useProgressLogCreate, useProgressLogUpdate, useProgressLogDelete } from '@/lib/hooks/use-progress-log'
 import { useUser } from '@/lib/hooks/use-auth'
 import { TaskList } from '@/components/features/tasks/tasks-view'
@@ -227,6 +227,134 @@ const Timeline = ({
                 </div>
             </div>
         </div>
+    )
+}
+
+// ─── Recurring Weekly Progress Widget ────────────────────────────────────────
+function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
+    const { data: recurring = [], isLoading } = useRecurringCompletions(goalId, 4)
+
+    if (isLoading || recurring.length === 0) return null
+
+    // Build last-28-days date list
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const days: Date[] = Array.from({ length: 28 }, (_, i) => {
+        const d = new Date(today); d.setDate(today.getDate() - 27 + i); return d
+    })
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+    const dayLabel = (d: Date) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getDay()]
+
+    const priorityDot: Record<string, string> = {
+        high: 'bg-red-400', medium: 'bg-yellow-400', low: 'bg-green-400'
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+        >
+            <Card
+                className="p-6 border border-white/5 backdrop-blur-sm"
+                style={{ backgroundColor: 'oklch(0.18 0.02 240)', borderColor: 'oklch(0.25 0.02 240)' }}
+            >
+                <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <span>🔄</span> Recurring Tasks
+                        <span className="text-xs font-normal text-white/40 ml-1">— last 4 weeks</span>
+                    </h2>
+                </div>
+
+                {/* Day header */}
+                <div className="flex gap-1 mb-2 pl-[200px]">
+                    {days.map((d, i) => (
+                        <div key={i} className="w-6 flex-shrink-0 text-center">
+                            {i % 7 === 0 && (
+                                <span className="text-[9px] text-white/25 font-medium">{dayLabel(d)}</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="space-y-2">
+                    {recurring.map(task => {
+                        const completionSet = new Set(task.completions)
+                        const totalDone = task.completions.length
+                        const streak = (() => {
+                            let s = 0
+                            for (let i = 27; i >= 0; i--) {
+                                if (completionSet.has(fmt(days[i]))) s++
+                                else break
+                            }
+                            return s
+                        })()
+
+                        return (
+                            <div key={task.task_id} className="flex items-center gap-2">
+                                {/* Task name */}
+                                <div className="w-[192px] flex items-center gap-2 shrink-0">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority] ?? 'bg-white/30'}`} />
+                                    <span className="text-sm text-white/80 truncate" title={task.task_name}>
+                                        {task.task_name}
+                                    </span>
+                                </div>
+
+                                {/* Day cells */}
+                                <div className="flex gap-1">
+                                    {days.map((d, i) => {
+                                        const dateStr = fmt(d)
+                                        const done = completionSet.has(dateStr)
+                                        const isToday = dateStr === fmt(today)
+                                        return (
+                                            <div key={i}
+                                                title={`${dateStr}${done ? ' ✓' : ''}`}
+                                                className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center transition-all
+                                                    ${done
+                                                        ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
+                                                        : isToday
+                                                            ? 'bg-white/10 border border-white/20'
+                                                            : d > today
+                                                                ? 'bg-transparent'
+                                                                : 'bg-white/5'
+                                                    }`}
+                                            >
+                                                {done && <span className="text-[9px] text-white font-bold">✓</span>}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* Stats */}
+                                <div className="ml-2 flex items-center gap-3 shrink-0">
+                                    <span className="text-xs text-white/40">{totalDone}/28</span>
+                                    {streak > 0 && (
+                                        <span className="text-xs text-amber-400 font-semibold">
+                                            🔥 {streak}d
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+
+                {/* Legend */}
+                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm bg-emerald-500" />
+                        <span className="text-xs text-white/35">Completed</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm bg-white/5" />
+                        <span className="text-xs text-white/35">Missed</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-amber-400">🔥</span>
+                        <span className="text-xs text-white/35">Current streak</span>
+                    </div>
+                </div>
+            </Card>
+        </motion.div>
     )
 }
 
@@ -466,6 +594,10 @@ export default function GoalPage() {
         day: 'numeric',
     }) : 'No target date'
 
+    const isOverdue = goalData.target_date &&
+        goalData.status !== 'completed' &&
+        new Date(goalData.target_date) < new Date()
+
 
 
     return (
@@ -524,6 +656,11 @@ export default function GoalPage() {
                             >
                                 {goalData.priority} Priority
                             </Badge>
+                            {isOverdue && (
+                                <Badge className="px-3 py-1 text-sm bg-red-500/15 text-red-400 border border-red-500/30">
+                                    ⚠ Overdue
+                                </Badge>
+                            )}
                             <div className="flex items-center gap-2 text-sm text-gray-400 ml-2">
                                 <Clock className="w-4 h-4" />
                                 <span>Updated {updatedDate}</span>
@@ -1066,6 +1203,8 @@ export default function GoalPage() {
                             </Card>
                         </motion.div>
 
+                        {/* ── Recurring Tasks Weekly Progress ── */}
+                        <RecurringWeeklyProgress goalId={id as string} />
 
                     </div>
                 </div>

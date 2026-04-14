@@ -492,7 +492,9 @@ def delete_expense(
 
     salary_month_id = db_expense.salary_month_id
 
-    # Reverse savings withdrawal if this expense was funded from savings
+    # Reverse savings withdrawal if this expense was funded from savings.
+    # We add a reversal DEPOSIT (not delete the original withdrawal) to preserve
+    # the full audit trail. The original withdrawal transaction stays in history.
     saving_to_recompute = None
     if db_expense.source == "savings" and db_expense.saving_transaction_id:
         saving_tx = db.query(models.SavingTransaction).filter(
@@ -502,14 +504,26 @@ def delete_expense(
             saving_to_recompute = db.query(models.Saving).filter(
                 models.Saving.id == saving_tx.saving_id
             ).first()
-            db.delete(saving_tx)
+            if saving_to_recompute:
+                # Add a reversal deposit to cancel the original withdrawal
+                reversal = models.SavingTransaction(
+                    saving_id=saving_tx.saving_id,
+                    transaction_type="deposit",
+                    amount=saving_tx.amount,
+                    transaction_date=db_expense.date,
+                    balance_before=0.0,   # will be recomputed
+                    balance_after=0.0,    # will be recomputed
+                    description=f"Reversal: expense #{db_expense.id} '{db_expense.name}' was deleted"
+                )
+                db.add(reversal)
+            # Clear the link so restore will create a fresh withdrawal if needed
             db_expense.saving_transaction_id = None
             db.flush()
 
     db_expense.deleted = True
     db.commit()
 
-    # Recompute savings balance chain after removing the withdrawal transaction
+    # Recompute savings balance chain after adding the reversal deposit
     if saving_to_recompute:
         from app.routers.savings import _recompute_balance_chain
         _recompute_balance_chain(saving_to_recompute, db)

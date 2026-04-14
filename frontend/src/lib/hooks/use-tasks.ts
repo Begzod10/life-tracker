@@ -105,20 +105,29 @@ export function useTaskCreate() {
         }
     })
 }
-export function useTasksStatsByPerson(personId?: string | number) {
+export function useTasksStatsByPerson(personId?: string | number, timeRange: 'day' | 'week' | 'month' | 'year' | 'all' = 'week') {
     const { request } = useHttp()
 
     return useQuery({
-        queryKey: ['tasks', 'stats', 'person', personId],
+        queryKey: ['tasks', 'stats', 'person', personId, timeRange],
         queryFn: async () => {
             const tasks: any[] = await request(API_ENDPOINTS.TASKS.BY_PERSON(personId!))
             const now = new Date()
-            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-            const total = tasks.length
-            const completed = tasks.filter(t => t.completed).length
-            const inProgress = tasks.filter(t => !t.completed).length
-            const addedThisWeek = tasks.filter(t => new Date(t.created_at) >= weekAgo).length
+            const cutoff: Date | null = (() => {
+                if (timeRange === 'day')   { const d = new Date(now); d.setHours(0, 0, 0, 0); return d }
+                if (timeRange === 'week')  return new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
+                if (timeRange === 'month') return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                if (timeRange === 'year')  return new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                return null // 'all'
+            })()
+
+            const inPeriod = cutoff ? tasks.filter(t => new Date(t.created_at) >= cutoff) : tasks
+
+            const total = inPeriod.length
+            const completed = inPeriod.filter(t => t.completed).length
+            const inProgress = inPeriod.filter(t => !t.completed).length
+            const addedThisWeek = tasks.filter(t => new Date(t.created_at) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)).length
             const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
 
             return { total, completed, inProgress, addedThisWeek, completionRate }
@@ -187,5 +196,22 @@ export function useSubtaskDelete() {
             queryClient.invalidateQueries({ queryKey: ['subtasks'] })
             queryClient.invalidateQueries({ queryKey: ['tasks'] })
         }
+    })
+}
+
+// ─── Recurring task completion history ───────────────────────────────────────
+export type RecurringCompletion = {
+    task_id: number
+    task_name: string
+    priority: string
+    completions: string[]  // "YYYY-MM-DD" dates
+}
+
+export function useRecurringCompletions(goalId: string | number, weeks = 4) {
+    const { request } = useHttp()
+    return useQuery<RecurringCompletion[]>({
+        queryKey: ['tasks', 'recurring-completions', goalId, weeks],
+        queryFn: () => request(API_ENDPOINTS.TASKS.RECURRING_COMPLETIONS(goalId, weeks)),
+        enabled: !!goalId,
     })
 }

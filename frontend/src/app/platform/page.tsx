@@ -293,7 +293,7 @@ function CategoryExpanded({ category, onBack }: {
     const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year' | 'all'>('week')
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
     const { data: overviewStats, isLoading: isLoadingOverviewStats } = useGoalsOverviewStats(user?.id ? String(user.id) : '')
-    const { data: taskStats, isLoading: isLoadingTaskStats } = useTasksStatsByPerson(category.id === 'tasks' ? user?.id : undefined)
+    const { data: taskStats, isLoading: isLoadingTaskStats } = useTasksStatsByPerson(category.id === 'tasks' ? user?.id : undefined, timeRange)
 
     return (
         <motion.div
@@ -431,16 +431,16 @@ function StatsSection({ category, timeRange, overviewStats, isLoading, taskStats
         const total = taskStats?.total ?? 0
         const completed = taskStats?.completed ?? 0
         const inProgress = taskStats?.inProgress ?? 0
-        const addedThisWeek = taskStats?.addedThisWeek ?? 0
         const completionRate = taskStats?.completionRate ?? 0
         const inProgressPct = total > 0 ? Math.round((inProgress / total) * 100) : 0
+        const periodLabel = timeRange === 'day' ? 'Today' : timeRange === 'week' ? 'This Week' : timeRange === 'month' ? 'This Month' : timeRange === 'year' ? 'This Year' : 'All Time'
 
         return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-[#1a1b26] border-[#2a2b36] p-6">
-                    <div className="text-sm text-gray-400 mb-2">Added This Week</div>
-                    <div className="text-3xl font-bold text-white mb-1">{addedThisWeek}</div>
-                    <div className="text-sm text-gray-400">{total} total tasks</div>
+                    <div className="text-sm text-gray-400 mb-2">Added — {periodLabel}</div>
+                    <div className="text-3xl font-bold text-white mb-1">{total}</div>
+                    <div className="text-sm text-gray-400">{taskStats?.addedThisWeek ?? 0} added this week</div>
                 </Card>
 
                 <Card className="bg-[#1a1b26] border-[#2a2b36] p-6">

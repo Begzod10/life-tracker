@@ -24,6 +24,7 @@ class Person(Base):
     auth_provider = Column(String(20), default="google")
     google_id = Column(String(255), unique=True, nullable=True, index=True)
     profile_photo_url = Column(String(500), nullable=True)
+    telegram_chat_id = Column(String(50), nullable=True)   # Telegram chat ID for notifications
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     jobs = relationship(
@@ -197,6 +198,7 @@ class Task(Base):
     priority = Column(String(20), default="medium")
     estimated_duration = Column(Integer)  # minutes
     value = Column(Float, nullable=True)  # contribution to goal's current_value when completed
+    is_recurring = Column(Boolean, default=False)  # resets daily instead of completing
     deleted = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -512,6 +514,7 @@ class TimeBlock(Base):
     category = Column(String(50), default="work")   # work, personal, health, learning, social, other
     color = Column(String(7), nullable=True)         # hex color override
     is_completed = Column(Boolean, default=False)
+    is_recurring = Column(Boolean, default=False)   # auto-copy to next week
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
     deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

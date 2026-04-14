@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from sqlalchemy import or_, func
 from app import models, schemas
 from app.database import get_db
 from app.services.progress_service import ProgressService
+from app.dependencies import get_current_active_user
 
 not_deleted = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
 router = APIRouter(
@@ -15,34 +16,47 @@ router = APIRouter(
 
 
 @router.get('/', response_model=List[schemas.Task])
-def get_tasks(db: Session = Depends(get_db)):
-    """Get all tasks"""
-    return db.query(models.Task).filter(models.Task.deleted == False).all()
+def get_tasks(db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
+    """Get all tasks for current user (via their goals)"""
+    return (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Goal.person_id == current_user.id, models.Task.deleted == False)
+        .all()
+    )
 
 
 @router.get('/deleted/goal/{goal_id}', response_model=List[schemas.Task])
-def get_deleted_tasks(goal_id: int, db: Session = Depends(get_db)):
+def get_deleted_tasks(goal_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get all soft-deleted tasks for a specific goal"""
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, models.Goal.person_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
     return db.query(models.Task).filter(models.Task.goal_id == goal_id, models.Task.deleted == True).all()
 
 
 @router.get('/{task_id}', response_model=schemas.Task)
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task(task_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get a specific task by ID"""
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    task = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .first()
+    )
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
 
 
 @router.post('/', response_model=schemas.Task)
-def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
+def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """
     Create a new task and recalculate goal progress.
     Adding a task will update the goal's completion percentage.
     """
-    # Verify the goal exists
-    goal = db.query(models.Goal).filter(models.Goal.id == task.goal_id).first()
+    # Verify the goal exists and belongs to current user
+    goal = db.query(models.Goal).filter(models.Goal.id == task.goal_id, models.Goal.person_id == current_user.id).first()
     if not goal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -75,12 +89,17 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
 
 
 @router.put('/{task_id}', response_model=schemas.Task)
-def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(get_db)):
+def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """
     Update a task and automatically recalculate goal progress.
     When task completion status changes, the goal percentage is updated.
     """
-    db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    db_task = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .first()
+    )
     if not db_task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
@@ -134,18 +153,23 @@ def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(ge
 
 
 @router.delete('/{task_id}', status_code=status.HTTP_200_OK)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(task_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """
-    Delete a task and recalculate goal progress.
+    Soft-delete a task and recalculate goal progress.
     Removing a task affects the total count and percentage.
     """
-    db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    db_task = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .first()
+    )
     if not db_task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     goal_id = db_task.goal_id
 
-    db.delete(db_task)
+    db_task.deleted = True
     db.commit()
 
     # Recalculate goal progress (removing a task changes the total)
@@ -155,8 +179,10 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get('/person/{person_id}', response_model=List[schemas.Task])
-def get_tasks_by_person(person_id: int, db: Session = Depends(get_db)):
+def get_tasks_by_person(person_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get all tasks for a specific person (across all their goals)"""
+    if person_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return db.query(models.Task).join(models.Goal).filter(
         models.Goal.person_id == person_id,
         not_deleted
@@ -164,21 +190,65 @@ def get_tasks_by_person(person_id: int, db: Session = Depends(get_db)):
 
 
 @router.get('/goal/{goal_id}', response_model=List[schemas.Task])
-def get_tasks_by_goal(goal_id: int, db: Session = Depends(get_db)):
+def get_tasks_by_goal(goal_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get all tasks for a specific goal"""
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, models.Goal.person_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
     return db.query(models.Task).filter(models.Task.goal_id == goal_id, not_deleted).all()
 
 
 @router.post('/{task_id}/mark_task', response_model=schemas.Task)
-def mark_task(task_id: int, db: Session = Depends(get_db)):
+def mark_task(task_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """
-    Quick endpoint to mark a task as completed.
-    Automatically updates goal progress.
+    Mark a task as completed.
+    - Regular tasks: toggle completed on/off.
+    - Recurring tasks: log the completion in ProgressLogTask, then reset
+      completed=False so the task is ready again tomorrow. Due date advances
+      by 1 day so it shows up correctly in the list.
     """
-    db_task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    db_task = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .first()
+    )
     if not db_task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
+    if db_task.is_recurring:
+        today = date.today()
+
+        # Check if already logged today (prevent double-completion)
+        already_done = db.query(models.ProgressLogTask).filter(
+            models.ProgressLogTask.task_id == task_id,
+            models.ProgressLogTask.log_date == today,
+        ).first()
+
+        if already_done:
+            # Un-complete: remove today's log entry
+            db.delete(already_done)
+            db_task.completed = False
+            db_task.completed_at = None
+        else:
+            # Log completion
+            log = models.ProgressLogTask(
+                task_id=task_id,
+                log_date=today,
+                notes="completed",
+            )
+            db.add(log)
+            # Show as completed until midnight, then reset via next call
+            db_task.completed = True
+            db_task.completed_at = datetime.utcnow()
+            db_task.due_date = today + timedelta(days=1)
+
+        db.commit()
+        db.refresh(db_task)
+        ProgressService.update_goal_percentage(db_task.goal_id, db, method='hybrid')
+        return db_task
+
+    # ── Non-recurring: original toggle behaviour ──────────────────────────────
     if db_task.completed:
         db_task.completed = False
         db_task.completed_at = None
@@ -188,7 +258,6 @@ def mark_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_task)
 
-    # Auto-update goal's current_value from completed tasks with values
     goal = db.query(models.Goal).filter(models.Goal.id == db_task.goal_id).first()
     if goal and goal.target_value:
         total_value = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
@@ -200,20 +269,53 @@ def mark_task(task_id: int, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_task)
 
-    # Recalculate goal progress
     ProgressService.update_goal_percentage(db_task.goal_id, db, method='hybrid')
-
     return db_task
 
 
+@router.get('/goal/{goal_id}/recurring-completions', response_model=List[schemas.RecurringCompletionTask])
+def get_recurring_completions(goal_id: int, weeks: int = Query(default=4, ge=1, le=52), db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
+    """
+    Return completion history for all recurring tasks in a goal.
+    `weeks` controls how far back to look (default: 4 weeks).
+    """
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, models.Goal.person_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+
+    since = date.today() - timedelta(weeks=weeks)
+
+    recurring_tasks = db.query(models.Task).filter(
+        models.Task.goal_id == goal_id,
+        models.Task.is_recurring == True,
+        or_(models.Task.deleted == False, models.Task.deleted.is_(None)),
+    ).all()
+
+    result = []
+    for task in recurring_tasks:
+        logs = db.query(models.ProgressLogTask).filter(
+            models.ProgressLogTask.task_id == task.id,
+            models.ProgressLogTask.log_date >= since,
+        ).order_by(models.ProgressLogTask.log_date).all()
+
+        result.append(schemas.RecurringCompletionTask(
+            task_id=task.id,
+            task_name=task.name,
+            priority=task.priority,
+            completions=[log.log_date for log in logs],
+        ))
+
+    return result
+
+
 @router.get('/goal/{goal_id}/statistics')
-def get_goal_task_statistics(goal_id: int, db: Session = Depends(get_db)):
+def get_goal_task_statistics(goal_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """
     Get detailed task statistics for a goal.
     Returns counts by status, priority, and completion percentages.
     """
-    # Verify goal exists
-    goal = db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+    # Verify goal exists and belongs to current user
+    goal = db.query(models.Goal).filter(models.Goal.id == goal_id, models.Goal.person_id == current_user.id).first()
     if not goal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
 

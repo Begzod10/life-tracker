@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { useParams } from 'next/navigation'
-import { format, addDays, subDays, isToday, parseISO } from 'date-fns'
+import { useParams, useRouter } from 'next/navigation'
+import { format, addDays, subDays, isToday, parseISO, startOfWeek, isSameDay } from 'date-fns'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, ChevronLeft, ChevronRight, Check, Trash2, Clock, CalendarDays, Loader2, Link as LinkIcon, X, Search } from 'lucide-react'
+import {
+    Plus, ChevronLeft, ChevronRight, Check, Trash2, Clock,
+    Loader2, Link as LinkIcon, X, Search, RefreshCw, BarChart3, BarChart2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -25,235 +26,190 @@ import {
 import { useTasksList } from '@/lib/hooks/use-tasks'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const HOUR_START = 6   // 6 AM
-const HOUR_END   = 24  // midnight
-const TOTAL_HOURS = HOUR_END - HOUR_START
-const PX_PER_HOUR = 72  // height per hour in pixels
+const HOUR_START   = 6
+const HOUR_END     = 24
+const TOTAL_HOURS  = HOUR_END - HOUR_START
+const PX_PER_HOUR  = 80
 
-const CATEGORIES: { value: string; label: string; color: string; bg: string }[] = [
-    { value: 'work',      label: 'Work',      color: '#3b82f6', bg: 'bg-blue-500/20 border-blue-500/40 text-blue-300' },
-    { value: 'personal',  label: 'Personal',  color: '#a855f7', bg: 'bg-purple-500/20 border-purple-500/40 text-purple-300' },
-    { value: 'health',    label: 'Health',    color: '#22c55e', bg: 'bg-green-500/20 border-green-500/40 text-green-300' },
-    { value: 'learning',  label: 'Learning',  color: '#f59e0b', bg: 'bg-amber-500/20 border-amber-500/40 text-amber-300' },
-    { value: 'social',    label: 'Social',    color: '#ec4899', bg: 'bg-pink-500/20 border-pink-500/40 text-pink-300' },
-    { value: 'other',     label: 'Other',     color: '#6b7280', bg: 'bg-gray-500/20 border-gray-500/40 text-gray-300' },
+const CATEGORIES = [
+    { value: 'work',     label: 'Work',     color: '#6366f1', from: 'from-indigo-500/30', to: 'to-indigo-600/10', border: 'border-indigo-500/50', text: 'text-indigo-300', dot: 'bg-indigo-400' },
+    { value: 'personal', label: 'Personal', color: '#a855f7', from: 'from-purple-500/30', to: 'to-purple-600/10', border: 'border-purple-500/50', text: 'text-purple-300',  dot: 'bg-purple-400' },
+    { value: 'health',   label: 'Health',   color: '#10b981', from: 'from-emerald-500/30', to: 'to-emerald-600/10', border: 'border-emerald-500/50', text: 'text-emerald-300', dot: 'bg-emerald-400' },
+    { value: 'learning', label: 'Learning', color: '#f59e0b', from: 'from-amber-500/30', to: 'to-amber-600/10', border: 'border-amber-500/50', text: 'text-amber-300',   dot: 'bg-amber-400' },
+    { value: 'social',   label: 'Social',   color: '#ec4899', from: 'from-pink-500/30', to: 'to-pink-600/10', border: 'border-pink-500/50', text: 'text-pink-300',    dot: 'bg-pink-400' },
+    { value: 'other',    label: 'Other',    color: '#64748b', from: 'from-slate-500/30', to: 'to-slate-600/10', border: 'border-slate-500/50', text: 'text-slate-300',   dot: 'bg-slate-400' },
 ]
 
-const getCategoryStyle = (cat: string) =>
-    CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[CATEGORIES.length - 1]
+const getCat = (cat: string) => CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[CATEGORIES.length - 1]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function timeToMinutes(t: string): number {
+function timeToMinutes(t: string) {
     const [h, m] = t.split(':').map(Number)
     return h * 60 + m
 }
-
-function minutesToTime(min: number): string {
-    const h = Math.floor(min / 60).toString().padStart(2, '0')
-    const m = (min % 60).toString().padStart(2, '0')
-    return `${h}:${m}`
+function minutesToTime(min: number) {
+    return `${Math.floor(min / 60).toString().padStart(2, '0')}:${(min % 60).toString().padStart(2, '0')}`
+}
+function blockTop(start: string) {
+    return ((timeToMinutes(start) - HOUR_START * 60) / 60) * PX_PER_HOUR
+}
+function blockHeight(start: string, end: string) {
+    return Math.max(((timeToMinutes(end) - timeToMinutes(start)) / 60) * PX_PER_HOUR, 28)
 }
 
-function blockTop(start: string): number {
-    const mins = timeToMinutes(start) - HOUR_START * 60
-    return (mins / 60) * PX_PER_HOUR
-}
-
-function blockHeight(start: string, end: string): number {
-    const mins = timeToMinutes(end) - timeToMinutes(start)
-    return Math.max((mins / 60) * PX_PER_HOUR, 24)
-}
-
-// ─── Block Form ───────────────────────────────────────────────────────────────
+// ─── Repeat helpers ───────────────────────────────────────────────────────────
 type BlockFormData = {
-    title: string
-    description: string
-    start_time: string
-    end_time: string
-    category: string
-    task_id?: number
+    title: string; description: string; start_time: string; end_time: string
+    category: string; task_id?: number; is_recurring?: boolean
+    repeat_days?: number[]; repeat_weeks?: number
 }
 
-type TaskOption = { id: number; title: string; status: string; priority: string }
+const WEEK_DAYS = [
+    { label: 'Mo', value: 1 }, { label: 'Tu', value: 2 }, { label: 'We', value: 3 },
+    { label: 'Th', value: 4 }, { label: 'Fr', value: 5 }, { label: 'Sa', value: 6 }, { label: 'Su', value: 0 },
+]
 
-function TaskPicker({
-    personId,
-    value,
-    onChange,
-}: {
-    personId: string
-    value?: number
-    onChange: (id?: number) => void
-}) {
+function getRepeatDates(days: number[], weeks: number, fromDate: string): string[] {
+    const start = parseISO(fromDate); start.setHours(0, 0, 0, 0)
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const dates = new Set<string>()
+    for (let w = 0; w < weeks; w++) {
+        for (const day of days) {
+            const offset = (day - start.getDay() + 7) % 7 + w * 7
+            const d = addDays(start, offset)
+            if (d >= today) dates.add(format(d, 'yyyy-MM-dd'))
+        }
+    }
+    return [...dates].sort()
+}
+
+// ─── TaskPicker ───────────────────────────────────────────────────────────────
+type TaskOption = { id: number; name: string; completed: boolean; priority: string }
+
+function TaskPicker({ personId, value, onChange }: { personId: string; value?: number; onChange: (id?: number) => void }) {
     const [search, setSearch] = useState('')
     const [open, setOpen] = useState(false)
     const { data: tasks = [] } = useTasksList({ person_id: personId })
-
     const options: TaskOption[] = useMemo(() =>
-        (tasks as TaskOption[]).filter(t =>
-            t?.title &&
-            t.status !== 'completed' &&
-            t.title.toLowerCase().includes(search.toLowerCase())
-        ),
-        [tasks, search]
-    )
-
+        (tasks as TaskOption[]).filter(t => t?.name && !t.completed && t.name.toLowerCase().includes(search.toLowerCase())),
+        [tasks, search])
     const selected = (tasks as TaskOption[]).find((t: TaskOption) => t.id === value)
 
-    if (!open && !value) {
-        return (
-            <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-white/10 bg-white/5 text-white/40 hover:text-white/70 hover:border-white/20 transition-colors text-sm"
-            >
-                <LinkIcon className="w-3.5 h-3.5" />
-                Link to a task (optional)
-            </button>
-        )
-    }
-
-    if (!open && selected) {
-        return (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-blue-500/30 bg-blue-500/10">
-                <LinkIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span className="flex-1 text-sm text-white truncate">{selected.title}</span>
-                <button
-                    type="button"
-                    onClick={() => onChange(undefined)}
-                    className="text-white/40 hover:text-white/80 transition-colors"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
-            </div>
-        )
-    }
-
+    if (!open && !value) return (
+        <button type="button" onClick={() => setOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-white/8 bg-white/3 text-white/40 hover:text-white/70 hover:border-white/15 transition-all text-sm">
+            <LinkIcon className="w-3.5 h-3.5" />Link to a task (optional)
+        </button>
+    )
+    if (!open && selected) return (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10">
+            <LinkIcon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="flex-1 text-sm text-white truncate">{selected.name}</span>
+            <button type="button" onClick={() => onChange(undefined)} className="text-white/40 hover:text-white/80"><X className="w-3.5 h-3.5" /></button>
+        </div>
+    )
     return (
-        <div className="rounded-md border border-white/15 bg-white/5 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+        <div className="rounded-xl border border-white/10 bg-white/3 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/8">
                 <Search className="w-3.5 h-3.5 text-white/40 shrink-0" />
-                <input
-                    autoFocus
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search tasks…"
-                    className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
-                />
-                <button
-                    type="button"
-                    onClick={() => { setOpen(false); setSearch('') }}
-                    className="text-white/40 hover:text-white/80"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
+                <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks…"
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-white/30 outline-none" />
+                <button type="button" onClick={() => { setOpen(false); setSearch('') }} className="text-white/40 hover:text-white/80"><X className="w-3.5 h-3.5" /></button>
             </div>
             <div className="max-h-40 overflow-y-auto">
-                {options.length === 0 ? (
-                    <p className="text-white/30 text-xs text-center py-4">No tasks found</p>
-                ) : (
-                    options.map(task => (
-                        <button
-                            key={task.id}
-                            type="button"
+                {options.length === 0
+                    ? <p className="text-white/30 text-xs text-center py-4">No tasks found</p>
+                    : options.map(task => (
+                        <button key={task.id} type="button"
                             onClick={() => { onChange(task.id); setOpen(false); setSearch('') }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/8 transition-colors text-left"
-                        >
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                task.priority === 'high' ? 'bg-red-400' :
-                                task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'
-                            }`} />
-                            <span className="text-sm text-white truncate">{task.title}</span>
-                            <span className="ml-auto text-xs text-white/30 shrink-0">{task.status}</span>
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors text-left">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                            <span className="text-sm text-white truncate">{task.name}</span>
                         </button>
-                    ))
-                )}
+                    ))}
             </div>
         </div>
     )
 }
 
-function BlockForm({
-    initial,
-    personId,
-    onSubmit,
-    onCancel,
-    isLoading,
-}: {
-    initial?: Partial<BlockFormData>
-    personId: string
-    onSubmit: (d: BlockFormData) => void
-    onCancel: () => void
-    isLoading?: boolean
+// ─── Block Form ───────────────────────────────────────────────────────────────
+function hasOverlap(start: string, end: string, existing: TimeBlock[], excludeId?: number): TimeBlock | null {
+    const s = timeToMinutes(start)
+    const e = timeToMinutes(end)
+    for (const b of existing) {
+        if (b.id === excludeId || b.deleted) continue
+        const bs = timeToMinutes(b.start_time)
+        const be = timeToMinutes(b.end_time)
+        if (s < be && e > bs) return b
+    }
+    return null
+}
+
+function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingBlocks, editingId }: {
+    initial?: Partial<BlockFormData>; personId: string
+    onSubmit: (d: BlockFormData) => void; onCancel: () => void; isLoading?: boolean
+    existingBlocks?: TimeBlock[]; editingId?: number
 }) {
     const [form, setForm] = useState<BlockFormData>({
-        title: initial?.title ?? '',
-        description: initial?.description ?? '',
-        start_time: initial?.start_time ?? '09:00',
-        end_time: initial?.end_time ?? '10:00',
-        category: initial?.category ?? 'work',
-        task_id: initial?.task_id,
+        title: initial?.title ?? '', description: initial?.description ?? '',
+        start_time: initial?.start_time ?? '09:00', end_time: initial?.end_time ?? '10:00',
+        category: initial?.category ?? 'work', task_id: initial?.task_id,
+        is_recurring: initial?.is_recurring ?? false, repeat_days: [], repeat_weeks: 4,
     })
+    const [showRepeat, setShowRepeat] = useState(false)
+    const set = (k: keyof BlockFormData) => (v: string) => setForm(p => ({ ...p, [k]: v }))
 
-    const set = (k: keyof BlockFormData) => (v: string) =>
-        setForm(prev => ({ ...prev, [k]: v }))
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!form.title.trim()) return
-        if (form.start_time >= form.end_time) return
-        onSubmit(form)
-    }
+    const conflict = form.start_time < form.end_time
+        ? hasOverlap(form.start_time, form.end_time, existingBlocks ?? [], editingId)
+        : null
+    const canSave = (!!form.title.trim() || !!form.task_id) && form.start_time < form.end_time && !conflict
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={e => { e.preventDefault(); if (!canSave) return; onSubmit(form) }}
+            className="space-y-4">
+
             <div className="space-y-1.5">
-                <Label className="text-white/80 text-sm">Title *</Label>
-                <Input
-                    value={form.title}
-                    onChange={e => set('title')(e.target.value)}
-                    placeholder="e.g. Deep Work Session"
-                    className="bg-white/5 border-white/10 text-white placeholder:text-white/30"
-                    required
-                />
+                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">
+                    Title {!form.task_id && '*'}
+                </Label>
+                <Input value={form.title} onChange={e => set('title')(e.target.value)}
+                    placeholder={form.task_id ? 'Uses task name if left empty' : 'e.g. Deep Work Session'}
+                    className="bg-white/5 border-white/10 text-white placeholder:text-white/25 rounded-xl focus:border-indigo-500/60 focus:ring-0" />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                    <Label className="text-white/80 text-sm">Start time *</Label>
-                    <Input
-                        type="time"
-                        value={form.start_time}
-                        onChange={e => set('start_time')(e.target.value)}
-                        className="bg-white/5 border-white/10 text-white"
-                    />
-                </div>
-                <div className="space-y-1.5">
-                    <Label className="text-white/80 text-sm">End time *</Label>
-                    <Input
-                        type="time"
-                        value={form.end_time}
-                        onChange={e => set('end_time')(e.target.value)}
-                        className="bg-white/5 border-white/10 text-white"
-                    />
-                </div>
+                {(['start_time', 'end_time'] as const).map((k, i) => (
+                    <div key={k} className="space-y-1.5">
+                        <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">{i === 0 ? 'Start' : 'End'} *</Label>
+                        <Input type="time" value={form[k]} onChange={e => set(k)(e.target.value)}
+                            className="bg-white/5 border-white/10 text-white rounded-xl focus:border-indigo-500/60 focus:ring-0" />
+                    </div>
+                ))}
             </div>
             {form.start_time >= form.end_time && (
                 <p className="text-red-400 text-xs">End time must be after start time</p>
             )}
+            {conflict && form.start_time < form.end_time && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30">
+                    <span className="text-red-400 text-sm shrink-0">⚠</span>
+                    <p className="text-red-300 text-xs leading-relaxed">
+                        Overlaps with <span className="font-semibold text-red-200">"{conflict.title}"</span>{' '}
+                        ({conflict.start_time}–{conflict.end_time})
+                    </p>
+                </div>
+            )}
 
             <div className="space-y-1.5">
-                <Label className="text-white/80 text-sm">Category</Label>
+                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Category</Label>
                 <Select value={form.category} onValueChange={set('category')}>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                    <SelectTrigger className="bg-white/5 border-white/10 text-white rounded-xl focus:border-indigo-500/60">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#1a1b26] border-white/10 text-white">
+                    <SelectContent className="bg-[#16172a] border-white/10 text-white rounded-xl">
                         {CATEGORIES.map(c => (
                             <SelectItem key={c.value} value={c.value}>
                                 <span className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full" style={{ background: c.color }} />
-                                    {c.label}
+                                    <span className={`w-2 h-2 rounded-full ${c.dot}`} />{c.label}
                                 </span>
                             </SelectItem>
                         ))}
@@ -262,120 +218,117 @@ function BlockForm({
             </div>
 
             <div className="space-y-1.5">
-                <Label className="text-white/80 text-sm">Link Task</Label>
-                <TaskPicker
-                    personId={personId}
-                    value={form.task_id}
-                    onChange={id => setForm(prev => ({ ...prev, task_id: id }))}
-                />
+                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Link Task</Label>
+                <TaskPicker personId={personId} value={form.task_id} onChange={id => setForm(p => ({ ...p, task_id: id }))} />
             </div>
+
+            {/* Repeat on days */}
+            <div className="space-y-2">
+                <button type="button" onClick={() => { setShowRepeat(v => !v); if (showRepeat) setForm(p => ({ ...p, repeat_days: [] })) }}
+                    className={`flex items-center gap-2 text-sm font-medium transition-colors ${showRepeat ? 'text-indigo-400' : 'text-white/40 hover:text-white/70'}`}>
+                    <span className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${showRepeat ? 'bg-indigo-600 border-indigo-600' : 'border-white/20'}`}>
+                        {showRepeat && <Check className="w-2.5 h-2.5 text-white" />}
+                    </span>
+                    Repeat on days of week
+                </button>
+                {showRepeat && (
+                    <div className="space-y-3 pl-6">
+                        <div className="flex gap-1.5 flex-wrap">
+                            {WEEK_DAYS.map(d => {
+                                const active = form.repeat_days?.includes(d.value)
+                                return (
+                                    <button key={d.value} type="button"
+                                        onClick={() => setForm(p => ({ ...p, repeat_days: active ? p.repeat_days?.filter(x => x !== d.value) : [...(p.repeat_days ?? []), d.value] }))}
+                                        className={`w-9 h-9 rounded-xl text-xs font-semibold transition-all ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-white/20'}`}>
+                                        {d.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Label className="text-white/50 text-xs whitespace-nowrap">For</Label>
+                            <Select value={String(form.repeat_weeks ?? 4)} onValueChange={v => setForm(p => ({ ...p, repeat_weeks: Number(v) }))}>
+                                <SelectTrigger className="h-8 bg-white/5 border-white/10 text-white text-xs w-28 rounded-lg"><SelectValue /></SelectTrigger>
+                                <SelectContent className="bg-[#16172a] border-white/10 text-white">
+                                    {[1, 2, 4, 8, 12, 24, 52].map(w => <SelectItem key={w} value={String(w)} className="text-xs">{w} {w === 1 ? 'week' : 'weeks'}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <span className="text-white/35 text-xs">ahead</span>
+                        </div>
+                        {(form.repeat_days?.length ?? 0) > 0 && (
+                            <p className="text-indigo-400/80 text-xs">~{(form.repeat_days?.length ?? 0) * (form.repeat_weeks ?? 4)} blocks will be created</p>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Auto-recurring */}
+            <button type="button" onClick={() => setForm(p => ({ ...p, is_recurring: !p.is_recurring }))}
+                className={`flex items-center gap-2 text-sm font-medium transition-colors ${form.is_recurring ? 'text-emerald-400' : 'text-white/40 hover:text-white/70'}`}>
+                <span className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${form.is_recurring ? 'bg-emerald-600 border-emerald-600' : 'border-white/20'}`}>
+                    {form.is_recurring && <Check className="w-2.5 h-2.5 text-white" />}
+                </span>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Auto-copy to next week (Celery)
+            </button>
 
             <div className="space-y-1.5">
-                <Label className="text-white/80 text-sm">Notes</Label>
-                <Textarea
-                    value={form.description}
-                    onChange={e => set('description')(e.target.value)}
+                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Notes</Label>
+                <Textarea value={form.description} onChange={e => set('description')(e.target.value)}
                     placeholder="Optional notes…"
-                    className="bg-white/5 border-white/10 text-white placeholder:text-white/30 min-h-[80px] resize-none"
-                />
+                    className="bg-white/5 border-white/10 text-white placeholder:text-white/25 rounded-xl min-h-[72px] resize-none focus:border-indigo-500/60 focus:ring-0" />
             </div>
 
-            <div className="flex gap-3 pt-2">
-                <Button type="button" variant="ghost" onClick={onCancel} className="flex-1 text-white/60 hover:text-white border border-white/10">
-                    Cancel
-                </Button>
-                <Button
-                    type="submit"
-                    disabled={isLoading || !form.title.trim() || form.start_time >= form.end_time}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            <div className="flex gap-3 pt-1">
+                <Button type="button" variant="ghost" onClick={onCancel}
+                    className="flex-1 text-white/50 hover:text-white border border-white/10 rounded-xl">Cancel</Button>
+                <Button type="submit" disabled={isLoading || !canSave}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save block'}
                 </Button>
             </div>
         </form>
     )
 }
 
-// ─── Single Block Card on timeline ────────────────────────────────────────────
-function TimeBlockCard({
-    block,
-    taskTitle,
-    onEdit,
-    onDelete,
-    onToggle,
-}: {
-    block: TimeBlock
-    taskTitle?: string
-    onEdit: (b: TimeBlock) => void
-    onDelete: (b: TimeBlock) => void
-    onToggle: (b: TimeBlock) => void
+// ─── TimeBlockCard ────────────────────────────────────────────────────────────
+function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
+    block: TimeBlock; taskTitle?: string
+    onEdit: (b: TimeBlock) => void; onDelete: (b: TimeBlock) => void; onToggle: (b: TimeBlock) => void
 }) {
-    const cat = getCategoryStyle(block.color ? 'other' : block.category)
+    const cat    = getCat(block.category)
     const top    = blockTop(block.start_time)
     const height = blockHeight(block.start_time, block.end_time)
-    const durationMins = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
-    const isShort = height < 48
+    const dur    = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
+    const isShort = height < 52
 
     return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
-            style={{
-                position: 'absolute',
-                top: top,
-                left: 0,
-                right: 0,
-                height: height,
-                borderLeftColor: block.color ?? cat.color,
-            }}
-            className={`
-                group rounded-lg border border-l-4 px-2.5 py-1.5 cursor-pointer select-none overflow-hidden
-                transition-all duration-150
-                ${block.is_completed
-                    ? 'bg-white/5 border-white/10 opacity-60'
-                    : `border-white/10 ${cat.bg}`}
-            `}
-            onClick={() => onEdit(block)}
-        >
+        <motion.div layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
+            style={{ position: 'absolute', top, left: 0, right: 0, height, borderLeftColor: block.color ?? cat.color }}
+            className={`group rounded-xl border border-l-[3px] px-2.5 py-2 cursor-pointer select-none overflow-hidden backdrop-blur-sm transition-all duration-150 hover:brightness-110
+                ${block.is_completed ? 'bg-white/4 border-white/8 opacity-55' : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
+            onClick={() => onEdit(block)}>
             <div className="flex items-start justify-between gap-1 h-full">
                 <div className="flex-1 min-w-0">
-                    <p className={`font-semibold truncate text-sm leading-tight ${block.is_completed ? 'line-through text-white/40' : 'text-white'}`}>
+                    <p className={`font-semibold truncate leading-tight ${isShort ? 'text-xs' : 'text-sm'} ${block.is_completed ? 'line-through text-white/35' : 'text-white'}`}>
                         {block.title}
                     </p>
                     {!isShort && (
-                        <p className="text-xs text-white/50 mt-0.5">
-                            {block.start_time} – {block.end_time}
-                            <span className="ml-1">({durationMins}m)</span>
-                        </p>
+                        <p className="text-xs text-white/45 mt-0.5">{block.start_time}–{block.end_time} <span className="text-white/25">({dur}m)</span></p>
                     )}
                     {!isShort && taskTitle && (
-                        <div className="flex items-center gap-1 mt-1">
-                            <LinkIcon className="w-2.5 h-2.5 text-blue-400 shrink-0" />
-                            <p className="text-xs text-blue-300 truncate">{taskTitle}</p>
-                        </div>
+                        <div className="flex items-center gap-1 mt-1"><LinkIcon className="w-2.5 h-2.5 text-indigo-400 shrink-0" /><p className="text-xs text-indigo-300 truncate">{taskTitle}</p></div>
                     )}
-                    {!isShort && block.description && (
-                        <p className="text-xs text-white/40 mt-1 line-clamp-2">{block.description}</p>
+                    {!isShort && block.is_recurring && (
+                        <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>
                     )}
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
-                    {block.task_id && !isShort && (
-                        <span className="p-1 rounded bg-blue-500/20">
-                            <LinkIcon className="w-3 h-3 text-blue-400" />
-                        </span>
-                    )}
-                    <button
-                        onClick={() => onToggle(block)}
-                        className={`p-1 rounded transition-colors ${block.is_completed ? 'text-green-400 hover:text-green-300' : 'text-white/40 hover:text-green-400'}`}
-                    >
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => onToggle(block)}
+                        className={`p-1 rounded-lg transition-colors ${block.is_completed ? 'text-emerald-400 bg-emerald-500/15' : 'text-white/35 hover:text-emerald-400 hover:bg-emerald-500/15'}`}>
                         <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                        onClick={() => onDelete(block)}
-                        className="p-1 rounded text-white/40 hover:text-red-400 transition-colors"
-                    >
+                    <button onClick={() => onDelete(block)} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
@@ -384,7 +337,7 @@ function TimeBlockCard({
     )
 }
 
-// ─── Timeline ruler ───────────────────────────────────────────────────────────
+// ─── Timeline Ruler ───────────────────────────────────────────────────────────
 function TimelineRuler() {
     return (
         <div className="relative" style={{ height: TOTAL_HOURS * PX_PER_HOUR }}>
@@ -392,379 +345,345 @@ function TimelineRuler() {
                 const hour = HOUR_START + i
                 const label = hour === 0 || hour === 24 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`
                 return (
-                    <div
-                        key={hour}
-                        className="absolute left-0 right-0 flex items-center gap-3"
-                        style={{ top: i * PX_PER_HOUR }}
-                    >
-                        <span className="text-xs text-white/30 w-12 text-right shrink-0">{label}</span>
-                        <div className="flex-1 h-px bg-white/8" />
+                    <div key={hour} className="absolute left-0 right-0 flex items-center gap-3" style={{ top: i * PX_PER_HOUR }}>
+                        <span className="text-[11px] text-white/25 w-14 text-right shrink-0 font-medium">{label}</span>
+                        <div className="flex-1 h-px bg-white/6" />
                     </div>
                 )
             })}
-            {/* Half-hour marks */}
             {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                <div
-                    key={`half-${i}`}
-                    className="absolute left-16 right-0 h-px bg-white/4"
-                    style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }}
-                />
+                <div key={`h-${i}`} className="absolute left-[74px] right-0 h-px bg-white/3" style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }} />
             ))}
         </div>
     )
 }
 
-// ─── Current time indicator ────────────────────────────────────────────────────
+// ─── Current Time Indicator ───────────────────────────────────────────────────
 function CurrentTimeIndicator({ day }: { day: string }) {
     if (!isToday(parseISO(day))) return null
     const now = new Date()
-    const totalMins = now.getHours() * 60 + now.getMinutes()
-    const offsetMins = totalMins - HOUR_START * 60
+    const offsetMins = now.getHours() * 60 + now.getMinutes() - HOUR_START * 60
     if (offsetMins < 0 || offsetMins > TOTAL_HOURS * 60) return null
     const top = (offsetMins / 60) * PX_PER_HOUR
-
     return (
         <div className="absolute left-0 right-0 z-20 pointer-events-none flex items-center" style={{ top }}>
-            <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 shrink-0" />
-            <div className="flex-1 h-px bg-red-500 opacity-70" />
+            <div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)] -ml-1.5 shrink-0" />
+            <div className="flex-1 h-px bg-gradient-to-r from-red-400/70 to-transparent" />
         </div>
     )
 }
 
-// ─── Summary Sidebar ──────────────────────────────────────────────────────────
-function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void }) {
-    const total = blocks.length
-    const done  = blocks.filter(b => b.is_completed).length
-    const totalMins = blocks.reduce((acc, b) =>
-        acc + timeToMinutes(b.end_time) - timeToMinutes(b.start_time), 0)
-
-    const byCategory = CATEGORIES.map(cat => ({
-        ...cat,
-        count: blocks.filter(b => b.category === cat.value).length,
-    })).filter(c => c.count > 0)
+// ─── Week Strip ───────────────────────────────────────────────────────────────
+function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d: string) => void }) {
+    const parsed = parseISO(currentDay)
+    const weekStart = startOfWeek(parsed, { weekStartsOn: 1 })
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
     return (
-        <div className="space-y-4">
+        <div className="flex gap-1">
+            {days.map(d => {
+                const key   = format(d, 'yyyy-MM-dd')
+                const isAct = isSameDay(d, parsed)
+                const isTod = isToday(d)
+                return (
+                    <button key={key} onClick={() => onSelect(key)}
+                        className={`flex flex-col items-center px-3 py-2 rounded-xl transition-all text-center min-w-[46px]
+                            ${isAct ? 'bg-indigo-600 shadow-lg shadow-indigo-500/25 text-white' : isTod ? 'bg-white/8 text-white border border-white/15' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">{format(d, 'EEE')}</span>
+                        <span className={`text-base font-bold leading-tight mt-0.5 ${isAct || isTod ? 'text-white' : ''}`}>{format(d, 'd')}</span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void }) {
+    const total     = blocks.length
+    const done      = blocks.filter(b => b.is_completed).length
+    const totalMins = blocks.reduce((acc, b) => acc + timeToMinutes(b.end_time) - timeToMinutes(b.start_time), 0)
+    const pct       = total > 0 ? Math.round((done / total) * 100) : 0
+    const byCategory = CATEGORIES.map(c => ({ ...c, count: blocks.filter(b => b.category === c.value).length })).filter(c => c.count > 0)
+
+    return (
+        <div className="space-y-3">
             {/* Stats */}
-            <Card className="bg-white/3 border-white/8 p-4">
-                <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Day Overview</h3>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                    <div>
+            <div className="rounded-2xl border border-white/8 bg-white/3 backdrop-blur-sm p-5">
+                <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-4">Day Overview</p>
+                <div className="grid grid-cols-3 gap-2 text-center mb-4">
+                    <div className="rounded-xl bg-white/4 p-3">
                         <p className="text-2xl font-bold text-white">{total}</p>
-                        <p className="text-xs text-white/40">Blocks</p>
+                        <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Blocks</p>
                     </div>
-                    <div>
-                        <p className="text-2xl font-bold text-green-400">{done}</p>
-                        <p className="text-xs text-white/40">Done</p>
+                    <div className="rounded-xl bg-emerald-500/10 p-3">
+                        <p className="text-2xl font-bold text-emerald-400">{done}</p>
+                        <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Done</p>
                     </div>
-                    <div>
-                        <p className="text-2xl font-bold text-blue-400">{Math.round(totalMins / 60)}h</p>
-                        <p className="text-xs text-white/40">Scheduled</p>
+                    <div className="rounded-xl bg-indigo-500/10 p-3">
+                        <p className="text-2xl font-bold text-indigo-400">{Math.round(totalMins / 60)}h</p>
+                        <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Sched</p>
                     </div>
                 </div>
                 {total > 0 && (
-                    <div className="mt-3">
-                        <div className="flex justify-between text-xs text-white/40 mb-1">
-                            <span>Completion</span>
-                            <span>{total > 0 ? Math.round((done / total) * 100) : 0}%</span>
+                    <div>
+                        <div className="flex justify-between text-xs mb-1.5">
+                            <span className="text-white/35">Completion</span>
+                            <span className={`font-semibold ${pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-indigo-400' : 'text-white/60'}`}>{pct}%</span>
                         </div>
-                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-green-500 rounded-full transition-all duration-500"
-                                style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
-                            />
+                        <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+                            <motion.div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full"
+                                initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
                         </div>
                     </div>
                 )}
-            </Card>
+            </div>
 
             {/* Categories */}
             {byCategory.length > 0 && (
-                <Card className="bg-white/3 border-white/8 p-4">
-                    <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Categories</h3>
+                <div className="rounded-2xl border border-white/8 bg-white/3 backdrop-blur-sm p-5">
+                    <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-3">Categories</p>
                     <div className="space-y-2">
                         {byCategory.map(cat => (
                             <div key={cat.value} className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full" style={{ background: cat.color }} />
+                                    <div className={`w-2 h-2 rounded-full ${cat.dot}`} />
                                     <span className="text-sm text-white/70">{cat.label}</span>
                                 </div>
-                                <Badge variant="outline" className="text-xs border-white/20 text-white/60">{cat.count}</Badge>
+                                <span className="text-xs font-semibold text-white/40 bg-white/6 px-2 py-0.5 rounded-lg">{cat.count}</span>
                             </div>
                         ))}
                     </div>
-                </Card>
+                </div>
             )}
 
-            {/* Block list */}
-            <Card className="bg-white/3 border-white/8 p-4">
-                <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Schedule</h3>
-                {blocks.length === 0 ? (
-                    <p className="text-white/30 text-sm text-center py-4">No blocks yet</p>
-                ) : (
-                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                        {blocks.map(b => {
-                            const cat = getCategoryStyle(b.category)
-                            const linkedTask = b.task_id ? taskMap[b.task_id] : undefined
-                            return (
-                                <div key={b.id} className={`flex items-center gap-3 p-2.5 rounded-lg border ${b.is_completed ? 'opacity-50 border-white/5 bg-white/3' : `border-white/10 ${cat.bg}`}`}>
-                                    <div
-                                        className="w-1 self-stretch rounded-full shrink-0"
-                                        style={{ background: b.color ?? cat.color }}
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-sm font-medium truncate ${b.is_completed ? 'line-through text-white/40' : 'text-white'}`}>
-                                            {b.title}
-                                        </p>
-                                        <p className="text-xs text-white/40">{b.start_time} – {b.end_time}</p>
-                                        {linkedTask && (
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                                <LinkIcon className="w-2.5 h-2.5 text-blue-400 shrink-0" />
-                                                <p className="text-xs text-blue-300 truncate">{linkedTask}</p>
-                                            </div>
-                                        )}
+            {/* Schedule list */}
+            <div className="rounded-2xl border border-white/8 bg-white/3 backdrop-blur-sm p-5">
+                <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-3">Schedule</p>
+                {blocks.length === 0
+                    ? <p className="text-white/25 text-sm text-center py-6">No blocks yet</p>
+                    : (
+                        <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+                            {blocks.map(b => {
+                                const cat = getCat(b.category)
+                                const linked = b.task_id ? taskMap[b.task_id] : undefined
+                                return (
+                                    <div key={b.id}
+                                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all
+                                            ${b.is_completed ? 'opacity-45 border-white/5 bg-white/3' : `${cat.border} bg-gradient-to-r ${cat.from} ${cat.to}`}`}>
+                                        <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: b.color ?? cat.color }} />
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-medium truncate ${b.is_completed ? 'line-through text-white/35' : 'text-white'}`}>{b.title}</p>
+                                            <p className="text-xs text-white/35">{b.start_time}–{b.end_time}</p>
+                                            {linked && <div className="flex items-center gap-1 mt-0.5"><LinkIcon className="w-2.5 h-2.5 text-indigo-400 shrink-0" /><p className="text-xs text-indigo-300 truncate">{linked}</p></div>}
+                                            {b.is_recurring && <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>}
+                                        </div>
+                                        {b.is_completed && <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
                                     </div>
-                                    {b.is_completed && <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />}
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
-            </Card>
+                                )
+                            })}
+                        </div>
+                    )}
+            </div>
 
-            <Button onClick={onAddNew} className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                <Plus className="w-4 h-4" />
-                Add Block
-            </Button>
+            <button onClick={onAddNew}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30">
+                <Plus className="w-4 h-4" />Add Block
+            </button>
         </div>
     )
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TimetablePage() {
-    const params = useParams()
+    const params   = useParams()
+    const router   = useRouter()
     const personId = params.id as string
-    const [currentDay, setCurrentDay] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+    const [currentDay, setCurrentDay]   = useState(() => format(new Date(), 'yyyy-MM-dd'))
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null)
-    const [clickedTime, setClickedTime] = useState<string | null>(null)
+    const [clickedTime, setClickedTime]  = useState<string | null>(null)
     const timelineRef = useRef<HTMLDivElement>(null)
 
     const { data: blocks = [], isLoading } = useTimeBlocksByDay(currentDay)
-    const { data: tasks = [] } = useTasksList({ person_id: personId })
-    const createBlock  = useTimeBlockCreate()
-    const updateBlock  = useTimeBlockUpdate()
-    const deleteBlock  = useTimeBlockDelete()
-    const toggleBlock  = useTimeBlockToggle()
+    const { data: tasks  = [] }             = useTasksList({ person_id: personId })
+    const createBlock = useTimeBlockCreate()
+    const updateBlock = useTimeBlockUpdate()
+    const deleteBlock = useTimeBlockDelete()
+    const toggleBlock = useTimeBlockToggle()
 
-    // Map task_id → title for quick lookup
     const taskMap = useMemo(() =>
-        Object.fromEntries((tasks as TaskOption[]).map(t => [t.id, t.title])),
-        [tasks]
-    )
+        Object.fromEntries((tasks as TaskOption[]).map(t => [t.id, t.name])), [tasks])
 
-    const goToday = () => setCurrentDay(format(new Date(), 'yyyy-MM-dd'))
     const goPrev  = () => setCurrentDay(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))
     const goNext  = () => setCurrentDay(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))
+    const goToday = () => setCurrentDay(format(new Date(), 'yyyy-MM-dd'))
 
-    // Click on timeline to create a block at that time
     const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
         if (!timelineRef.current) return
         const rect = timelineRef.current.getBoundingClientRect()
-        const y = e.clientY - rect.top
-        const mins = Math.round((y / PX_PER_HOUR) * 60 / 30) * 30 + HOUR_START * 60
+        const mins = Math.round((((e.clientY - rect.top) / PX_PER_HOUR) * 60) / 30) * 30 + HOUR_START * 60
         const clamped = Math.max(HOUR_START * 60, Math.min((HOUR_END - 1) * 60, mins))
-        const start = minutesToTime(clamped)
-        const end   = minutesToTime(Math.min(clamped + 60, HOUR_END * 60))
-        setClickedTime(start + '__' + end)
+        setClickedTime(minutesToTime(clamped) + '__' + minutesToTime(Math.min(clamped + 60, HOUR_END * 60)))
         setIsCreateOpen(true)
     }, [])
 
     const handleCreate = async (data: BlockFormData) => {
-        await createBlock.mutateAsync({
-            title: data.title,
-            description: data.description,
-            start_time: data.start_time,
-            end_time: data.end_time,
-            category: data.category,
-            task_id: data.task_id,
-            date: currentDay,
-        } as TimeBlockPayload)
-        setIsCreateOpen(false)
-        setClickedTime(null)
+        const resolvedTitle = data.title.trim() || (data.task_id ? taskMap[data.task_id] : '') || 'Untitled'
+        const payload = {
+            title: resolvedTitle, description: data.description,
+            start_time: data.start_time, end_time: data.end_time,
+            category: data.category, task_id: data.task_id,
+            is_recurring: data.is_recurring ?? false,
+        }
+        if ((data.repeat_days?.length ?? 0) > 0) {
+            for (const date of getRepeatDates(data.repeat_days!, data.repeat_weeks ?? 4, currentDay))
+                await createBlock.mutateAsync({ ...payload, date } as TimeBlockPayload)
+        } else {
+            await createBlock.mutateAsync({ ...payload, date: currentDay } as TimeBlockPayload)
+        }
+        setIsCreateOpen(false); setClickedTime(null)
     }
 
     const handleUpdate = async (data: BlockFormData) => {
         if (!editingBlock) return
-        await updateBlock.mutateAsync({
-            id: editingBlock.id,
-            data: {
-                title: data.title,
-                description: data.description,
-                start_time: data.start_time,
-                end_time: data.end_time,
-                category: data.category,
-                task_id: data.task_id ?? undefined,
-            }
-        })
+        const resolvedTitle = data.title.trim() || (data.task_id ? taskMap[data.task_id] : '') || editingBlock.title
+        await updateBlock.mutateAsync({ id: editingBlock.id, data: {
+            title: resolvedTitle, description: data.description,
+            start_time: data.start_time, end_time: data.end_time,
+            category: data.category, task_id: data.task_id ?? undefined,
+            is_recurring: data.is_recurring ?? false,
+        }})
         setEditingBlock(null)
     }
 
-    const handleDelete = async (block: TimeBlock) => {
-        await deleteBlock.mutateAsync({ id: block.id, date: block.date })
-    }
-
-    const handleToggle = async (block: TimeBlock) => {
-        await toggleBlock.mutateAsync({ id: block.id, date: block.date })
-    }
-
-    const parsedDay = parseISO(currentDay)
-    const dayLabel  = isToday(parsedDay) ? 'Today' : format(parsedDay, 'EEEE')
-    const dateLabel = format(parsedDay, 'MMMM d, yyyy')
-
+    const parsedDay  = parseISO(currentDay)
+    const isTodayDay = isToday(parsedDay)
     const [preStart, preEnd] = (clickedTime ?? '__').split('__')
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] text-white">
-            <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="min-h-screen bg-[#09090f] text-white">
+            {/* Top gradient glow */}
+            <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/30 to-transparent pointer-events-none z-0" />
 
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
+            <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+
+                {/* ── Header ── */}
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-8">
+                    {/* Left: title */}
                     <div>
                         <div className="flex items-center gap-3 mb-1">
-                            <CalendarDays className="w-6 h-6 text-blue-400" />
-                            <h1 className="text-2xl font-bold text-white">Timetable</h1>
+                            <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                                <BarChart3 className="w-4 h-4 text-indigo-400" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">Timetable</h1>
+                                <p className="text-xs text-white/35">Plan and track every hour of your day</p>
+                            </div>
+                            <button onClick={() => router.push(`/platform/${personId}/timetable/stats`)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-white/45 hover:text-white hover:border-white/20 text-xs font-medium transition-all ml-2">
+                                <BarChart2 className="w-3.5 h-3.5" />Stats
+                            </button>
                         </div>
-                        <p className="text-sm text-white/40">Plan and track every hour of your day</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={goPrev} className="text-white/60 hover:text-white">
-                            <ChevronLeft className="w-5 h-5" />
-                        </Button>
-                        <div className="text-center min-w-[140px]">
-                            <p className="font-semibold text-white">{dayLabel}</p>
-                            <p className="text-xs text-white/40">{dateLabel}</p>
+
+                    {/* Right: week nav */}
+                    <div className="flex flex-col items-end gap-3">
+                        <div className="flex items-center gap-2">
+                            <button onClick={goPrev} className="w-8 h-8 rounded-xl border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/20 transition-all">
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <div className="text-center min-w-[130px]">
+                                <p className="font-semibold text-white text-sm">{isTodayDay ? 'Today' : format(parsedDay, 'EEEE')}</p>
+                                <p className="text-xs text-white/35">{format(parsedDay, 'MMMM d, yyyy')}</p>
+                            </div>
+                            <button onClick={goNext} className="w-8 h-8 rounded-xl border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/20 transition-all">
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                            {!isTodayDay && (
+                                <button onClick={goToday} className="px-3 py-1.5 rounded-xl border border-white/15 text-white/60 hover:text-white hover:border-white/25 text-xs font-medium transition-all">
+                                    Today
+                                </button>
+                            )}
                         </div>
-                        <Button variant="ghost" size="icon" onClick={goNext} className="text-white/60 hover:text-white">
-                            <ChevronRight className="w-5 h-5" />
-                        </Button>
-                        {!isToday(parsedDay) && (
-                            <Button variant="outline" size="sm" onClick={goToday} className="ml-2 text-white border-white/20 hover:bg-white/5">
-                                Today
-                            </Button>
-                        )}
+                        <WeekStrip currentDay={currentDay} onSelect={setCurrentDay} />
                     </div>
                 </div>
 
-                {/* Body */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                {/* ── Body ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
 
                     {/* Timeline */}
-                    <div className="lg:col-span-2">
-                        <Card className="bg-white/3 border-white/8 overflow-hidden">
-                            <div className="p-4 border-b border-white/8 flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-sm text-white/60">
-                                    <Clock className="w-4 h-4" />
-                                    <span>Click on the timeline to add a block</span>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
-                                    className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white h-8"
-                                >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Add
-                                </Button>
+                    <div className="rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-sm overflow-hidden">
+                        {/* Toolbar */}
+                        <div className="px-5 py-3.5 border-b border-white/6 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs text-white/35">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Click timeline to add a block</span>
                             </div>
+                            <button onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
+                                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shadow-indigo-500/20">
+                                <Plus className="w-3.5 h-3.5" />Add
+                            </button>
+                        </div>
 
-                            <div className="p-4 overflow-y-auto max-h-[calc(100vh-220px)]">
-                                {isLoading ? (
-                                    <div className="flex items-center justify-center py-20">
-                                        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-                                    </div>
-                                ) : (
+                        <div className="px-4 py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
+                            {isLoading
+                                ? <div className="flex items-center justify-center py-20"><Loader2 className="w-7 h-7 animate-spin text-indigo-400" /></div>
+                                : (
                                     <div className="relative" style={{ height: TOTAL_HOURS * PX_PER_HOUR }}>
-                                        {/* Ruler */}
                                         <TimelineRuler />
-
-                                        {/* Clickable overlay */}
-                                        <div
-                                            ref={timelineRef}
-                                            className="absolute inset-0 ml-16 cursor-crosshair"
-                                            onClick={handleTimelineClick}
-                                        />
-
-                                        {/* Current time */}
-                                        <div className="absolute inset-0 ml-16 pointer-events-none">
+                                        <div ref={timelineRef} className="absolute inset-0 ml-[74px] cursor-crosshair" onClick={handleTimelineClick} />
+                                        <div className="absolute inset-0 ml-[74px] pointer-events-none">
                                             <CurrentTimeIndicator day={currentDay} />
                                         </div>
-
-                                        {/* Blocks */}
-                                        <div className="absolute inset-0 ml-16 mr-1 pointer-events-none">
+                                        <div className="absolute inset-0 ml-[74px] mr-1 pointer-events-none">
                                             <AnimatePresence>
                                                 {blocks.map(block => (
                                                     <div key={block.id} className="pointer-events-auto">
-                                                        <TimeBlockCard
-                                                            block={block}
-                                                            taskTitle={block.task_id ? taskMap[block.task_id] : undefined}
-                                                            onEdit={setEditingBlock}
-                                                            onDelete={handleDelete}
-                                                            onToggle={handleToggle}
-                                                        />
+                                                        <TimeBlockCard block={block} taskTitle={block.task_id ? taskMap[block.task_id] : undefined}
+                                                            onEdit={setEditingBlock} onDelete={b => deleteBlock.mutateAsync({ id: b.id, date: b.date })}
+                                                            onToggle={b => toggleBlock.mutateAsync({ id: b.id, date: b.date })} />
                                                     </div>
                                                 ))}
                                             </AnimatePresence>
                                         </div>
                                     </div>
                                 )}
-                            </div>
-                        </Card>
+                        </div>
                     </div>
 
                     {/* Sidebar */}
-                    <div>
-                        <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
-                    </div>
+                    <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
                 </div>
             </div>
 
             {/* Create Modal */}
             <Dialog open={isCreateOpen} onOpenChange={v => { setIsCreateOpen(v); if (!v) setClickedTime(null) }}>
-                <DialogContent className="bg-[#1a1b26] border border-white/10 text-white max-w-md">
+                <DialogContent className="bg-[#13131f] border border-white/10 text-white max-w-md rounded-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-white">Add Time Block</DialogTitle>
+                        <DialogTitle className="text-white font-semibold">Add Time Block</DialogTitle>
                     </DialogHeader>
-                    <BlockForm
-                        initial={clickedTime ? { start_time: preStart, end_time: preEnd } : undefined}
-                        personId={personId}
-                        onSubmit={handleCreate}
+                    <BlockForm initial={clickedTime ? { start_time: preStart, end_time: preEnd } : undefined}
+                        personId={personId} onSubmit={handleCreate}
                         onCancel={() => { setIsCreateOpen(false); setClickedTime(null) }}
-                        isLoading={createBlock.isPending}
-                    />
+                        isLoading={createBlock.isPending} existingBlocks={blocks} />
                 </DialogContent>
             </Dialog>
 
             {/* Edit Modal */}
             <Dialog open={!!editingBlock} onOpenChange={v => { if (!v) setEditingBlock(null) }}>
-                <DialogContent className="bg-[#1a1b26] border border-white/10 text-white max-w-md">
+                <DialogContent className="bg-[#13131f] border border-white/10 text-white max-w-md rounded-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-white">Edit Time Block</DialogTitle>
+                        <DialogTitle className="text-white font-semibold">Edit Time Block</DialogTitle>
                     </DialogHeader>
                     {editingBlock && (
-                        <BlockForm
-                            initial={{
-                                title: editingBlock.title,
-                                description: editingBlock.description ?? '',
-                                start_time: editingBlock.start_time,
-                                end_time: editingBlock.end_time,
-                                category: editingBlock.category,
-                                task_id: editingBlock.task_id,
-                            }}
-                            personId={personId}
-                            onSubmit={handleUpdate}
-                            onCancel={() => setEditingBlock(null)}
-                            isLoading={updateBlock.isPending}
-                        />
+                        <BlockForm initial={{ title: editingBlock.title, description: editingBlock.description ?? '',
+                            start_time: editingBlock.start_time, end_time: editingBlock.end_time,
+                            category: editingBlock.category, task_id: editingBlock.task_id, is_recurring: editingBlock.is_recurring }}
+                            personId={personId} onSubmit={handleUpdate}
+                            onCancel={() => setEditingBlock(null)} isLoading={updateBlock.isPending}
+                            existingBlocks={blocks} editingId={editingBlock.id} />
                     )}
                 </DialogContent>
             </Dialog>

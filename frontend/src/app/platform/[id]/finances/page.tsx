@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter, useParams } from 'next/navigation'
-import { ChevronLeft, Plus, Trash2, Edit2, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
+import { ChevronLeft, Plus, Trash2, Edit2, TrendingUp, TrendingDown, Loader2, BarChart3, Wallet, PiggyBank, ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { useMonthlyFinancialSummary } from '@/lib/hooks/use-finances'
+import { useMonthlyFinancialSummary, useNetWorth, useSpendingTrends } from '@/lib/hooks/use-finances'
 import { useJobCreate, useJobsList, useJobDelete, useJobUpdate, useDeletedJobsList } from '@/lib/hooks/use-jobs'
 import { useExpenseCreate, useExpensesList, useExpenseDelete, useExpenseUpdate, useDeletedExpensesList } from '@/lib/hooks/use-expenses'
 import { useBudgetsList, useDeletedBudgetsList, useBudgetCreate, useBudgetUpdate, useBudgetDelete } from '@/lib/hooks/use-budgets'
@@ -968,6 +968,207 @@ const SalaryTab: React.FC<{ personId: string | number }> = ({ personId }) => {
                 </div>
             )}
         </motion.div>
+    )
+}
+
+// ─── Overview / Dashboard Tab ──────────────────────────────────────────────────
+const CATEGORY_COLORS: Record<string, string> = {
+    food: '#f59e0b',
+    transport: '#6366f1',
+    education: '#10b981',
+    entertainment: '#ec4899',
+    bills: '#ef4444',
+    health: '#14b8a6',
+    shopping: '#8b5cf6',
+    other: '#64748b',
+}
+
+function fmt(n: number | undefined, currency = 'UZS') {
+    if (n === undefined || n === null) return '—'
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n) + ' ' + currency
+}
+
+const OverviewTab: React.FC = () => {
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    const [month, setMonth] = useState(currentMonth)
+
+    const { data: summary, isLoading: summaryLoading } = useMonthlyFinancialSummary(month)
+    const { data: netWorth, isLoading: nwLoading } = useNetWorth()
+    const { data: trends, isLoading: trendsLoading } = useSpendingTrends(6)
+
+    const trendsList: { period: string; total_income_funded: number; total_savings_funded: number }[] =
+        (trends as any)?.trends ?? []
+
+    const maxTrend = Math.max(...trendsList.map((t: any) => t.total_income_funded || 0), 1)
+
+    const categoryEntries = Object.entries((summary as any)?.expense_by_category ?? {})
+        .sort((a: any, b: any) => b[1] - a[1])
+
+    return (
+        <div className="space-y-8">
+            {/* Month selector */}
+            <div className="flex items-center gap-3">
+                <label className="text-white/50 text-sm">Month</label>
+                <input
+                    type="month"
+                    value={month}
+                    onChange={e => setMonth(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500/50"
+                />
+            </div>
+
+            {/* Key metric cards */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {[
+                    {
+                        label: 'Total Income', icon: <ArrowUpRight className="w-4 h-4" />,
+                        value: fmt((summary as any)?.total_income), color: 'emerald',
+                        loading: summaryLoading,
+                    },
+                    {
+                        label: 'Expenses', icon: <ArrowDownRight className="w-4 h-4" />,
+                        value: fmt((summary as any)?.total_expenses), color: 'red',
+                        loading: summaryLoading,
+                    },
+                    {
+                        label: 'Net Income', icon: <TrendingUp className="w-4 h-4" />,
+                        value: fmt((summary as any)?.net_income), color: 'indigo',
+                        loading: summaryLoading,
+                    },
+                    {
+                        label: 'Net Worth', icon: <PiggyBank className="w-4 h-4" />,
+                        value: fmt((netWorth as any)?.net_worth), color: 'amber',
+                        loading: nwLoading,
+                    },
+                ].map(card => (
+                    <div key={card.label} className="rounded-2xl border border-white/8 bg-white/3 p-4">
+                        <div className={`flex items-center gap-2 text-${card.color}-400 mb-2`}>
+                            {card.icon}
+                            <span className="text-xs font-medium uppercase tracking-wider text-white/50">{card.label}</span>
+                        </div>
+                        {card.loading
+                            ? <div className="h-6 w-24 bg-white/8 rounded animate-pulse" />
+                            : <p className={`text-lg font-semibold text-${card.color}-300`}>{card.value}</p>
+                        }
+                    </div>
+                ))}
+            </div>
+
+            {/* Savings rate */}
+            {!summaryLoading && (summary as any)?.savings_rate !== undefined && (
+                <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-sm font-medium text-white/70">Savings Rate</p>
+                        <span className={`text-sm font-semibold ${(summary as any).savings_rate >= 20 ? 'text-emerald-400' : (summary as any).savings_rate >= 10 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {(summary as any).savings_rate.toFixed(1)}%
+                        </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-white/8">
+                        <div
+                            className={`h-2 rounded-full transition-all ${(summary as any).savings_rate >= 20 ? 'bg-emerald-500' : (summary as any).savings_rate >= 10 ? 'bg-amber-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min((summary as any).savings_rate, 100)}%` }}
+                        />
+                    </div>
+                    <p className="text-xs text-white/30 mt-2">Target: 20%+</p>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* Spending by category */}
+                <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                    <p className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-indigo-400" /> Spending by Category
+                    </p>
+                    {summaryLoading
+                        ? <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-6 bg-white/8 rounded animate-pulse" />)}</div>
+                        : categoryEntries.length === 0
+                            ? <p className="text-white/30 text-sm text-center py-6">No expense data for this month</p>
+                            : (
+                                <div className="space-y-3">
+                                    {categoryEntries.map(([cat, amt]: any) => {
+                                        const total = categoryEntries.reduce((s: number, [, v]: any) => s + v, 0)
+                                        const pct = total > 0 ? (amt / total) * 100 : 0
+                                        return (
+                                            <div key={cat}>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-xs text-white/60 capitalize">{cat}</span>
+                                                    <span className="text-xs text-white/80">{fmt(amt)}</span>
+                                                </div>
+                                                <div className="h-1.5 rounded-full bg-white/8">
+                                                    <div
+                                                        className="h-1.5 rounded-full"
+                                                        style={{ width: `${pct}%`, backgroundColor: CATEGORY_COLORS[cat] ?? '#64748b' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )
+                    }
+                </div>
+
+                {/* Spending trends (6 months) */}
+                <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                    <p className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-indigo-400" /> 6-Month Spending Trend
+                    </p>
+                    {trendsLoading
+                        ? <div className="flex items-end gap-2 h-28">{[...Array(6)].map((_, i) => <div key={i} className="flex-1 bg-white/8 rounded-t animate-pulse" style={{ height: `${30 + i * 12}%` }} />)}</div>
+                        : trendsList.length === 0
+                            ? <p className="text-white/30 text-sm text-center py-6">No trend data available</p>
+                            : (
+                                <div className="flex items-end gap-2 h-28">
+                                    {trendsList.slice().reverse().map((t: any) => {
+                                        const h = Math.max((t.total_income_funded / maxTrend) * 100, 4)
+                                        return (
+                                            <div key={t.period} className="flex-1 flex flex-col items-center gap-1">
+                                                <div
+                                                    className="w-full rounded-t bg-indigo-500/60 hover:bg-indigo-500 transition-colors cursor-default"
+                                                    style={{ height: `${h}%` }}
+                                                    title={`${t.period}: ${fmt(t.total_income_funded)}`}
+                                                />
+                                                <span className="text-[10px] text-white/30">{t.period.slice(5)}</span>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )
+                    }
+                </div>
+            </div>
+
+            {/* Net worth breakdown */}
+            {!nwLoading && netWorth && (
+                <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
+                    <p className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-amber-400" /> Net Worth Breakdown
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-xs text-white/40 mb-1">Savings Accounts</p>
+                            <p className="text-base font-semibold text-amber-300">{fmt((netWorth as any).breakdown?.savings_accounts)}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-white/40 mb-1">Cash in Hand</p>
+                            <p className="text-base font-semibold text-emerald-300">{fmt((netWorth as any).breakdown?.cash_in_hand)}</p>
+                        </div>
+                    </div>
+                    {Object.keys((netWorth as any).savings_by_type ?? {}).length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/8">
+                            <p className="text-xs text-white/40 mb-2">By Account Type</p>
+                            <div className="flex flex-wrap gap-3">
+                                {Object.entries((netWorth as any).savings_by_type).map(([type, bal]: any) => (
+                                    <span key={type} className="text-xs px-2.5 py-1 rounded-lg bg-white/8 text-white/70 capitalize">
+                                        {type}: {fmt(bal)}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     )
 }
 
@@ -2616,7 +2817,7 @@ const SavingsTab: React.FC<{ personId: string }> = ({ personId }) => {
 // Main Page Component
 export default function FinancesPage() {
     const params = useParams<{ id: string }>()
-    const [activeTab, setActiveTab] = useState('jobs')
+    const [activeTab, setActiveTab] = useState('overview')
 
     // Default to current month, e.g., "2024-02"
     // For now, let's hardcode a month to test or use current date
@@ -2675,6 +2876,7 @@ export default function FinancesPage() {
                 >
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <TabsList className="bg-[#1a1b26] border border-[#2a2b36] mb-8">
+                            <TabsTrigger value="overview">Overview</TabsTrigger>
                             <TabsTrigger value="jobs">Jobs</TabsTrigger>
                             <TabsTrigger value="salary">Salary</TabsTrigger>
                             <TabsTrigger value="expenses">Expenses</TabsTrigger>
@@ -2684,6 +2886,9 @@ export default function FinancesPage() {
                         </TabsList>
 
                         <AnimatePresence mode="wait">
+                            <TabsContent value="overview" key="overview">
+                                <OverviewTab />
+                            </TabsContent>
                             <TabsContent value="jobs" key="jobs">
                                 <JobsTab personId={params.id} />
                             </TabsContent>

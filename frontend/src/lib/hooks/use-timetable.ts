@@ -13,6 +13,7 @@ export type TimeBlock = {
     category: string
     color?: string
     is_completed: boolean
+    is_recurring: boolean
     task_id?: number
     deleted: boolean
     created_at: string
@@ -28,13 +29,39 @@ export type TimeBlockPayload = {
     category?: string
     color?: string
     task_id?: number
+    is_recurring?: boolean
 }
 
-export type TimeBlockUpdate = Partial<TimeBlockPayload> & { is_completed?: boolean }
+export type TimeBlockUpdate = Partial<TimeBlockPayload> & { is_completed?: boolean; is_recurring?: boolean }
+
+export type TimetableStats = {
+    period: { from: string; to: string }
+    weeks: number
+    total_blocks: number
+    completed_blocks: number
+    completion_rate: number
+    total_hours: number
+    completed_hours: number
+    recurring_count: number
+    streak_days: number
+    by_category: { category: string; count: number; hours: number; completed: number }[]
+    by_weekday: { weekday: number; name: string; count: number; hours: number; completed: number }[]
+    by_hour: { hour: number; count: number }[]
+    daily_summary: { date: string; total: number; completed: number; hours: number }[]
+}
 
 const keys = {
     all: ['timetable'] as const,
     day: (day: string) => ['timetable', 'day', day] as const,
+    stats: (weeks: number) => ['timetable', 'stats', weeks] as const,
+}
+
+export function useTimetableStats(weeks = 4) {
+    const { request } = useHttp()
+    return useQuery<TimetableStats>({
+        queryKey: keys.stats(weeks),
+        queryFn: () => request(API_ENDPOINTS.TIMETABLE.STATS(weeks)),
+    })
 }
 
 export function useTimeBlocksByDay(day: string) {

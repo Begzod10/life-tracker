@@ -1,6 +1,13 @@
-import os
+"""
+Telegram bot — webhook mode.
+
+Telegram pushes every update to POST /api/bot/webhook.
+FastAPI passes the raw dict to TelegramBotService.process_update().
+Celery handles scheduled morning/evening notifications (see app/tasks.py).
+"""
+
 import logging
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta, datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -8,12 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Task
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# ---------------------------------------------------------------------------
+# DB helpers
+# ---------------------------------------------------------------------------
 
 def get_db() -> Session:
     return SessionLocal()
@@ -72,12 +81,56 @@ def task_keyboard(task_id: int) -> InlineKeyboardMarkup:
     ]])
 
 
+# ---------------------------------------------------------------------------
+# Command handlers
+# ---------------------------------------------------------------------------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
+    chat_id = str(update.effective_chat.id)
+
+    # /start TOKEN — account linking flow
+    if context.args:
+        token = context.args[0]
+        from app.services.link_tokens import consume_token
+        user_id = consume_token(token)
+        if user_id:
+            db = get_db()
+            try:
+                from app.models import Person
+                person = db.query(Person).filter(Person.id == user_id).first()
+                if person:
+                    person.telegram_chat_id = chat_id
+                    db.commit()
+                    await update.message.reply_text(
+                        f"✅ <b>Connected!</b>\n\n"
+                        f"Your Telegram is now linked to Life Tracker, {person.name}.\n"
+                        f"You'll receive daily task reminders here.\n\n"
+                        f"Commands:\n"
+                        f"/tasks — today's tasks\n"
+                        f"/check — overdue tasks\n"
+                        f"/upcoming — upcoming tasks",
+                        parse_mode="HTML",
+                    )
+                    return
+            finally:
+                db.close()
+        # Token expired or invalid
+        await update.message.reply_text(
+            "⚠️ <b>Link expired.</b>\n\n"
+            "Please open your profile page and click <b>Connect Telegram</b> again.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Normal /start
     await update.message.reply_text(
-        f"👋 Life Tracker Bot ready!\n\nYour Chat ID: `{chat_id}`\n\n"
-        f"/tasks — today's tasks\n/check — check overdue tasks\n/upcoming — upcoming tasks",
-        parse_mode="Markdown"
+        f"👋 <b>Life Tracker Bot</b>\n\n"
+        f"Your Chat ID: <code>{chat_id}</code>\n\n"
+        f"Commands:\n"
+        f"/tasks — today's tasks\n"
+        f"/check — overdue tasks\n"
+        f"/upcoming — upcoming tasks",
+        parse_mode="HTML",
     )
 
 
@@ -118,7 +171,7 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(
             f"Did you finish this task?\n\n{format_task(task)}",
             reply_markup=task_keyboard(task.id),
-            parse_mode="Markdown"
+            parse_mode="Markdown",
         )
     finally:
         db.close()
@@ -135,7 +188,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             complete_task(db, task_id)
             await query.edit_message_text("✅ Great job! Task marked as done!")
 
-            # Ask about next overdue task
             next_overdue = get_overdue_tasks(db)
             if next_overdue:
                 task = next_overdue[0]
@@ -143,10 +195,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     chat_id=query.message.chat_id,
                     text=f"What about this one?\n\n{format_task(task)}",
                     reply_markup=task_keyboard(task.id),
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
             else:
-                # Show today's and upcoming tasks
                 todays = get_todays_tasks(db)
                 upcoming = get_upcoming_tasks(db)
                 all_tasks = todays + upcoming
@@ -155,7 +206,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     await context.bot.send_message(
                         chat_id=query.message.chat_id,
                         text=text,
-                        parse_mode="Markdown"
+                        parse_mode="Markdown",
                     )
 
         elif data.startswith("skip_"):
@@ -164,7 +215,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             name = task.name if task else "task"
             await query.edit_message_text(f"👌 OK, don't forget:\n*{name}*", parse_mode="Markdown")
 
-            # Still show today's and upcoming
             todays = get_todays_tasks(db)
             upcoming = get_upcoming_tasks(db)
             all_tasks = todays + upcoming
@@ -173,71 +223,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text=text,
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
     finally:
         db.close()
 
 
-async def morning_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not CHAT_ID:
-        return
-    db = get_db()
-    try:
-        # Ask about previous unfinished tasks first
-        overdue = get_overdue_tasks(db)
-        if overdue:
-            task = overdue[0]
-            await context.bot.send_message(
-                chat_id=CHAT_ID,
-                text=f"🌅 Good morning!\n\nDid you finish this task?\n\n{format_task(task)}",
-                reply_markup=task_keyboard(task.id),
-                parse_mode="Markdown"
-            )
+# ---------------------------------------------------------------------------
+# Bot service singleton
+# ---------------------------------------------------------------------------
 
-        # Then show today's tasks
-        todays = get_todays_tasks(db)
-        if todays:
-            text = "📋 *Today's tasks:*\n\n" + "\n".join(f"• {format_task(t)}" for t in todays)
-            await context.bot.send_message(chat_id=CHAT_ID, text=text, parse_mode="Markdown")
-        elif not overdue:
-            await context.bot.send_message(chat_id=CHAT_ID, text="✅ Good morning! No tasks for today!")
-    finally:
-        db.close()
+class TelegramBotService:
+    """
+    Webhook-mode bot service.
 
+    Lifecycle (called from main.py lifespan):
+      await bot_service.initialize()   # startup
+      await bot_service.shutdown()     # shutdown
 
-async def evening_notification(context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not CHAT_ID:
-        return
-    db = get_db()
-    try:
-        todays = get_todays_tasks(db)
-        if not todays:
-            await context.bot.send_message(chat_id=CHAT_ID, text="🌙 Good evening! All tasks done today! 🎉")
-            return
+    Update processing (called from /api/bot/webhook endpoint):
+      await bot_service.process_update(json_dict)
+    """
 
-        task = todays[0]
-        text = f"🌙 Evening check-in! *{len(todays)}* unfinished tasks.\n\nDid you finish:\n{format_task(task)}?"
-        await context.bot.send_message(
-            chat_id=CHAT_ID,
-            text=text,
-            reply_markup=task_keyboard(task.id),
-            parse_mode="Markdown"
-        )
-    finally:
-        db.close()
-
-
-class TelegramBot:
     def __init__(self):
-        if not BOT_TOKEN:
+        if not settings.TELEGRAM_BOT_TOKEN:
             logger.warning("TELEGRAM_BOT_TOKEN not set — bot disabled")
             self._app = None
             return
 
         self._app = (
             Application.builder()
-            .token(BOT_TOKEN)
+            .token(settings.TELEGRAM_BOT_TOKEN)
+            .updater(None)          # disable built-in polling updater
             .build()
         )
         self._app.add_handler(CommandHandler("start", start))
@@ -246,27 +263,40 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("check", check_command))
         self._app.add_handler(CallbackQueryHandler(button_callback))
 
-        self._app.job_queue.run_daily(
-            morning_notification,
-            time=datetime.strptime("08:00", "%H:%M").time(),
-        )
-        self._app.job_queue.run_daily(
-            evening_notification,
-            time=datetime.strptime("20:00", "%H:%M").time(),
-        )
+    @property
+    def configured(self) -> bool:
+        return self._app is not None
 
-    async def start(self):
+    async def initialize(self):
         if not self._app:
             return
         await self._app.initialize()
         await self._app.start()
-        await self._app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-        logger.info("Telegram bot started")
 
-    async def stop(self):
+        if settings.WEBHOOK_BASE_URL:
+            webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/api/bot/webhook"
+            await self._app.bot.set_webhook(
+                url=webhook_url,
+                secret_token=settings.TELEGRAM_WEBHOOK_SECRET or None,
+                allowed_updates=Update.ALL_TYPES,
+            )
+            logger.info("Telegram webhook registered: %s", webhook_url)
+        else:
+            logger.info("WEBHOOK_BASE_URL not set — webhook not registered (use polling or set the URL)")
+
+    async def shutdown(self):
         if not self._app:
             return
-        await self._app.updater.stop()
         await self._app.stop()
         await self._app.shutdown()
         logger.info("Telegram bot stopped")
+
+    async def process_update(self, data: dict):
+        if not self._app:
+            return
+        update = Update.de_json(data, self._app.bot)
+        await self._app.process_update(update)
+
+
+# Module-level singleton imported by main.py and bot.py router
+bot_service = TelegramBotService()

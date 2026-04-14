@@ -18,6 +18,7 @@ class ProfileResponse(BaseModel):
     timezone: str
     profile_photo_url: Optional[str] = None
     is_verified: bool
+    telegram_chat_id: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -26,6 +27,10 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     timezone: Optional[str] = None
+
+
+class TelegramUpdate(BaseModel):
+    chat_id: Optional[str] = None  # pass null to disconnect
 
 
 class PublicProfileResponse(BaseModel):
@@ -42,6 +47,7 @@ def _profile_response(user: models.Person) -> ProfileResponse:
         timezone=user.timezone,
         profile_photo_url=user.profile_photo_url,
         is_verified=user.is_verified,
+        telegram_chat_id=user.telegram_chat_id,
         created_at=user.created_at.isoformat() if user.created_at else None,
         updated_at=user.updated_at.isoformat() if user.updated_at else None,
     )
@@ -67,6 +73,67 @@ def update_profile(
     db.commit()
     db.refresh(current_user)
     return _profile_response(current_user)
+
+
+@router.post('/profile/telegram/link-code')
+def create_telegram_link_code(
+        current_user: models.Person = Depends(get_current_user),
+):
+    """Generate a one-time deep-link URL to connect the user's Telegram account."""
+    from app.services.link_tokens import create_token
+    from app.config import settings
+
+    token = create_token(current_user.id)
+    url = f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={token}"
+    return {"url": url}
+
+
+@router.put('/profile/telegram', response_model=ProfileResponse)
+def update_telegram_chat_id(
+        body: TelegramUpdate,
+        current_user: models.Person = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """Save or remove your Telegram chat ID for bot notifications."""
+    current_user.telegram_chat_id = body.chat_id
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return _profile_response(current_user)
+
+
+@router.post('/profile/telegram/test')
+def test_telegram_notification(
+        current_user: models.Person = Depends(get_current_user),
+):
+    """Send a test Telegram message to verify the bot is working."""
+    from app.bot.telegram import send_message, is_configured
+    from app.config import settings
+
+    if not is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="TELEGRAM_BOT_TOKEN is not configured on the server"
+        )
+
+    chat_id = current_user.telegram_chat_id or settings.TELEGRAM_CHAT_ID
+    if not chat_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No Telegram chat ID configured. Set it via PUT /profile/telegram first."
+        )
+
+    ok = send_message(
+        f"✅ <b>Life Tracker bot is working!</b>\n\nHello, {current_user.name}! "
+        "You will receive daily task reminders here.",
+        chat_id=chat_id,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to send Telegram message. Check the bot token and chat ID."
+        )
+    return {"message": "Test notification sent successfully"}
 
 
 @router.delete('/profile')

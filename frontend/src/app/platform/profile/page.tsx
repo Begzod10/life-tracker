@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     User, Settings, Eye, EyeOff, Info, AlertTriangle, Lock, Globe,
-    Mail, Camera, Save, Shield, ChevronRight, BadgeCheck, LogOut
+    Mail, Camera, Save, Shield, ChevronRight, BadgeCheck, LogOut,
+    Send, CheckCircle2, Unlink, ExternalLink, Link
 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useProfile, useProfileUpdate } from '@/lib/hooks/use-profile'
+import { useProfile, useProfileUpdate, useTelegramLinkCode, useTelegramDisconnect, useTelegramTest } from '@/lib/hooks/use-profile'
 import { useLogout } from '@/lib/hooks/use-auth'
 
 const TIMEZONES = [
@@ -268,6 +269,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
 
                 <div className="space-y-6">
                     <ProfileInfoCard profile={profile} />
+                    <TelegramCard profile={profile} />
                     <QuickActionsCard />
                 </div>
             </div>
@@ -398,6 +400,112 @@ function PrivacySettingsSection({ privacySettings, togglePrivacy }: {
     )
 }
 
+function TelegramCard({ profile }: { profile: NonNullable<ReturnType<typeof useProfile>['data']> }) {
+    const [testResult, setTestResult] = useState<'idle' | 'ok' | 'err'>('idle')
+
+    const { mutate: getLink, isPending: isLinking } = useTelegramLinkCode()
+    const { mutate: disconnect, isPending: isDisconnecting } = useTelegramDisconnect()
+    const { mutate: test, isPending: isTesting } = useTelegramTest()
+
+    const isConnected = !!profile.telegram_chat_id
+
+    const handleConnect = () => {
+        getLink(undefined, {
+            onSuccess: ({ url }) => window.open(url, '_blank'),
+        })
+    }
+
+    const handleTest = () => {
+        setTestResult('idle')
+        test(undefined, {
+            onSuccess: () => setTestResult('ok'),
+            onError: () => setTestResult('err'),
+        })
+    }
+
+    return (
+        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+            <div className="p-6 space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400">
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.1 13.126l-2.94-.918c-.64-.203-.653-.64.136-.954l11.49-4.43c.533-.194 1.001.131.828.396z"/>
+                        </svg>
+                        Telegram Bot
+                    </h3>
+                    {isConnected ? (
+                        <span className="flex items-center gap-1 text-xs text-green-400 bg-green-500/15 px-2 py-1 rounded-full">
+                            <CheckCircle2 size={12} /> Connected
+                        </span>
+                    ) : (
+                        <span className="text-xs text-gray-500 bg-[#0f0f1a] px-2 py-1 rounded-full">
+                            Not connected
+                        </span>
+                    )}
+                </div>
+
+                {/* Connected state */}
+                {isConnected ? (
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-400">
+                            You'll receive daily task reminders in Telegram.
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={handleTest}
+                                disabled={isTesting}
+                                className="flex-1 border-[#2a2b36] text-gray-300 hover:text-white"
+                            >
+                                <Send size={15} className="mr-2" />
+                                {isTesting ? 'Sending…' : 'Send test'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => disconnect()}
+                                disabled={isDisconnecting}
+                                className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                            >
+                                <Unlink size={15} className="mr-2" />
+                                {isDisconnecting ? 'Removing…' : 'Disconnect'}
+                            </Button>
+                        </div>
+                        {testResult === 'ok' && (
+                            <p className="text-sm text-green-400 flex items-center gap-2">
+                                <CheckCircle2 size={13} /> Test message sent!
+                            </p>
+                        )}
+                        {testResult === 'err' && (
+                            <p className="text-sm text-red-400 flex items-center gap-2">
+                                <AlertTriangle size={13} /> Failed to send. Try reconnecting.
+                            </p>
+                        )}
+                    </div>
+                ) : (
+                    /* Not connected state */
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-400">
+                            Connect your Telegram account to get daily task reminders.
+                        </p>
+                        <Button
+                            onClick={handleConnect}
+                            disabled={isLinking}
+                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                        >
+                            <Link size={16} className="mr-2" />
+                            {isLinking ? 'Opening Telegram…' : 'Connect via Telegram'}
+                        </Button>
+                        <p className="text-xs text-gray-500 text-center">
+                            Opens Telegram → click Start → done
+                        </p>
+                    </div>
+                )}
+            </div>
+        </Card>
+    )
+}
+
 function QuickActionsCard() {
     const actions = [
         { label: 'Export Data', icon: ChevronRight },
@@ -410,20 +518,6 @@ function QuickActionsCard() {
             <div className="p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-2">
-                    <a
-                        href="https://t.me/life_tracker_off_bot"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full flex items-center justify-between p-3 bg-[#0f0f1a] rounded-lg hover:bg-[#2a2b36] transition-colors text-left"
-                    >
-                        <span className="text-blue-400 font-medium flex items-center gap-2">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.1 13.126l-2.94-.918c-.64-.203-.653-.64.136-.954l11.49-4.43c.533-.194 1.001.131.828.396z"/>
-                            </svg>
-                            Telegram Bot
-                        </span>
-                        <ChevronRight size={16} className="text-gray-500" />
-                    </a>
                     {actions.map((action, idx) => (
                         <button
                             key={idx}

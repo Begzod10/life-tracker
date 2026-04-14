@@ -172,6 +172,7 @@ class TaskBase(BaseModel):
     priority: str = Field(default="medium", description="Priority: high, medium, low")
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
     value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
+    is_recurring: bool = Field(default=False, description="Task resets daily and tracks completions instead of closing")
 
 
 class TaskCreate(TaskBase):
@@ -199,6 +200,16 @@ class TaskUpdate(BaseModel):
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
     completed: Optional[bool] = Field(None, description="Completion status")
     value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
+    is_recurring: Optional[bool] = Field(None, description="Toggle recurring mode")
+
+
+class RecurringCompletionTask(BaseModel):
+    task_id: int
+    task_name: str
+    priority: str
+    completions: list[date]
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== SUB TASK SCHEMAS ==========
@@ -822,6 +833,7 @@ class TimeBlockBase(BaseModel):
     category: str = Field(default="work", description="Category: work, personal, health, learning, social, other")
     color: Optional[str] = Field(None, description="Hex color override")
     task_id: Optional[int] = Field(None, description="Linked task ID")
+    is_recurring: bool = Field(default=False, description="Auto-copy to next week via Celery")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -839,6 +851,7 @@ class TimeBlockUpdate(BaseModel):
     category: Optional[str] = None
     color: Optional[str] = None
     is_completed: Optional[bool] = None
+    is_recurring: Optional[bool] = None
     task_id: Optional[int] = None
 
 
@@ -846,6 +859,7 @@ class TimeBlock(TimeBlockBase):
     id: int
     person_id: int
     is_completed: bool
+    is_recurring: bool
     deleted: bool
     created_at: datetime
     updated_at: datetime

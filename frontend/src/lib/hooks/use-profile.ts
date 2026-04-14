@@ -9,6 +9,7 @@ export interface Profile {
     timezone: string
     profile_photo_url: string | null
     is_verified: boolean
+    telegram_chat_id: string | null
     created_at: string
     updated_at: string
 }
@@ -36,5 +37,36 @@ export function useProfileUpdate() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: profileKeys.all })
         },
+    })
+}
+
+export function useTelegramLinkCode() {
+    const { request } = useHttp()
+
+    return useMutation({
+        mutationFn: () =>
+            request<{ url: string }>(API_ENDPOINTS.PROFILE.TELEGRAM_LINK_CODE, { method: 'POST' }),
+    })
+}
+
+export function useTelegramDisconnect() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: () =>
+            request<Profile>(API_ENDPOINTS.PROFILE.TELEGRAM, { method: 'PUT', body: { chat_id: null } }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: profileKeys.all })
+        },
+    })
+}
+
+export function useTelegramTest() {
+    const { request } = useHttp()
+
+    return useMutation({
+        mutationFn: () =>
+            request<{ message: string }>(API_ENDPOINTS.PROFILE.TELEGRAM_TEST, { method: 'POST' }),
     })
 }

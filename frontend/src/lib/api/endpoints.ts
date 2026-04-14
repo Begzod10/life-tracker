@@ -20,6 +20,9 @@ export const API_ENDPOINTS = {
         DELETE: `${API_URL}/profile`,
         PHOTO: `${API_URL}/profile/photo`,
         PRIVACY: `${API_URL}/profile/privacy`,
+        TELEGRAM: `${API_URL}/profile/telegram`,
+        TELEGRAM_TEST: `${API_URL}/profile/telegram/test`,
+        TELEGRAM_LINK_CODE: `${API_URL}/profile/telegram/link-code`,
     },
 
     // Users
@@ -51,6 +54,8 @@ export const API_ENDPOINTS = {
         DELETE: (id: string) => `${API_URL}/tasks/${id}`,
         BY_GOAL: (goalId: string | number) => `${API_URL}/tasks/goal/${goalId}`,
         BY_PERSON: (personId: string | number) => `${API_URL}/tasks/person/${personId}`,
+        RECURRING_COMPLETIONS: (goalId: string | number, weeks = 4) =>
+            `${API_URL}/tasks/goal/${goalId}/recurring-completions?weeks=${weeks}`,
     },
 
     // Subtasks
@@ -91,6 +96,11 @@ export const API_ENDPOINTS = {
     // Financial Analytics
     FINANCIAL_ANALYTICS: {
         MONTHLY_SUMMARY: (month: string) => `${API_URL}/financial-analytics/monthly-summary/${month}`,
+        MONTHLY_REPORT: (month: string) => `${API_URL}/financial-analytics/monthly-report/${month}`,
+        NET_WORTH: `${API_URL}/financial-analytics/net-worth`,
+        SPENDING_TRENDS: (months = 6) => `${API_URL}/financial-analytics/spending-trends?months=${months}`,
+        CATEGORY_ANALYSIS: (months = 3) => `${API_URL}/financial-analytics/category-analysis?months=${months}`,
+        INCOME_VS_EXPENSES: (months = 6) => `${API_URL}/financial-analytics/income-vs-expenses?months=${months}`,
     },
 
     // Jobs
@@ -165,6 +175,7 @@ export const API_ENDPOINTS = {
     },
 
     TIMETABLE: {
+        STATS: (weeks = 4) => `${API_URL}/timetable/stats?weeks=${weeks}`,
         LIST: (dateFrom?: string, dateTo?: string) => {
             const params = new URLSearchParams()
             if (dateFrom) params.append('date_from', dateFrom)

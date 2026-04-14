@@ -1,7 +1,6 @@
 import sys
 import logging
 import traceback
-import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -12,10 +11,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
-    financial_analytics, savings, salary_months, income_sources, milestones, profile, timetable, ai_coach
+    financial_analytics, savings, salary_months, income_sources, milestones, profile, timetable, ai_coach, bot
 from app.config import settings
 from app.services.job_service import JobService
-from app.services.telegram_bot import TelegramBot
+from app.services.telegram_bot import bot_service
 
 
 @asynccontextmanager
@@ -37,14 +36,13 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
 
-    # Start Telegram bot
-    bot = TelegramBot()
-    bot_task = asyncio.create_task(bot.start())
+    # Initialize Telegram bot (webhook mode — no background polling thread)
+    await bot_service.initialize()
 
     yield
 
     scheduler.shutdown()
-    await bot.stop()
+    await bot_service.shutdown()
 
 
 app = FastAPI(
@@ -107,6 +105,7 @@ app.include_router(income_sources.router, prefix="/api")
 app.include_router(profile.router, prefix="/api")
 app.include_router(timetable.router, prefix="/api")
 app.include_router(ai_coach.router, prefix="/api")
+app.include_router(bot.router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
