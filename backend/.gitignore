@@ -1,0 +1,13 @@
+venv
+__pycache__
+.env
+node_modules/
+.next/
+.git
+alembic
+alembic.ini
+alembic/versions
+.pytest_cache
+.idea
+structure
+test_main.http

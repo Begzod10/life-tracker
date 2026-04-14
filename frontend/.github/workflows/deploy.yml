@@ -1,0 +1,48 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          script: |
+            cd ${{ secrets.TARGET_DIR }}/frontend
+            git reset --hard HEAD
+            git pull origin master
+            npm install
+            npm run build
+            fuser -k 3000/tcp || true
+            pm2 restart frontend || pm2 start npm --name "frontend" -- start
+
+      - name: Notify Success
+        if: success()
+        uses: appleboy/telegram-action@v0.1.0
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ✅ Deploy Successful!
+            Branch: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+
+      - name: Notify Failure
+        if: failure()
+        uses: appleboy/telegram-action@v0.1.0
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ❌ Deploy Failed!
+            Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

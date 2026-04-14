@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+.next/
+.pnp
+.pnp.*
+npm-debug.log*
+yarn-debug.log*
+
+# Build
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Project-specific
+alembic/versions/
+*.http
+structure/
