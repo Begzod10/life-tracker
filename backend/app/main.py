@@ -1,6 +1,7 @@
 import sys
 import logging
 import traceback
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -14,6 +15,7 @@ from app.routers import goals, person, tasks, subtasks, progresslog, progresslog
     financial_analytics, savings, salary_months, income_sources, milestones, profile, timetable, ai_coach
 from app.config import settings
 from app.services.job_service import JobService
+from app.services.telegram_bot import TelegramBot
 
 
 @asynccontextmanager
@@ -35,9 +37,14 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
 
+    # Start Telegram bot
+    bot = TelegramBot()
+    bot_task = asyncio.create_task(bot.start())
+
     yield
 
     scheduler.shutdown()
+    await bot.stop()
 
 
 app = FastAPI(
