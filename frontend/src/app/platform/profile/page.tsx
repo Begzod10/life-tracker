@@ -411,7 +411,7 @@ function QuickActionsCard() {
                 <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-2">
                     <a
-                        href="https://t.me/life_tracker_notify_bot"
+                        href="https://t.me/life_tracker_off_bot"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full flex items-center justify-between p-3 bg-[#0f0f1a] rounded-lg hover:bg-[#2a2b36] transition-colors text-left"
