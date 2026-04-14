@@ -172,7 +172,7 @@ class TaskBase(BaseModel):
     priority: str = Field(default="medium", description="Priority: high, medium, low")
     estimated_duration: Optional[int] = Field(None, description="Estimated duration in minutes")
     value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
-    is_recurring: bool = Field(default=False, description="Task resets daily and tracks completions instead of closing")
+    is_recurring: Optional[bool] = Field(default=False, description="Task resets daily and tracks completions instead of closing")
 
 
 class TaskCreate(TaskBase):
@@ -858,9 +858,9 @@ class TimeBlockUpdate(BaseModel):
 class TimeBlock(TimeBlockBase):
     id: int
     person_id: int
-    is_completed: bool
-    is_recurring: bool
-    deleted: bool
+    is_completed: Optional[bool] = False
+    is_recurring: Optional[bool] = False
+    deleted: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 
