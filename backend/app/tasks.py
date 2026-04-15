@@ -2,6 +2,7 @@
 Celery tasks for the Life Tracker backend.
 """
 from datetime import date, timedelta
+from sqlalchemy import or_
 import logging
 
 from app.celery_app import celery_app
@@ -98,6 +99,28 @@ def copy_recurring_blocks(self):
 
 # ─── Telegram notification helpers ───────────────────────────────────────────
 
+def _get_upcoming_tasks(db, person_id: int, today: date, days_ahead: int = 3):
+    """Return non-completed tasks due in the next `days_ahead` days (excluding today)."""
+    tomorrow = today + timedelta(days=1)
+    future = today + timedelta(days=days_ahead)
+    not_deleted = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+    return (
+        db.query(models.Task)
+        .join(models.Goal, models.Task.goal_id == models.Goal.id)
+        .filter(
+            models.Goal.person_id == person_id,
+            models.Goal.deleted == False,
+            not_deleted,
+            models.Task.completed == False,
+            models.Task.due_date >= tomorrow,
+            models.Task.due_date <= future,
+        )
+        .order_by(models.Task.due_date.asc())
+        .limit(5)
+        .all()
+    )
+
+
 def _get_todays_tasks(db, person_id: int, today: date):
     """
     Return all non-deleted, non-completed tasks for a person that are relevant today:
@@ -160,24 +183,27 @@ def send_morning_tasks(self):
                 continue
 
             tasks = _get_todays_tasks(db, person.id, today)
-            if not tasks:
-                msg = (
-                    f"🌅 <b>Good morning, {person.name.split()[0]}!</b>\n\n"
-                    "No tasks scheduled for today. Enjoy your day! 🎉"
-                )
-            else:
-                # Sort: high first, then medium, then low
-                priority_order = {"high": 0, "medium": 1, "low": 2}
-                tasks_sorted = sorted(tasks, key=lambda t: priority_order.get(t.priority, 3))
+            upcoming = _get_upcoming_tasks(db, person.id, today)
+            priority_order = {"high": 0, "medium": 1, "low": 2}
+            first_name = person.name.split()[0]
 
-                lines = [_format_task_line(t) for t in tasks_sorted]
-                task_list = "\n".join(lines)
-                msg = (
-                    f"🌅 <b>Good morning, {person.name.split()[0]}!</b>\n\n"
-                    f"📋 <b>Today's tasks ({len(tasks)}):</b>\n"
-                    f"{task_list}\n\n"
-                    "Let's have a productive day! 💪"
-                )
+            msg = f"🌅 <b>Good morning, {first_name}!</b>\n\n"
+
+            if not tasks:
+                msg += "No tasks scheduled for today. Enjoy your day! 🎉"
+            else:
+                tasks_sorted = sorted(tasks, key=lambda t: priority_order.get(t.priority, 3))
+                task_list = "\n".join(_format_task_line(t) for t in tasks_sorted)
+                msg += f"📋 <b>Today's tasks ({len(tasks)}):</b>\n{task_list}"
+
+            if upcoming:
+                msg += "\n\n📅 <b>Upcoming (next 3 days):</b>\n"
+                for t in upcoming:
+                    due_label = t.due_date.strftime("%b %d") if t.due_date else ""
+                    emoji = PRIORITY_EMOJI.get(t.priority, "⚪")
+                    msg += f"  {emoji} {t.name} <i>({due_label})</i>\n"
+
+            msg += "\n\nLet's have a productive day! 💪"
 
             if send_message(msg, chat_id=chat_id):
                 sent += 1
@@ -301,8 +327,23 @@ def send_evening_checkup(self):
 
                 msg = "\n".join(lines)
 
-            if send_message(msg, chat_id=chat_id):
-                sent += 1
+            if not send_message(msg, chat_id=chat_id):
+                continue
+            sent += 1
+
+            # Ask about each pending task with Yes/No inline buttons
+            if all_today:
+                for task in pending_list:
+                    send_message(
+                        f"❓ Did you finish: <b>{task.name}</b>?",
+                        chat_id=chat_id,
+                        reply_markup={
+                            "inline_keyboard": [[
+                                {"text": "✅ Yes, done!", "callback_data": f"done_{task.id}"},
+                                {"text": "❌ Not yet", "callback_data": f"skip_{task.id}"},
+                            ]]
+                        },
+                    )
 
         logger.info("send_evening_checkup: sent to %d users", sent)
         return {"sent": sent}

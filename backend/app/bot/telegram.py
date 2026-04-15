@@ -25,6 +25,7 @@ def send_message(
     chat_id: Optional[str] = None,
     parse_mode: str = "HTML",
     disable_notification: bool = False,
+    reply_markup: Optional[dict] = None,
 ) -> bool:
     """
     Send a message to a Telegram chat.
@@ -55,6 +56,8 @@ def send_message(
         "parse_mode": parse_mode,
         "disable_notification": disable_notification,
     }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
 
     try:
         resp = requests.post(url, json=payload, timeout=10)

@@ -6,7 +6,8 @@ import { format, addDays, subDays, isToday, parseISO, startOfWeek, isSameDay } f
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Plus, ChevronLeft, ChevronRight, Check, Trash2, Clock,
-    Loader2, Link as LinkIcon, X, Search, RefreshCw, BarChart3, BarChart2
+    Loader2, Link as LinkIcon, X, Search, RefreshCw, BarChart3, BarChart2,
+    AlertTriangle, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     useTimeBlocksByDay,
+    useTimeBlocksByDays,
     useTimeBlockCreate,
     useTimeBlockUpdate,
     useTimeBlockDelete,
@@ -69,15 +71,17 @@ const WEEK_DAYS = [
     { label: 'Th', value: 4 }, { label: 'Fr', value: 5 }, { label: 'Sa', value: 6 }, { label: 'Su', value: 0 },
 ]
 
-function getRepeatDates(days: number[], weeks: number, fromDate: string): string[] {
+// skipPast=true  → only future/today dates (used when actually creating blocks)
+// skipPast=false → all dates from fromDate (used for availability check, includes viewed past day)
+function getRepeatDates(days: number[], weeks: number, fromDate: string, skipPast = true): string[] {
     const start = parseISO(fromDate); start.setHours(0, 0, 0, 0)
-    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const cutoff = skipPast ? (() => { const t = new Date(); t.setHours(0,0,0,0); return t })() : start
     const dates = new Set<string>()
     for (let w = 0; w < weeks; w++) {
         for (const day of days) {
             const offset = (day - start.getDay() + 7) % 7 + w * 7
             const d = addDays(start, offset)
-            if (d >= today) dates.add(format(d, 'yyyy-MM-dd'))
+            if (d >= cutoff) dates.add(format(d, 'yyyy-MM-dd'))
         }
     }
     return [...dates].sort()
@@ -145,10 +149,10 @@ function hasOverlap(start: string, end: string, existing: TimeBlock[], excludeId
     return null
 }
 
-function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingBlocks, editingId }: {
+function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingBlocks, editingId, currentDay }: {
     initial?: Partial<BlockFormData>; personId: string
     onSubmit: (d: BlockFormData) => void; onCancel: () => void; isLoading?: boolean
-    existingBlocks?: TimeBlock[]; editingId?: number
+    existingBlocks?: TimeBlock[]; editingId?: number; currentDay: string
 }) {
     const [form, setForm] = useState<BlockFormData>({
         title: initial?.title ?? '', description: initial?.description ?? '',
@@ -157,12 +161,37 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
         is_recurring: initial?.is_recurring ?? false, repeat_days: [], repeat_weeks: 4,
     })
     const [showRepeat, setShowRepeat] = useState(false)
-    const set = (k: keyof BlockFormData) => (v: string) => setForm(p => ({ ...p, [k]: v }))
+
+    const set = (k: keyof BlockFormData) => (v: string) => setForm(p => {
+        if (k === 'start_time') {
+            const startMins = timeToMinutes(v)
+            const endMins   = timeToMinutes(p.end_time)
+            // Auto-push end to start + 1h whenever end is no longer after start
+            if (endMins <= startMins) {
+                const newEnd = Math.min(startMins + 60, HOUR_END * 60 - 1)
+                return { ...p, start_time: v, end_time: minutesToTime(newEnd) }
+            }
+        }
+        return { ...p, [k]: v }
+    })
 
     const conflict = form.start_time < form.end_time
         ? hasOverlap(form.start_time, form.end_time, existingBlocks ?? [], editingId)
         : null
     const canSave = (!!form.title.trim() || !!form.task_id) && form.start_time < form.end_time && !conflict
+
+    // ── Availability check for repeat dates ───────────────────────────────────
+    const validTime = form.start_time < form.end_time
+    // Same dates that will actually be created (skipPast=true — next upcoming weekday, not a past one)
+    const targetDates = (showRepeat && (form.repeat_days?.length ?? 0) > 0 && validTime)
+        ? getRepeatDates(form.repeat_days!, form.repeat_weeks ?? 4, currentDay)
+        : []
+    const repeatDayResults = useTimeBlocksByDays(targetDates)
+    const isCheckingAvail = repeatDayResults.some(r => r.isLoading || r.isFetching)
+    const conflictedDates = targetDates.filter((date, i) => {
+        const dayBlocks = (repeatDayResults[i]?.data ?? []) as TimeBlock[]
+        return hasOverlap(form.start_time, form.end_time, dayBlocks) !== null
+    })
 
     return (
         <form onSubmit={e => { e.preventDefault(); if (!canSave) return; onSubmit(form) }}
@@ -187,7 +216,20 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                 ))}
             </div>
             {form.start_time >= form.end_time && (
-                <p className="text-red-400 text-xs">End time must be after start time</p>
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25">
+                    <p className="text-red-400 text-xs leading-relaxed">
+                        {form.end_time === '00:00'
+                            ? '12:00 AM = midnight. Did you mean 12:00 PM (noon)?'
+                            : 'End time must be after start time'}
+                    </p>
+                    {form.end_time === '00:00' && (
+                        <button type="button"
+                            onClick={() => setForm(p => ({ ...p, end_time: '12:00' }))}
+                            className="shrink-0 text-xs font-semibold text-red-300 hover:text-white border border-red-400/40 hover:border-white/30 px-2 py-0.5 rounded-lg transition-colors whitespace-nowrap">
+                            Set noon
+                        </button>
+                    )}
+                </div>
             )}
             {conflict && form.start_time < form.end_time && (
                 <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30">
@@ -257,6 +299,44 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                         </div>
                         {(form.repeat_days?.length ?? 0) > 0 && (
                             <p className="text-indigo-400/80 text-xs">~{(form.repeat_days?.length ?? 0) * (form.repeat_weeks ?? 4)} blocks will be created</p>
+                        )}
+                        {/* Availability check */}
+                        {targetDates.length > 0 && (
+                            <div className="rounded-xl border border-white/8 bg-white/3 px-3 py-2.5">
+                                {isCheckingAvail ? (
+                                    <div className="flex items-center gap-1.5 text-white/40 text-xs">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Checking availability…
+                                    </div>
+                                ) : conflictedDates.length === 0 ? (
+                                    <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        All {targetDates.length} dates are free
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center gap-1.5 text-amber-400 text-xs font-medium">
+                                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                            {conflictedDates.length} of {targetDates.length} dates have conflicts
+                                        </div>
+                                        <div className="space-y-1 pl-5">
+                                            {conflictedDates.map(date => {
+                                                const idx = targetDates.indexOf(date)
+                                                const dayBlocks = (repeatDayResults[idx]?.data ?? []) as TimeBlock[]
+                                                const overlapping = hasOverlap(form.start_time, form.end_time, dayBlocks)
+                                                return (
+                                                    <p key={date} className="text-xs text-amber-300/70">
+                                                        {format(parseISO(date), 'EEE, MMM d')}
+                                                        {overlapping && (
+                                                            <span className="text-white/35"> — "{overlapping.title}"</span>
+                                                        )}
+                                                    </p>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 )}
@@ -524,7 +604,7 @@ export default function TimetablePage() {
         const rect = timelineRef.current.getBoundingClientRect()
         const mins = Math.round((((e.clientY - rect.top) / PX_PER_HOUR) * 60) / 30) * 30 + HOUR_START * 60
         const clamped = Math.max(HOUR_START * 60, Math.min((HOUR_END - 1) * 60, mins))
-        setClickedTime(minutesToTime(clamped) + '__' + minutesToTime(Math.min(clamped + 60, HOUR_END * 60)))
+        setClickedTime(minutesToTime(clamped) + '__' + minutesToTime(Math.min(clamped + 60, HOUR_END * 60 - 1)))
         setIsCreateOpen(true)
     }, [])
 
@@ -667,7 +747,7 @@ export default function TimetablePage() {
                     <BlockForm initial={clickedTime ? { start_time: preStart, end_time: preEnd } : undefined}
                         personId={personId} onSubmit={handleCreate}
                         onCancel={() => { setIsCreateOpen(false); setClickedTime(null) }}
-                        isLoading={createBlock.isPending} existingBlocks={blocks} />
+                        isLoading={createBlock.isPending} existingBlocks={blocks} currentDay={currentDay} />
                 </DialogContent>
             </Dialog>
 
@@ -683,7 +763,7 @@ export default function TimetablePage() {
                             category: editingBlock.category, task_id: editingBlock.task_id, is_recurring: editingBlock.is_recurring }}
                             personId={personId} onSubmit={handleUpdate}
                             onCancel={() => setEditingBlock(null)} isLoading={updateBlock.isPending}
-                            existingBlocks={blocks} editingId={editingBlock.id} />
+                            existingBlocks={blocks} editingId={editingBlock.id} currentDay={currentDay} />
                     )}
                 </DialogContent>
             </Dialog>

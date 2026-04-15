@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '../api/endpoints'
 import { useHttp } from './use-http'
 
@@ -61,6 +61,17 @@ export function useTimetableStats(weeks = 4) {
     return useQuery<TimetableStats>({
         queryKey: keys.stats(weeks),
         queryFn: () => request(API_ENDPOINTS.TIMETABLE.STATS(weeks)),
+    })
+}
+
+export function useTimeBlocksByDays(days: string[]) {
+    const { request } = useHttp()
+    return useQueries({
+        queries: days.map(day => ({
+            queryKey: keys.day(day),
+            queryFn: () => request<TimeBlock[]>(API_ENDPOINTS.TIMETABLE.BY_DAY(day)),
+            enabled: !!day,
+        })),
     })
 }
 
