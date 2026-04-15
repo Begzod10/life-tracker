@@ -97,6 +97,39 @@ def copy_recurring_blocks(self):
         db.close()
 
 
+@celery_app.task(name="app.tasks.mark_missed_blocks", bind=True, max_retries=3)
+def mark_missed_blocks(self):
+    """
+    Runs at midnight (00:05 UTC) every day.
+    Marks all time blocks from previous days that are still incomplete as is_missed=True.
+    """
+    db = SessionLocal()
+    try:
+        today = date.today()
+        updated = (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.date < today,
+                models.TimeBlock.is_completed == False,
+                models.TimeBlock.is_missed == False,
+                models.TimeBlock.deleted == False,
+            )
+            .all()
+        )
+        count = len(updated)
+        for block in updated:
+            block.is_missed = True
+        db.commit()
+        logger.info("mark_missed_blocks: marked %d blocks as missed", count)
+        return {"marked": count}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("mark_missed_blocks failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
 # ─── Telegram notification helpers ───────────────────────────────────────────
 
 def _get_upcoming_tasks(db, person_id: int, today: date, days_ahead: int = 3):

@@ -418,8 +418,8 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
 }
 
 // ─── TimeBlockCard ────────────────────────────────────────────────────────────
-function TimeBlockCard({ block, taskTitle, isPastDay, onEdit, onDelete, onToggle }: {
-    block: TimeBlock; taskTitle?: string; isPastDay: boolean
+function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
+    block: TimeBlock; taskTitle?: string
     onEdit: (b: TimeBlock) => void; onDelete: (b: TimeBlock) => void; onToggle: (b: TimeBlock) => void
 }) {
     const cat    = getCat(block.category)
@@ -427,7 +427,7 @@ function TimeBlockCard({ block, taskTitle, isPastDay, onEdit, onDelete, onToggle
     const height = blockHeight(block.start_time, block.end_time)
     const dur    = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
     const isShort = height < 52
-    const isMissed = isPastDay && !block.is_completed
+    const isMissed = block.is_missed
 
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
@@ -533,10 +533,10 @@ function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d:
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function DaySummary({ blocks, taskMap, isPastDay, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; isPastDay: boolean; onAddNew: () => void }) {
+function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void }) {
     const total     = blocks.length
     const done      = blocks.filter(b => b.is_completed).length
-    const missed    = isPastDay ? blocks.filter(b => !b.is_completed).length : 0
+    const missed    = blocks.filter(b => b.is_missed).length
     const totalMins = blocks.reduce((acc, b) => acc + timeToMinutes(b.end_time) - timeToMinutes(b.start_time), 0)
     const pct       = total > 0 ? Math.round((done / total) * 100) : 0
     const byCategory = CATEGORIES.map(c => ({ ...c, count: blocks.filter(b => b.category === c.value).length })).filter(c => c.count > 0)
@@ -555,7 +555,7 @@ function DaySummary({ blocks, taskMap, isPastDay, onAddNew }: { blocks: TimeBloc
                         <p className="text-2xl font-bold text-emerald-400">{done}</p>
                         <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Done</p>
                     </div>
-                    {isPastDay && missed > 0 ? (
+                    {missed > 0 ? (
                         <div className="rounded-xl bg-red-500/10 p-3">
                             <p className="text-2xl font-bold text-red-400">{missed}</p>
                             <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Missed</p>
@@ -609,7 +609,7 @@ function DaySummary({ blocks, taskMap, isPastDay, onAddNew }: { blocks: TimeBloc
                             {blocks.map(b => {
                                 const cat = getCat(b.category)
                                 const linked = b.task_id ? taskMap[b.task_id] : undefined
-                                const isMissed = isPastDay && !b.is_completed
+                                const isMissed = b.is_missed
                                 return (
                                     <div key={b.id}
                                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all
@@ -664,9 +664,6 @@ export default function TimetablePage() {
 
     const taskMap = useMemo(() =>
         Object.fromEntries((tasks as TaskOption[]).map(t => [t.id, t.name])), [tasks])
-
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const isPastDay = currentDay < today
 
     const goPrev  = () => setCurrentDay(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))
     const goNext  = () => setCurrentDay(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))
@@ -795,7 +792,6 @@ export default function TimetablePage() {
                                                 {blocks.map(block => (
                                                     <div key={block.id} className="pointer-events-auto">
                                                         <TimeBlockCard block={block} taskTitle={block.task_id ? taskMap[block.task_id] : undefined}
-                                                            isPastDay={isPastDay}
                                                             onEdit={setEditingBlock} onDelete={b => deleteBlock.mutateAsync({ id: b.id, date: b.date })}
                                                             onToggle={b => toggleBlock.mutateAsync({ id: b.id, date: b.date })} />
                                                     </div>
@@ -808,7 +804,7 @@ export default function TimetablePage() {
                     </div>
 
                     {/* Sidebar */}
-                    <DaySummary blocks={blocks} taskMap={taskMap} isPastDay={isPastDay} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
+                    <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
                 </div>
             </div>
 

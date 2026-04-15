@@ -514,6 +514,7 @@ class TimeBlock(Base):
     category = Column(String(50), default="work")   # work, personal, health, learning, social, other
     color = Column(String(7), nullable=True)         # hex color override
     is_completed = Column(Boolean, default=False)
+    is_missed = Column(Boolean, default=False)      # set by Celery at midnight if not completed
     is_recurring = Column(Boolean, default=False)   # auto-copy to next week
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
     deleted = Column(Boolean, default=False)

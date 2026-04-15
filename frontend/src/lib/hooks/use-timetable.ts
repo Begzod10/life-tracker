@@ -13,6 +13,7 @@ export type TimeBlock = {
     category: string
     color?: string
     is_completed: boolean
+    is_missed: boolean
     is_recurring: boolean
     task_id?: number
     deleted: boolean

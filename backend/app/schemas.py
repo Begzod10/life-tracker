@@ -859,6 +859,7 @@ class TimeBlock(TimeBlockBase):
     id: int
     person_id: int
     is_completed: Optional[bool] = False
+    is_missed: Optional[bool] = False
     is_recurring: Optional[bool] = False
     deleted: Optional[bool] = False
     created_at: datetime

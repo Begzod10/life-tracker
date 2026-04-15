@@ -19,6 +19,12 @@ celery_app.conf.update(
 
 # ─── Beat schedule ─────────────────────────────────────────────────────────────
 celery_app.conf.beat_schedule = {
+    # Daily 00:05 UTC — mark incomplete blocks from previous days as missed
+    "mark-missed-blocks": {
+        "task": "app.tasks.mark_missed_blocks",
+        "schedule": crontab(hour=0, minute=5),
+    },
+
     # Every Saturday 00:00 UTC — copy recurring timetable blocks to next week
     "copy-recurring-timetable-blocks": {
         "task": "app.tasks.copy_recurring_blocks",
