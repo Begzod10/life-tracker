@@ -56,28 +56,34 @@ def get_timetable_stats(
 
     total_blocks = len(blocks)
     completed_blocks = sum(1 for b in blocks if b.is_completed)
+    missed_blocks = sum(1 for b in blocks if b.is_missed)
     total_hours = sum(duration_hours(b) for b in blocks)
     completed_hours = sum(duration_hours(b) for b in blocks if b.is_completed)
+    missed_hours = sum(duration_hours(b) for b in blocks if b.is_missed)
 
     # By category
-    cat_data = defaultdict(lambda: {"count": 0, "hours": 0.0, "completed": 0})
+    cat_data = defaultdict(lambda: {"count": 0, "hours": 0.0, "completed": 0, "missed": 0})
     for b in blocks:
         cat = b.category or "other"
         cat_data[cat]["count"] += 1
         cat_data[cat]["hours"] += duration_hours(b)
         if b.is_completed:
             cat_data[cat]["completed"] += 1
+        if b.is_missed:
+            cat_data[cat]["missed"] += 1
     by_category = [{"category": k, **v} for k, v in sorted(cat_data.items(), key=lambda x: -x[1]["hours"])]
 
     # By weekday (0=Mon … 6=Sun)
     DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    wd_data = defaultdict(lambda: {"count": 0, "hours": 0.0, "completed": 0})
+    wd_data = defaultdict(lambda: {"count": 0, "hours": 0.0, "completed": 0, "missed": 0})
     for b in blocks:
         wd = b.date.weekday()
         wd_data[wd]["count"] += 1
         wd_data[wd]["hours"] += duration_hours(b)
         if b.is_completed:
             wd_data[wd]["completed"] += 1
+        if b.is_missed:
+            wd_data[wd]["missed"] += 1
     by_weekday = [{"weekday": i, "name": DAYS[i], **wd_data[i]} for i in range(7)]
 
     # By hour (start hour distribution)
@@ -88,13 +94,15 @@ def get_timetable_stats(
     by_hour = [{"hour": h, "count": hour_data[h]} for h in range(6, 24)]
 
     # Daily summary (all days in range)
-    day_data = defaultdict(lambda: {"total": 0, "completed": 0, "hours": 0.0})
+    day_data = defaultdict(lambda: {"total": 0, "completed": 0, "missed": 0, "hours": 0.0})
     for b in blocks:
         ds = str(b.date)
         day_data[ds]["total"] += 1
         day_data[ds]["hours"] += duration_hours(b)
         if b.is_completed:
             day_data[ds]["completed"] += 1
+        if b.is_missed:
+            day_data[ds]["missed"] += 1
     daily_summary = [{"date": d, **v} for d, v in sorted(day_data.items())]
 
     # Streak: consecutive days with at least 1 block up to today
@@ -112,9 +120,12 @@ def get_timetable_stats(
         "weeks": weeks,
         "total_blocks": total_blocks,
         "completed_blocks": completed_blocks,
+        "missed_blocks": missed_blocks,
         "completion_rate": round(completed_blocks / total_blocks * 100, 1) if total_blocks else 0,
+        "missed_rate": round(missed_blocks / total_blocks * 100, 1) if total_blocks else 0,
         "total_hours": round(total_hours, 1),
         "completed_hours": round(completed_hours, 1),
+        "missed_hours": round(missed_hours, 1),
         "recurring_count": sum(1 for b in blocks if b.is_recurring),
         "streak_days": streak,
         "by_category": by_category,

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Clock, CheckCircle2, Flame, RefreshCw, TrendingUp, BarChart2, Calendar } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, Flame, RefreshCw, TrendingUp, BarChart2, Calendar, XCircle } from 'lucide-react'
 import { useTimetableStats } from '@/lib/hooks/use-timetable'
 
 const CATEGORY_COLORS: Record<string, { bg: string; bar: string; text: string }> = {
@@ -109,10 +109,12 @@ export default function TimetableStatsPage() {
                                 value={`${stats.completion_rate}%`}
                                 sub={`${stats.completed_blocks} of ${stats.total_blocks} blocks`}
                                 color={stats.completion_rate >= 70 ? 'text-emerald-400' : stats.completion_rate >= 40 ? 'text-amber-400' : 'text-red-400'} />
+                            <StatCard icon={<XCircle className="w-3.5 h-3.5" />} label="Missed Blocks"
+                                value={stats.missed_blocks}
+                                sub={`${stats.missed_hours}h · ${stats.missed_rate}% of total`}
+                                color={stats.missed_blocks === 0 ? 'text-emerald-400' : stats.missed_rate <= 20 ? 'text-amber-400' : 'text-red-400'} />
                             <StatCard icon={<Flame className="w-3.5 h-3.5" />} label="Active Streak"
                                 value={`${stats.streak_days}d`} sub="consecutive days with blocks" color="text-amber-400" />
-                            <StatCard icon={<RefreshCw className="w-3.5 h-3.5" />} label="Recurring Blocks"
-                                value={stats.recurring_count} sub={`of ${stats.total_blocks} total`} color="text-emerald-400" />
                         </div>
 
                         {/* ── Activity Heatmap ── */}
@@ -124,17 +126,21 @@ export default function TimetableStatsPage() {
                                 {heatDays.map((d, i) => {
                                     const ds     = fmt(d)
                                     const data   = dayMap[ds]
-                                    const pct    = data ? data.completed / Math.max(data.total, 1) : 0
-                                    const isT    = ds === fmt(today)
+                                    const pct      = data ? data.completed / Math.max(data.total, 1) : 0
+                                    const hasMissed = data && data.missed > 0
+                                    const allMissed = data && data.missed === data.total
+                                    const isT      = ds === fmt(today)
                                     const isFuture = d > today
                                     return (
-                                        <div key={i} title={data ? `${ds}: ${data.total} blocks, ${data.completed} done, ${data.hours.toFixed(1)}h` : ds}
+                                        <div key={i} title={data ? `${ds}: ${data.total} blocks, ${data.completed} done${data.missed ? `, ${data.missed} missed` : ''}, ${data.hours.toFixed(1)}h` : ds}
                                             className={`w-8 h-8 rounded-lg flex items-center justify-center text-[9px] font-bold transition-all cursor-default
                                                 ${isT ? 'ring-2 ring-indigo-500 ring-offset-1 ring-offset-[#09090f]' : ''}
                                                 ${!data
                                                     ? isFuture ? 'bg-white/2 text-white/10' : 'bg-white/4 text-white/15'
                                                     : isFuture
                                                         ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                                                        : allMissed ? 'bg-red-500/40 text-red-200'
+                                                        : hasMissed ? 'bg-amber-500/35 text-amber-200'
                                                         : pct === 1 ? 'bg-emerald-500 text-white'
                                                         : pct >= 0.5 ? 'bg-emerald-500/50 text-emerald-200'
                                                         : 'bg-indigo-500/30 text-indigo-300'}`}>
@@ -143,11 +149,13 @@ export default function TimetableStatsPage() {
                                     )
                                 })}
                             </div>
-                            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5 text-xs text-white/30">
+                            <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5 text-xs text-white/30 flex-wrap">
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-white/4" />No blocks</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-indigo-500/30" />Partial</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-emerald-500/50" />≥50% done</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-emerald-500" />All done</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-amber-500/35" />Some missed</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/40" />All missed</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-indigo-500/20 border border-indigo-500/30" />Upcoming</div>
                             </div>
                         </div>
@@ -172,7 +180,8 @@ export default function TimetableStatsPage() {
                                                             <div className="flex items-center gap-3 text-xs text-white/40">
                                                                 <span>{c.hours.toFixed(1)}h</span>
                                                                 <span>{c.count} blocks</span>
-                                                                <span className={donePct >= 70 ? 'text-emerald-400' : 'text-white/40'}>{donePct}%</span>
+                                                                <span className={donePct >= 70 ? 'text-emerald-400' : 'text-white/40'}>{donePct}% done</span>
+                                                                {c.missed > 0 && <span className="text-red-400">{c.missed} missed</span>}
                                                             </div>
                                                         </div>
                                                         <div className="h-2 bg-white/6 rounded-full overflow-hidden">
@@ -192,8 +201,9 @@ export default function TimetableStatsPage() {
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5">Weekday Pattern</h2>
                                 <div className="space-y-2.5">
                                     {stats.by_weekday.map(d => {
-                                        const pct     = d.count / maxWdCount * 100
-                                        const donePct = d.count > 0 ? Math.round(d.completed / d.count * 100) : 0
+                                        const pct      = d.count / maxWdCount * 100
+                                        const donePct  = d.count > 0 ? Math.round(d.completed / d.count * 100) : 0
+                                        const missedPct = d.count > 0 ? Math.round(d.missed / d.count * 100) : 0
                                         return (
                                             <div key={d.weekday} className="flex items-center gap-3">
                                                 <span className="text-xs text-white/40 w-8 shrink-0">{d.name.slice(0, 3)}</span>
@@ -204,13 +214,18 @@ export default function TimetableStatsPage() {
                                                     {d.count > 0 && (
                                                         <span className="absolute inset-0 flex items-center px-2 text-[10px] text-white/60">
                                                             {d.count} blocks · {d.hours.toFixed(1)}h
+                                                            {d.missed > 0 && <span className="text-red-400 ml-1.5">· {d.missed} missed</span>}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <span className={`text-xs w-9 text-right shrink-0 font-medium
-                                                    ${donePct >= 70 ? 'text-emerald-400' : donePct > 0 ? 'text-white/50' : 'text-white/20'}`}>
-                                                    {d.count > 0 ? `${donePct}%` : '—'}
-                                                </span>
+                                                <div className="flex flex-col items-end w-16 shrink-0">
+                                                    <span className={`text-xs font-medium ${donePct >= 70 ? 'text-emerald-400' : donePct > 0 ? 'text-white/50' : 'text-white/20'}`}>
+                                                        {d.count > 0 ? `${donePct}%` : '—'}
+                                                    </span>
+                                                    {d.missed > 0 && (
+                                                        <span className="text-[10px] text-red-400">{missedPct}% miss</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )
                                     })}

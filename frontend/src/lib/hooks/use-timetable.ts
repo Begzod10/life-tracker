@@ -40,15 +40,18 @@ export type TimetableStats = {
     weeks: number
     total_blocks: number
     completed_blocks: number
+    missed_blocks: number
     completion_rate: number
+    missed_rate: number
     total_hours: number
     completed_hours: number
+    missed_hours: number
     recurring_count: number
     streak_days: number
-    by_category: { category: string; count: number; hours: number; completed: number }[]
-    by_weekday: { weekday: number; name: string; count: number; hours: number; completed: number }[]
+    by_category: { category: string; count: number; hours: number; completed: number; missed: number }[]
+    by_weekday: { weekday: number; name: string; count: number; hours: number; completed: number; missed: number }[]
     by_hour: { hour: number; count: number }[]
-    daily_summary: { date: string; total: number; completed: number; hours: number }[]
+    daily_summary: { date: string; total: number; completed: number; missed: number; hours: number }[]
 }
 
 const keys = {
