@@ -62,7 +62,7 @@ function blockHeight(start: string, end: string) {
 // ─── Repeat helpers ───────────────────────────────────────────────────────────
 type BlockFormData = {
     title: string; description: string; start_time: string; end_time: string
-    category: string; task_id?: number; is_recurring?: boolean
+    category: string; task_id?: number; task_duration?: number; is_recurring?: boolean
     repeat_days?: number[]; repeat_weeks?: number
 }
 
@@ -88,9 +88,12 @@ function getRepeatDates(days: number[], weeks: number, fromDate: string, skipPas
 }
 
 // ─── TaskPicker ───────────────────────────────────────────────────────────────
-type TaskOption = { id: number; name: string; completed: boolean; priority: string }
+type TaskOption = { id: number; name: string; completed: boolean; priority: string; estimated_duration?: number }
 
-function TaskPicker({ personId, value, onChange }: { personId: string; value?: number; onChange: (id?: number) => void }) {
+function TaskPicker({ personId, value, onChange }: {
+    personId: string; value?: number
+    onChange: (id?: number, duration?: number) => void
+}) {
     const [search, setSearch] = useState('')
     const [open, setOpen] = useState(false)
     const { data: tasks = [] } = useTasksList({ person_id: personId })
@@ -109,6 +112,9 @@ function TaskPicker({ personId, value, onChange }: { personId: string; value?: n
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10">
             <LinkIcon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             <span className="flex-1 text-sm text-white truncate">{selected.name}</span>
+            {selected.estimated_duration && (
+                <span className="text-xs text-indigo-300/70">{selected.estimated_duration}min</span>
+            )}
             <button type="button" onClick={() => onChange(undefined)} className="text-white/40 hover:text-white/80"><X className="w-3.5 h-3.5" /></button>
         </div>
     )
@@ -125,10 +131,13 @@ function TaskPicker({ personId, value, onChange }: { personId: string; value?: n
                     ? <p className="text-white/30 text-xs text-center py-4">No tasks found</p>
                     : options.map(task => (
                         <button key={task.id} type="button"
-                            onClick={() => { onChange(task.id); setOpen(false); setSearch('') }}
+                            onClick={() => { onChange(task.id, task.estimated_duration); setOpen(false); setSearch('') }}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors text-left">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`} />
-                            <span className="text-sm text-white truncate">{task.name}</span>
+                            <span className="text-sm text-white truncate flex-1">{task.name}</span>
+                            {task.estimated_duration && (
+                                <span className="text-xs text-white/35 shrink-0">{task.estimated_duration}min</span>
+                            )}
                         </button>
                     ))}
             </div>
@@ -157,7 +166,7 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
     const [form, setForm] = useState<BlockFormData>({
         title: initial?.title ?? '', description: initial?.description ?? '',
         start_time: initial?.start_time ?? '09:00', end_time: initial?.end_time ?? '10:00',
-        category: initial?.category ?? 'work', task_id: initial?.task_id,
+        category: initial?.category ?? 'work', task_id: initial?.task_id, task_duration: undefined,
         is_recurring: initial?.is_recurring ?? false, repeat_days: [], repeat_weeks: 4,
     })
     const [showRepeat, setShowRepeat] = useState(false)
@@ -206,16 +215,58 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                     className="bg-white/5 border-white/10 text-white placeholder:text-white/25 rounded-xl focus:border-indigo-500/60 focus:ring-0" />
             </div>
 
+            <div className="space-y-1.5">
+                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Link Task</Label>
+                <TaskPicker personId={personId} value={form.task_id} onChange={(id, duration) => {
+                    setForm(p => {
+                        const updates: Partial<BlockFormData> = { task_id: id, task_duration: duration }
+                        if (id && duration) {
+                            const endMins = timeToMinutes(p.start_time) + duration
+                            updates.end_time = minutesToTime(Math.min(endMins, HOUR_END * 60 - 1))
+                        }
+                        return { ...p, ...updates }
+                    })
+                }} />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
-                {(['start_time', 'end_time'] as const).map((k, i) => (
-                    <div key={k} className="space-y-1.5">
-                        <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">{i === 0 ? 'Start' : 'End'} *</Label>
-                        <Input type="time" value={form[k]} onChange={e => set(k)(e.target.value)}
+                <div className="space-y-1.5">
+                    <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Start *</Label>
+                    <Input type="time" value={form.start_time} onChange={e => {
+                        const v = e.target.value
+                        setForm(p => {
+                            if (p.task_duration) {
+                                const endMins = timeToMinutes(v) + p.task_duration
+                                return { ...p, start_time: v, end_time: minutesToTime(Math.min(endMins, HOUR_END * 60 - 1)) }
+                            }
+                            const startMins = timeToMinutes(v)
+                            const endMins   = timeToMinutes(p.end_time)
+                            if (endMins <= startMins) {
+                                const newEnd = Math.min(startMins + 60, HOUR_END * 60 - 1)
+                                return { ...p, start_time: v, end_time: minutesToTime(newEnd) }
+                            }
+                            return { ...p, start_time: v }
+                        })
+                    }} className="bg-white/5 border-white/10 text-white rounded-xl focus:border-indigo-500/60 focus:ring-0" />
+                </div>
+                {form.task_duration ? (
+                    <div className="space-y-1.5">
+                        <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">End</Label>
+                        <div className="flex items-center h-10 px-3 rounded-xl border border-indigo-500/25 bg-indigo-500/8 gap-2">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="text-sm text-white">{form.end_time}</span>
+                            <span className="text-xs text-indigo-300/60 ml-auto">{form.task_duration}min</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-1.5">
+                        <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">End *</Label>
+                        <Input type="time" value={form.end_time} onChange={e => set('end_time')(e.target.value)}
                             className="bg-white/5 border-white/10 text-white rounded-xl focus:border-indigo-500/60 focus:ring-0" />
                     </div>
-                ))}
+                )}
             </div>
-            {form.start_time >= form.end_time && (
+            {form.start_time >= form.end_time && !form.task_duration && (
                 <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/25">
                     <p className="text-red-400 text-xs leading-relaxed">
                         {form.end_time === '00:00'
@@ -257,11 +308,6 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                         ))}
                     </SelectContent>
                 </Select>
-            </div>
-
-            <div className="space-y-1.5">
-                <Label className="text-white/70 text-xs font-medium uppercase tracking-wider">Link Task</Label>
-                <TaskPicker personId={personId} value={form.task_id} onChange={id => setForm(p => ({ ...p, task_id: id }))} />
             </div>
 
             {/* Repeat on days */}

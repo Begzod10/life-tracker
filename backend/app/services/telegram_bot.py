@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Task
+from app.models import Task, TimeBlock
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,13 +49,42 @@ def get_todays_tasks(db: Session) -> list:
 
 def get_upcoming_tasks(db: Session) -> list:
     tomorrow = date.today() + timedelta(days=1)
-    return (
+    future = date.today() + timedelta(days=4)
+
+    # Tasks with a due_date in the next few days
+    due_date_tasks = (
         db.query(Task)
-        .filter(Task.deleted == False, Task.completed == False, Task.due_date >= tomorrow)
-        .order_by(Task.due_date.asc())
-        .limit(5)
+        .filter(Task.deleted == False, Task.completed == False,
+                Task.due_date >= tomorrow, Task.due_date <= future)
         .all()
     )
+
+    # Tasks linked to upcoming time blocks (no due_date required)
+    timetable_task_ids = {
+        row.task_id
+        for row in db.query(TimeBlock.task_id)
+        .filter(
+            TimeBlock.deleted == False,
+            TimeBlock.task_id != None,
+            TimeBlock.date >= tomorrow,
+            TimeBlock.date <= future,
+        )
+        .all()
+        if row.task_id
+    }
+
+    # Add timetable-linked tasks not already in due_date list
+    existing_ids = {t.id for t in due_date_tasks}
+    extra_ids = timetable_task_ids - existing_ids
+    if extra_ids:
+        extra_tasks = (
+            db.query(Task)
+            .filter(Task.id.in_(extra_ids), Task.deleted == False, Task.completed == False)
+            .all()
+        )
+        due_date_tasks = due_date_tasks + extra_tasks
+
+    return sorted(due_date_tasks, key=lambda t: (t.due_date or date.max))[:5]
 
 
 def complete_task(db: Session, task_id: int) -> bool:
