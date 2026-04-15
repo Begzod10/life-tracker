@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Task, TimeBlock
+from app.models import Task, TimeBlock, Person
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -177,14 +177,59 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = str(update.effective_chat.id)
     db = get_db()
     try:
-        tasks = get_upcoming_tasks(db)
-        if not tasks:
-            await update.message.reply_text("✅ No upcoming tasks!")
+        person = db.query(Person).filter(Person.telegram_chat_id == chat_id).first()
+        if not person:
+            await update.message.reply_text("❌ Account not linked. Use /start to connect.")
             return
-        text = "🗓 *Upcoming Tasks:*\n\n" + "\n".join(f"• {format_task(t)}" for t in tasks)
-        await update.message.reply_text(text, parse_mode="Markdown")
+
+        tomorrow = date.today() + timedelta(days=1)
+        future = date.today() + timedelta(days=4)
+
+        blocks = (
+            db.query(TimeBlock)
+            .filter(
+                TimeBlock.person_id == person.id,
+                TimeBlock.deleted == False,
+                TimeBlock.date >= tomorrow,
+                TimeBlock.date <= future,
+            )
+            .order_by(TimeBlock.date.asc(), TimeBlock.start_time.asc())
+            .all()
+        )
+
+        if not blocks:
+            await update.message.reply_text("📭 No upcoming blocks in the next 3 days!")
+            return
+
+        # Group by date
+        from collections import defaultdict
+        by_day: dict = defaultdict(list)
+        for b in blocks:
+            by_day[b.date].append(b)
+
+        cat_emoji = {
+            "work": "💼", "personal": "🧍", "health": "💪",
+            "learning": "📚", "social": "👥", "other": "📌",
+        }
+
+        lines = ["🗓 *Upcoming Schedule:*\n"]
+        for day in sorted(by_day):
+            day_label = day.strftime("%A, %b %d")
+            lines.append(f"*{day_label}*")
+            for b in by_day[day]:
+                emoji = cat_emoji.get(b.category, "📌")
+                status = "✅" if b.is_completed else emoji
+                dur = (
+                    (int(b.end_time[:2]) * 60 + int(b.end_time[3:]))
+                    - (int(b.start_time[:2]) * 60 + int(b.start_time[3:]))
+                )
+                lines.append(f"  {status} {b.start_time}–{b.end_time} ({dur}m) {b.title}")
+            lines.append("")
+
+        await update.message.reply_text("\n".join(lines).strip(), parse_mode="Markdown")
     finally:
         db.close()
 
