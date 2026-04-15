@@ -345,6 +345,30 @@ def send_evening_checkup(self):
                         },
                     )
 
+            # Ask about each incomplete timetable block from today
+            todays_blocks = (
+                db.query(models.TimeBlock)
+                .filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                    models.TimeBlock.is_completed == False,
+                )
+                .order_by(models.TimeBlock.start_time.asc())
+                .all()
+            )
+            for block in todays_blocks:
+                send_message(
+                    f"🗓 Did you complete: <b>{block.title}</b> ({block.start_time}–{block.end_time})?",
+                    chat_id=chat_id,
+                    reply_markup={
+                        "inline_keyboard": [[
+                            {"text": "✅ Yes!", "callback_data": f"block_done_{block.id}"},
+                            {"text": "❌ No", "callback_data": f"block_skip_{block.id}"},
+                        ]]
+                    },
+                )
+
         logger.info("send_evening_checkup: sent to %d users", sent)
         return {"sent": sent}
 

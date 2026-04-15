@@ -299,6 +299,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     text=text,
                     parse_mode="Markdown",
                 )
+
+        elif data.startswith("block_done_"):
+            block_id = int(data.split("_")[2])
+            block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
+            if block:
+                block.is_completed = True
+                db.commit()
+                name = block.title
+            else:
+                name = "block"
+            await query.edit_message_text(f"✅ Marked as done: *{name}*", parse_mode="Markdown")
+
+        elif data.startswith("block_skip_"):
+            block_id = int(data.split("_")[2])
+            block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
+            name = block.title if block else "block"
+            await query.edit_message_text(f"👌 OK, skipped: *{name}*", parse_mode="Markdown")
+
     finally:
         db.close()
 
