@@ -418,8 +418,8 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
 }
 
 // ─── TimeBlockCard ────────────────────────────────────────────────────────────
-function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
-    block: TimeBlock; taskTitle?: string
+function TimeBlockCard({ block, taskTitle, isPastDay, onEdit, onDelete, onToggle }: {
+    block: TimeBlock; taskTitle?: string; isPastDay: boolean
     onEdit: (b: TimeBlock) => void; onDelete: (b: TimeBlock) => void; onToggle: (b: TimeBlock) => void
 }) {
     const cat    = getCat(block.category)
@@ -427,20 +427,28 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
     const height = blockHeight(block.start_time, block.end_time)
     const dur    = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
     const isShort = height < 52
+    const isMissed = isPastDay && !block.is_completed
 
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
-            style={{ position: 'absolute', top, left: 0, right: 0, height, borderLeftColor: block.color ?? cat.color }}
+            style={{ position: 'absolute', top, left: 0, right: 0, height, borderLeftColor: isMissed ? '#ef4444' : (block.color ?? cat.color) }}
             className={`group rounded-xl border border-l-[3px] px-2.5 py-2 cursor-pointer select-none overflow-hidden backdrop-blur-sm transition-all duration-150 hover:brightness-110
-                ${block.is_completed ? 'bg-white/4 border-white/8 opacity-55' : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
+                ${block.is_completed
+                    ? 'bg-white/4 border-white/8 opacity-55'
+                    : isMissed
+                        ? 'bg-red-500/10 border-red-500/30'
+                        : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
             onClick={() => onEdit(block)}>
             <div className="flex items-start justify-between gap-1 h-full">
                 <div className="flex-1 min-w-0">
-                    <p className={`font-semibold truncate leading-tight ${isShort ? 'text-xs' : 'text-sm'} ${block.is_completed ? 'line-through text-white/35' : 'text-white'}`}>
+                    <p className={`font-semibold truncate leading-tight ${isShort ? 'text-xs' : 'text-sm'} ${block.is_completed ? 'line-through text-white/35' : isMissed ? 'text-red-300' : 'text-white'}`}>
                         {block.title}
                     </p>
                     {!isShort && (
-                        <p className="text-xs text-white/45 mt-0.5">{block.start_time}–{block.end_time} <span className="text-white/25">({dur}m)</span></p>
+                        <p className={`text-xs mt-0.5 ${isMissed ? 'text-red-400/60' : 'text-white/45'}`}>
+                            {block.start_time}–{block.end_time} <span className="opacity-60">({dur}m)</span>
+                            {isMissed && <span className="ml-1.5 font-semibold">· missed</span>}
+                        </p>
                     )}
                     {!isShort && taskTitle && (
                         <div className="flex items-center gap-1 mt-1"><LinkIcon className="w-2.5 h-2.5 text-indigo-400 shrink-0" /><p className="text-xs text-indigo-300 truncate">{taskTitle}</p></div>
@@ -525,9 +533,10 @@ function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d:
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void }) {
+function DaySummary({ blocks, taskMap, isPastDay, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; isPastDay: boolean; onAddNew: () => void }) {
     const total     = blocks.length
     const done      = blocks.filter(b => b.is_completed).length
+    const missed    = isPastDay ? blocks.filter(b => !b.is_completed).length : 0
     const totalMins = blocks.reduce((acc, b) => acc + timeToMinutes(b.end_time) - timeToMinutes(b.start_time), 0)
     const pct       = total > 0 ? Math.round((done / total) * 100) : 0
     const byCategory = CATEGORIES.map(c => ({ ...c, count: blocks.filter(b => b.category === c.value).length })).filter(c => c.count > 0)
@@ -546,10 +555,17 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
                         <p className="text-2xl font-bold text-emerald-400">{done}</p>
                         <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Done</p>
                     </div>
-                    <div className="rounded-xl bg-indigo-500/10 p-3">
-                        <p className="text-2xl font-bold text-indigo-400">{Math.round(totalMins / 60)}h</p>
-                        <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Sched</p>
-                    </div>
+                    {isPastDay && missed > 0 ? (
+                        <div className="rounded-xl bg-red-500/10 p-3">
+                            <p className="text-2xl font-bold text-red-400">{missed}</p>
+                            <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Missed</p>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl bg-indigo-500/10 p-3">
+                            <p className="text-2xl font-bold text-indigo-400">{Math.round(totalMins / 60)}h</p>
+                            <p className="text-[10px] text-white/35 mt-0.5 uppercase tracking-wide">Sched</p>
+                        </div>
+                    )}
                 </div>
                 {total > 0 && (
                     <div>
@@ -593,14 +609,22 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
                             {blocks.map(b => {
                                 const cat = getCat(b.category)
                                 const linked = b.task_id ? taskMap[b.task_id] : undefined
+                                const isMissed = isPastDay && !b.is_completed
                                 return (
                                     <div key={b.id}
                                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all
-                                            ${b.is_completed ? 'opacity-45 border-white/5 bg-white/3' : `${cat.border} bg-gradient-to-r ${cat.from} ${cat.to}`}`}>
-                                        <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: b.color ?? cat.color }} />
+                                            ${b.is_completed
+                                                ? 'opacity-45 border-white/5 bg-white/3'
+                                                : isMissed
+                                                    ? 'border-red-500/30 bg-red-500/8'
+                                                    : `${cat.border} bg-gradient-to-r ${cat.from} ${cat.to}`}`}>
+                                        <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: isMissed ? '#ef4444' : (b.color ?? cat.color) }} />
                                         <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-medium truncate ${b.is_completed ? 'line-through text-white/35' : 'text-white'}`}>{b.title}</p>
-                                            <p className="text-xs text-white/35">{b.start_time}–{b.end_time}</p>
+                                            <p className={`text-sm font-medium truncate ${b.is_completed ? 'line-through text-white/35' : isMissed ? 'text-red-300' : 'text-white'}`}>{b.title}</p>
+                                            <p className={`text-xs ${isMissed ? 'text-red-400/60' : 'text-white/35'}`}>
+                                                {b.start_time}–{b.end_time}
+                                                {isMissed && <span className="ml-1.5 font-semibold">· missed</span>}
+                                            </p>
                                             {linked && <div className="flex items-center gap-1 mt-0.5"><LinkIcon className="w-2.5 h-2.5 text-indigo-400 shrink-0" /><p className="text-xs text-indigo-300 truncate">{linked}</p></div>}
                                             {b.is_recurring && <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>}
                                         </div>
@@ -640,6 +664,9 @@ export default function TimetablePage() {
 
     const taskMap = useMemo(() =>
         Object.fromEntries((tasks as TaskOption[]).map(t => [t.id, t.name])), [tasks])
+
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const isPastDay = currentDay < today
 
     const goPrev  = () => setCurrentDay(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))
     const goNext  = () => setCurrentDay(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))
@@ -768,6 +795,7 @@ export default function TimetablePage() {
                                                 {blocks.map(block => (
                                                     <div key={block.id} className="pointer-events-auto">
                                                         <TimeBlockCard block={block} taskTitle={block.task_id ? taskMap[block.task_id] : undefined}
+                                                            isPastDay={isPastDay}
                                                             onEdit={setEditingBlock} onDelete={b => deleteBlock.mutateAsync({ id: b.id, date: b.date })}
                                                             onToggle={b => toggleBlock.mutateAsync({ id: b.id, date: b.date })} />
                                                     </div>
@@ -780,7 +808,7 @@ export default function TimetablePage() {
                     </div>
 
                     {/* Sidebar */}
-                    <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
+                    <DaySummary blocks={blocks} taskMap={taskMap} isPastDay={isPastDay} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
                 </div>
             </div>
 
