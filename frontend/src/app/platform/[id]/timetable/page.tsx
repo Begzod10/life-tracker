@@ -589,7 +589,7 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
                 {blocks.length === 0
                     ? <p className="text-white/25 text-sm text-center py-6">No blocks yet</p>
                     : (
-                        <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+                        <div className="space-y-2 max-h-96 overflow-y-auto pr-0.5">
                             {blocks.map(b => {
                                 const cat = getCat(b.category)
                                 const linked = b.task_id ? taskMap[b.task_id] : undefined
@@ -737,7 +737,7 @@ export default function TimetablePage() {
                 </div>
 
                 {/* ── Body ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">
 
                     {/* Timeline */}
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-sm overflow-hidden">
