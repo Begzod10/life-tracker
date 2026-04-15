@@ -10,6 +10,11 @@ cd /var/www/life_tracker/backend
 /var/www/life_tracker/backend/venv/bin/pip install -r requirements.txt
 /var/www/life_tracker/backend/venv/bin/alembic upgrade head
 
+# Build frontend
+cd /var/www/life_tracker/frontend
+npm install
+npm run build
+
 # Restart services
 systemctl restart life_tracker.service
 systemctl restart life_tracker_celery.service
