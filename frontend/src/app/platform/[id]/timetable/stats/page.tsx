@@ -33,33 +33,51 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
     )
 }
 
-function LineChart({ data }: { data: { date: string; completed: number; missed: number; total: number }[] }) {
-    const past = data.filter(d => d.total > 0)
-    if (past.length < 2) return <p className="text-white/25 text-sm text-center py-8">Not enough data yet</p>
+function LineChart({
+    data,
+    weeks,
+}: {
+    data: { date: string; completed: number; missed: number; total: number }[]
+    weeks: number
+}) {
+    // Build a full day-by-day range from (today - weeks*7) up to yesterday
+    const todayMs = new Date(); todayMs.setHours(0, 0, 0, 0)
+    const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
+
+    const dayRange: { date: string; completed: number; missed: number }[] = []
+    for (let i = weeks * 7; i >= 1; i--) {
+        const d = new Date(todayMs); d.setDate(todayMs.getDate() - i)
+        const ds = fmtDate(d)
+        const found = data.find(x => x.date === ds)
+        dayRange.push({ date: ds, completed: found?.completed ?? 0, missed: found?.missed ?? 0 })
+    }
+
+    const hasAnyData = dayRange.some(d => d.completed > 0 || d.missed > 0)
+    if (!hasAnyData) return <p className="text-white/25 text-sm text-center py-8">No data for this period</p>
 
     const W = 800, H = 140, PAD = { t: 12, b: 28, l: 28, r: 12 }
     const chartW = W - PAD.l - PAD.r
     const chartH = H - PAD.t - PAD.b
-    const maxVal = Math.max(...past.map(d => Math.max(d.completed, d.missed)), 1)
+    const maxVal = Math.max(...dayRange.map(d => Math.max(d.completed, d.missed)), 1)
+    const n = dayRange.length
 
-    const xOf = (i: number) => PAD.l + (i / (past.length - 1)) * chartW
+    const xOf = (i: number) => PAD.l + (i / Math.max(n - 1, 1)) * chartW
     const yOf = (v: number) => PAD.t + chartH - (v / maxVal) * chartH
 
     const pathFor = (key: 'completed' | 'missed') =>
-        past.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ')
+        dayRange.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ')
 
     const areaFor = (key: 'completed' | 'missed') => {
         const line = pathFor(key)
-        const last = past.length - 1
-        return `${line} L ${xOf(last).toFixed(1)} ${(PAD.t + chartH).toFixed(1)} L ${PAD.l.toFixed(1)} ${(PAD.t + chartH).toFixed(1)} Z`
+        return `${line} L ${xOf(n - 1).toFixed(1)} ${(PAD.t + chartH).toFixed(1)} L ${PAD.l.toFixed(1)} ${(PAD.t + chartH).toFixed(1)} Z`
     }
 
-    // Y grid lines
     const yTicks = [0, Math.round(maxVal / 2), maxVal]
 
-    // X labels: show first, last, and every ~7 days
-    const xLabels = past.map((d, i) => {
-        const show = i === 0 || i === past.length - 1 || i % Math.max(1, Math.floor(past.length / 6)) === 0
+    // X labels spaced every ~7 days
+    const step = Math.max(1, Math.floor(n / 8))
+    const xLabels = dayRange.map((d, i) => {
+        const show = i === 0 || i === n - 1 || i % step === 0
         return show ? { i, label: d.date.slice(5) } : null
     }).filter(Boolean) as { i: number; label: string }[]
 
@@ -83,14 +101,15 @@ function LineChart({ data }: { data: { date: string; completed: number; missed: 
             <path d={pathFor('completed')} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             <path d={pathFor('missed')}    fill="none" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
-            {/* Dots */}
-            {past.map((d, i) => (
-                <g key={i}>
-                    <circle cx={xOf(i)} cy={yOf(d.completed)} r="3" fill="#22c55e" />
-                    <circle cx={xOf(i)} cy={yOf(d.missed)}    r="3" fill="#ef4444" />
-                    {/* Invisible wide hit area for title */}
-                    <title>{d.date}: {d.completed} done, {d.missed} not finished</title>
-                </g>
+            {/* Dots — only where there's data */}
+            {dayRange.map((d, i) => (
+                (d.completed > 0 || d.missed > 0) && (
+                    <g key={i}>
+                        <circle cx={xOf(i)} cy={yOf(d.completed)} r="3" fill="#22c55e" />
+                        <circle cx={xOf(i)} cy={yOf(d.missed)}    r="3" fill="#ef4444" />
+                        <title>{d.date}: {d.completed} done, {d.missed} not finished</title>
+                    </g>
+                )
             ))}
 
             {/* X labels */}
@@ -203,7 +222,7 @@ export default function TimetableStatsPage() {
                                     </div>
                                 </div>
                             </div>
-                            <LineChart data={stats.daily_summary} />
+                            <LineChart data={stats.daily_summary} weeks={weeks} />
                         </div>
 
                         {/* ── Activity Heatmap ── */}
