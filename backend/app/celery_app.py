@@ -46,6 +46,12 @@ celery_app.conf.beat_schedule = {
         ),
     },
 
+    # Daily 17:00 UTC = 22:00 Tashkent — full day summary (blocks + tasks)
+    "send-daily-summary": {
+        "task": "app.tasks.send_daily_summary",
+        "schedule": crontab(hour=17, minute=0),
+    },
+
     # Daily 16:00 UTC = 21:00 Tashkent — evening completion check-in
     "send-evening-checkup": {
         "task": "app.tasks.send_evening_checkup",

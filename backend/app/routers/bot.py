@@ -4,6 +4,7 @@ Bot endpoints:
   POST /bot/webhook            — Telegram pushes every update here (webhook mode)
   POST /bot/trigger/morning    — manually queue morning notification (Celery)
   POST /bot/trigger/evening    — manually queue evening notification (Celery)
+  POST /bot/trigger/summary    — manually queue daily summary (Celery)
 """
 
 from typing import Optional
@@ -55,3 +56,11 @@ def trigger_evening(current_user: models.Person = Depends(get_current_user)):
     from app.tasks import send_evening_checkup
     task = send_evening_checkup.delay()
     return {"message": "Evening check-in queued", "task_id": task.id}
+
+
+@router.post("/trigger/summary")
+def trigger_summary(current_user: models.Person = Depends(get_current_user)):
+    """Manually trigger the daily summary right now."""
+    from app.tasks import send_daily_summary
+    task = send_daily_summary.delay()
+    return {"message": "Daily summary queued", "task_id": task.id}

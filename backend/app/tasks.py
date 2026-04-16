@@ -453,3 +453,124 @@ def send_evening_checkup(self):
         raise self.retry(exc=exc, countdown=60 * 5)
     finally:
         db.close()
+
+
+@celery_app.task(name="app.tasks.send_daily_summary", bind=True, max_retries=2)
+def send_daily_summary(self):
+    """
+    Daily 22:00 Tashkent (17:00 UTC) — send full summary of today's blocks and tasks.
+    """
+    if not is_configured():
+        return {"skipped": True}
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        not_deleted = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+
+        for person in persons:
+            chat_id = person.telegram_chat_id
+            if not chat_id:
+                from app.config import settings
+                chat_id = settings.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+
+            lines = [f"📋 <b>Daily Summary — {today.strftime('%d %b %Y')}</b>", ""]
+
+            # ── Timetable blocks ──────────────────────────────────────────────
+            blocks = (
+                db.query(models.TimeBlock)
+                .filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                )
+                .order_by(models.TimeBlock.start_time.asc())
+                .all()
+            )
+
+            if blocks:
+                total_blocks = len(blocks)
+                done_blocks = [b for b in blocks if b.is_completed]
+                missed_blocks = [b for b in blocks if b.is_missed]
+                pending_blocks = [b for b in blocks if not b.is_completed and not b.is_missed]
+
+                lines.append(f"🗓 <b>Timetable Blocks</b> ({len(done_blocks)}/{total_blocks} done)")
+                for b in blocks:
+                    if b.is_completed:
+                        icon = "✅"
+                    elif b.is_missed:
+                        icon = "❌"
+                    else:
+                        icon = "⏳"
+                    lines.append(f"  {icon} {b.start_time}–{b.end_time}  {b.title}")
+                lines.append("")
+
+            # ── Tasks ─────────────────────────────────────────────────────────
+            all_tasks = (
+                db.query(models.Task)
+                .join(models.Goal, models.Task.goal_id == models.Goal.id)
+                .filter(
+                    models.Goal.person_id == person.id,
+                    models.Goal.deleted == False,
+                    not_deleted,
+                    or_(
+                        models.Task.due_date == today,
+                        models.Task.is_recurring == True,
+                        models.Task.task_type == "daily",
+                    ),
+                )
+                .all()
+            )
+
+            if all_tasks:
+                recurring_done_today = set(
+                    row.task_id
+                    for row in db.query(models.ProgressLogTask).filter(
+                        models.ProgressLogTask.log_date == today,
+                        models.ProgressLogTask.task_id.in_([t.id for t in all_tasks]),
+                    ).all()
+                )
+
+                def task_done(t) -> bool:
+                    return t.id in recurring_done_today if t.is_recurring else t.completed
+
+                done_tasks = [t for t in all_tasks if task_done(t)]
+                lines.append(f"✅ <b>Tasks</b> ({len(done_tasks)}/{len(all_tasks)} done)")
+                for t in all_tasks:
+                    icon = "✅" if task_done(t) else "❌"
+                    lines.append(f"  {icon} {t.name}")
+                lines.append("")
+
+            if not blocks and not all_tasks:
+                lines.append("Nothing scheduled for today.")
+            else:
+                # Overall completion rate
+                total = len(blocks) + len(all_tasks) if all_tasks else len(blocks)
+                completed = (
+                    len([b for b in blocks if b.is_completed]) +
+                    (len([t for t in all_tasks if task_done(t)]) if all_tasks else 0)
+                )
+                pct = round(completed / total * 100) if total else 0
+                filled = round(pct / 10)
+                bar = "█" * filled + "░" * (10 - filled)
+                lines.append(f"📊 Overall: {completed}/{total} ({pct}%)")
+                lines.append(f"[{bar}]")
+
+            if send_message("\n".join(lines), chat_id=chat_id):
+                sent += 1
+
+        logger.info("send_daily_summary: sent to %d users", sent)
+        return {"sent": sent}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("send_daily_summary failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60 * 5)
+    finally:
+        db.close()
