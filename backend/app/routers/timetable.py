@@ -54,12 +54,16 @@ def get_timetable_stats(
             return int(h) * 60 + int(m)
         return max(0, to_min(b.end_time) - to_min(b.start_time)) / 60
 
+    def is_not_finished(b) -> bool:
+        """A block is 'not finished' if it's in the past and not completed."""
+        return b.date < today and not b.is_completed
+
     total_blocks = len(blocks)
     completed_blocks = sum(1 for b in blocks if b.is_completed)
-    missed_blocks = sum(1 for b in blocks if b.is_missed)
+    not_finished_blocks = sum(1 for b in blocks if is_not_finished(b))
     total_hours = sum(duration_hours(b) for b in blocks)
     completed_hours = sum(duration_hours(b) for b in blocks if b.is_completed)
-    missed_hours = sum(duration_hours(b) for b in blocks if b.is_missed)
+    not_finished_hours = sum(duration_hours(b) for b in blocks if is_not_finished(b))
 
     # By category
     cat_data = defaultdict(lambda: {"count": 0, "hours": 0.0, "completed": 0, "missed": 0})
@@ -69,7 +73,7 @@ def get_timetable_stats(
         cat_data[cat]["hours"] += duration_hours(b)
         if b.is_completed:
             cat_data[cat]["completed"] += 1
-        if b.is_missed:
+        if is_not_finished(b):
             cat_data[cat]["missed"] += 1
     by_category = [{"category": k, **v} for k, v in sorted(cat_data.items(), key=lambda x: -x[1]["hours"])]
 
@@ -82,7 +86,7 @@ def get_timetable_stats(
         wd_data[wd]["hours"] += duration_hours(b)
         if b.is_completed:
             wd_data[wd]["completed"] += 1
-        if b.is_missed:
+        if is_not_finished(b):
             wd_data[wd]["missed"] += 1
     by_weekday = [{"weekday": i, "name": DAYS[i], **wd_data[i]} for i in range(7)]
 
@@ -101,7 +105,7 @@ def get_timetable_stats(
         day_data[ds]["hours"] += duration_hours(b)
         if b.is_completed:
             day_data[ds]["completed"] += 1
-        if b.is_missed:
+        if is_not_finished(b):
             day_data[ds]["missed"] += 1
     daily_summary = [{"date": d, **v} for d, v in sorted(day_data.items())]
 
@@ -120,12 +124,12 @@ def get_timetable_stats(
         "weeks": weeks,
         "total_blocks": total_blocks,
         "completed_blocks": completed_blocks,
-        "missed_blocks": missed_blocks,
+        "missed_blocks": not_finished_blocks,
         "completion_rate": round(completed_blocks / total_blocks * 100, 1) if total_blocks else 0,
-        "missed_rate": round(missed_blocks / total_blocks * 100, 1) if total_blocks else 0,
+        "missed_rate": round(not_finished_blocks / total_blocks * 100, 1) if total_blocks else 0,
         "total_hours": round(total_hours, 1),
         "completed_hours": round(completed_hours, 1),
-        "missed_hours": round(missed_hours, 1),
+        "missed_hours": round(not_finished_hours, 1),
         "recurring_count": sum(1 for b in blocks if b.is_recurring),
         "streak_days": streak,
         "by_category": by_category,

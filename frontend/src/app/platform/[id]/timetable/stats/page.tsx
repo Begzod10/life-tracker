@@ -109,7 +109,7 @@ export default function TimetableStatsPage() {
                                 value={`${stats.completion_rate}%`}
                                 sub={`${stats.completed_blocks} of ${stats.total_blocks} blocks`}
                                 color={stats.completion_rate >= 70 ? 'text-emerald-400' : stats.completion_rate >= 40 ? 'text-amber-400' : 'text-red-400'} />
-                            <StatCard icon={<XCircle className="w-3.5 h-3.5" />} label="Missed Blocks"
+                            <StatCard icon={<XCircle className="w-3.5 h-3.5" />} label="Not Finished"
                                 value={stats.missed_blocks}
                                 sub={`${stats.missed_hours}h · ${stats.missed_rate}% of total`}
                                 color={stats.missed_blocks === 0 ? 'text-emerald-400' : stats.missed_rate <= 20 ? 'text-amber-400' : 'text-red-400'} />
