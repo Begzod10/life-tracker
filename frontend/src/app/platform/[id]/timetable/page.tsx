@@ -429,16 +429,23 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
     const isShort = height < 52
     const isMissed = block.is_missed
 
+    // Block is locked once its end_time has passed today, or if it's from a past day
+    const now = new Date()
+    const todayStr = now.toISOString().slice(0, 10)
+    const nowMins = now.getHours() * 60 + now.getMinutes()
+    const isPast = block.date < todayStr || (block.date === todayStr && timeToMinutes(block.end_time) <= nowMins)
+
     return (
         <motion.div layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
             style={{ position: 'absolute', top, left: 0, right: 0, height, borderLeftColor: isMissed ? '#ef4444' : (block.color ?? cat.color) }}
-            className={`group rounded-xl border border-l-[3px] px-2.5 py-2 cursor-pointer select-none overflow-hidden backdrop-blur-sm transition-all duration-150 hover:brightness-110
+            className={`group rounded-xl border border-l-[3px] px-2.5 py-2 select-none overflow-hidden backdrop-blur-sm transition-all duration-150
+                ${isPast ? 'cursor-default' : 'cursor-pointer hover:brightness-110'}
                 ${block.is_completed
                     ? 'bg-white/4 border-white/8 opacity-70'
                     : isMissed
                         ? 'bg-red-500/10 border-red-500/30'
                         : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
-            onClick={() => onEdit(block)}>
+            onClick={() => { if (!isPast) onEdit(block) }}>
             <div className="flex items-start justify-between gap-1 h-full">
                 <div className="flex-1 min-w-0">
                     <p className={`font-semibold truncate leading-tight ${isShort ? 'text-xs' : 'text-sm'} ${block.is_completed ? 'line-through text-white/35' : isMissed ? 'text-red-300' : 'text-white'}`}>
@@ -457,14 +464,18 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
                         <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>
                     )}
                 </div>
-                <div className={`flex gap-0.5 transition-opacity shrink-0 ${block.is_completed || isMissed ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                <div className={`flex gap-0.5 transition-opacity shrink-0 ${isPast ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {/* Toggle (mark done) always allowed */}
                     <button onClick={e => { e.stopPropagation(); onToggle(block) }}
                         className={`p-1 rounded-lg transition-colors ${block.is_completed ? 'text-emerald-400 bg-emerald-500/15' : 'text-white/35 hover:text-emerald-400 hover:bg-emerald-500/15'}`}>
                         <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={e => { e.stopPropagation(); onDelete(block) }} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Delete and edit locked for past blocks */}
+                    {!isPast && (
+                        <button onClick={e => { e.stopPropagation(); onDelete(block) }} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
             </div>
         </motion.div>
