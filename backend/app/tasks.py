@@ -381,8 +381,24 @@ def send_evening_checkup(self):
                     ).all()
                 )
 
-                # A recurring task counts as "done today" if it has a log entry
+                # Check if any linked timetable block was completed today
+                block_done_today = set(
+                    b.task_id
+                    for b in db.query(models.TimeBlock).filter(
+                        models.TimeBlock.date == today,
+                        models.TimeBlock.deleted == False,
+                        models.TimeBlock.is_completed == True,
+                        models.TimeBlock.task_id.in_([t.id for t in all_today]),
+                    ).all()
+                    if b.task_id is not None
+                )
+
+                # A task counts as "done today" if:
+                # - non-recurring: task.completed OR its timetable block was checked off
+                # - recurring: has a ProgressLogTask entry OR its timetable block was checked off
                 def task_done(t) -> bool:
+                    if t.id in block_done_today:
+                        return True
                     if t.is_recurring:
                         return t.id in recurring_done_today
                     return t.completed
