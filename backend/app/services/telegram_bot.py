@@ -370,8 +370,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif data.startswith("block_skip_"):
             block_id = int(data.split("_")[2])
             block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
-            name = block.title if block else "block"
-            await query.edit_message_text(f"👌 OK, skipped: *{name}*", parse_mode="Markdown")
+            if block:
+                block.is_missed = True
+                db.commit()
+                name = block.title
+            else:
+                name = "block"
+            await query.edit_message_text(f"❌ Marked as missed: *{name}*", parse_mode="Markdown")
 
     finally:
         db.close()
