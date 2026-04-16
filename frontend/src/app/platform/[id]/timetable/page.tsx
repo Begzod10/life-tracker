@@ -457,12 +457,12 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
                         <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>
                     )}
                 </div>
-                <div className={`flex gap-0.5 transition-opacity shrink-0 ${block.is_completed || isMissed ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => onToggle(block)}
+                <div className={`flex gap-0.5 transition-opacity shrink-0 ${block.is_completed || isMissed ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <button onClick={e => { e.stopPropagation(); onToggle(block) }}
                         className={`p-1 rounded-lg transition-colors ${block.is_completed ? 'text-emerald-400 bg-emerald-500/15' : 'text-white/35 hover:text-emerald-400 hover:bg-emerald-500/15'}`}>
                         <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => onDelete(block)} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
+                    <button onClick={e => { e.stopPropagation(); onDelete(block) }} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
