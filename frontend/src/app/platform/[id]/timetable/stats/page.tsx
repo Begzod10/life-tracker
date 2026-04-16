@@ -48,7 +48,7 @@ function LineChart({
     const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
 
     const dayRange: { date: string; completed: number; missed: number }[] = []
-    for (let i = weeks * 7; i >= 1; i--) {
+    for (let i = weeks * 7; i >= 0; i--) {
         const d = new Date(todayMs); d.setDate(todayMs.getDate() - i)
         const ds = fmtDate(d)
         const found = data.find(x => x.date === ds)
