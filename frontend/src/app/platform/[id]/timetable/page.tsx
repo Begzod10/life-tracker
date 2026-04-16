@@ -434,7 +434,7 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
             style={{ position: 'absolute', top, left: 0, right: 0, height, borderLeftColor: isMissed ? '#ef4444' : (block.color ?? cat.color) }}
             className={`group rounded-xl border border-l-[3px] px-2.5 py-2 cursor-pointer select-none overflow-hidden backdrop-blur-sm transition-all duration-150 hover:brightness-110
                 ${block.is_completed
-                    ? 'bg-white/4 border-white/8 opacity-55'
+                    ? 'bg-white/4 border-white/8 opacity-70'
                     : isMissed
                         ? 'bg-red-500/10 border-red-500/30'
                         : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
@@ -457,7 +457,7 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
                         <div className="flex items-center gap-1 mt-0.5"><RefreshCw className="w-2.5 h-2.5 text-emerald-400 shrink-0" /><p className="text-xs text-emerald-400">recurring</p></div>
                     )}
                 </div>
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.stopPropagation()}>
+                <div className={`flex gap-0.5 transition-opacity shrink-0 ${block.is_completed || isMissed ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} onClick={e => e.stopPropagation()}>
                     <button onClick={() => onToggle(block)}
                         className={`p-1 rounded-lg transition-colors ${block.is_completed ? 'text-emerald-400 bg-emerald-500/15' : 'text-white/35 hover:text-emerald-400 hover:bg-emerald-500/15'}`}>
                         <Check className="w-3.5 h-3.5" />
