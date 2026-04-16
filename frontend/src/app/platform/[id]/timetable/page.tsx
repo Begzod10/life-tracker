@@ -88,7 +88,7 @@ function getRepeatDates(days: number[], weeks: number, fromDate: string, skipPas
 }
 
 // ─── TaskPicker ───────────────────────────────────────────────────────────────
-type TaskOption = { id: number; name: string; completed: boolean; priority: string; estimated_duration?: number }
+type TaskOption = { id: number; name: string; completed: boolean; priority: string; estimated_duration?: number; due_date?: string }
 
 function TaskPicker({ personId, value, onChange }: {
     personId: string; value?: number
@@ -655,6 +655,65 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
     )
 }
 
+// ─── Suggestions Banner ───────────────────────────────────────────────────────
+function SuggestionsBanner({
+    tasks,
+    blocks,
+    currentDay,
+    onSchedule,
+}: {
+    tasks: TaskOption[]
+    blocks: TimeBlock[]
+    currentDay: string
+    onSchedule: (task: TaskOption) => void
+}) {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + (6 - today.getDay()))
+    const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
+    const weekEndStr = fmtDate(weekEnd)
+
+    const scheduledTaskIds = new Set(blocks.map(b => b.task_id).filter(Boolean))
+
+    const suggestions = tasks.filter(t =>
+        !t.completed &&
+        !scheduledTaskIds.has(t.id) &&
+        t.due_date &&
+        t.due_date <= weekEndStr
+    ).slice(0, 5)
+
+    if (suggestions.length === 0) return null
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 mb-5"
+        >
+            <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-sm font-semibold text-amber-300">
+                    {suggestions.length} task{suggestions.length !== 1 ? 's' : ''} due this week — not yet scheduled
+                </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {suggestions.map(task => (
+                    <button
+                        key={task.id}
+                        onClick={() => onSchedule(task)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs hover:bg-amber-500/20 transition-all"
+                    >
+                        <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                        {task.name}
+                        {task.due_date && (
+                            <span className="text-amber-400/60 ml-0.5">· {task.due_date}</span>
+                        )}
+                    </button>
+                ))}
+            </div>
+        </motion.div>
+    )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TimetablePage() {
     const params   = useParams()
@@ -722,6 +781,15 @@ export default function TimetablePage() {
     const isTodayDay = isToday(parsedDay)
     const [preStart, preEnd] = (clickedTime ?? '__').split('__')
 
+    const handleSuggestTask = useCallback((task: TaskOption) => {
+        // Pre-fill form with next free 1h slot starting at 09:00
+        const nowMins = new Date().getHours() * 60 + new Date().getMinutes()
+        const startMins = isTodayDay ? Math.max(9 * 60, Math.ceil(nowMins / 60) * 60) : 9 * 60
+        const end = Math.min(startMins + (task.estimated_duration ?? 60), HOUR_END * 60)
+        setClickedTime(minutesToTime(startMins) + '__' + minutesToTime(end))
+        setIsCreateOpen(true)
+    }, [isTodayDay])
+
     return (
         <div className="min-h-screen bg-[#09090f] text-white">
             {/* Top gradient glow */}
@@ -770,6 +838,14 @@ export default function TimetablePage() {
                         <WeekStrip currentDay={currentDay} onSelect={setCurrentDay} />
                     </div>
                 </div>
+
+                {/* ── Suggestions Banner ── */}
+                <SuggestionsBanner
+                    tasks={tasks as TaskOption[]}
+                    blocks={blocks}
+                    currentDay={currentDay}
+                    onSchedule={handleSuggestTask}
+                />
 
                 {/* ── Body ── */}
                 <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">

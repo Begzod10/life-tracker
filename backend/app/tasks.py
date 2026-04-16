@@ -737,3 +737,355 @@ def generate_daily_conclusion(self):
         raise self.retry(exc=exc, countdown=60 * 5)
     finally:
         db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Weekly Review (Sunday 20:00 Tashkent = 15:00 UTC)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.send_weekly_review", bind=True, max_retries=2)
+def send_weekly_review(self):
+    """Sunday 20:00 Tashkent — weekly summary: goal progress, task ratio, top category, AI tip."""
+    if not is_configured():
+        return {"skipped": True}
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        week_start = today - timedelta(days=today.weekday())  # Monday
+        not_deleted_task = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+
+        for person in persons:
+            chat_id = person.telegram_chat_id
+            if not chat_id:
+                from app.config import settings as cfg
+                chat_id = cfg.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+
+            # Goals summary
+            goals = db.query(models.Goal).filter(
+                models.Goal.person_id == person.id,
+                models.Goal.deleted == False,
+                models.Goal.status == "active",
+            ).all()
+
+            # This week's blocks
+            blocks = db.query(models.TimeBlock).filter(
+                models.TimeBlock.person_id == person.id,
+                models.TimeBlock.date >= week_start,
+                models.TimeBlock.date <= today,
+                models.TimeBlock.deleted == False,
+            ).all()
+
+            total_b = len(blocks)
+            done_b  = sum(1 for b in blocks if b.is_completed)
+            missed_b = sum(1 for b in blocks if b.date < today and not b.is_completed)
+
+            # Category hours
+            from collections import defaultdict as _dd
+            cat_hours = _dd(float)
+            for b in blocks:
+                h, m = b.start_time.split(":"); eh, em = b.end_time.split(":")
+                cat_hours[b.category or "other"] += max(0, (int(eh)*60+int(em) - int(h)*60-int(m))) / 60
+            top_cat = max(cat_hours, key=cat_hours.get) if cat_hours else "—"
+
+            # This week's tasks
+            all_tasks = (
+                db.query(models.Task)
+                .join(models.Goal, models.Task.goal_id == models.Goal.id)
+                .filter(
+                    models.Goal.person_id == person.id,
+                    models.Goal.deleted == False,
+                    not_deleted_task,
+                    or_(
+                        models.Task.due_date >= week_start,
+                        models.Task.is_recurring == True,
+                        models.Task.task_type == "daily",
+                    ),
+                ).all()
+            )
+            recurring_done = set(
+                r.task_id for r in db.query(models.ProgressLogTask).filter(
+                    models.ProgressLogTask.log_date >= week_start,
+                    models.ProgressLogTask.task_id.in_([t.id for t in all_tasks]),
+                ).all()
+            )
+            def tdone(t):
+                return t.id in recurring_done if t.is_recurring else t.completed
+            done_t = sum(1 for t in all_tasks if tdone(t))
+
+            lines = [
+                f"📊 <b>Weekly Review — {week_start.strftime('%b %d')} to {today.strftime('%b %d')}</b>",
+                "",
+                f"🗓 <b>Timetable:</b> {done_b}/{total_b} blocks done"
+                + (f", {missed_b} missed" if missed_b else ""),
+                f"✅ <b>Tasks:</b> {done_t}/{len(all_tasks)} completed",
+                f"💼 <b>Top category:</b> {top_cat.capitalize()} ({cat_hours.get(top_cat, 0):.1f}h)",
+                "",
+            ]
+
+            if goals:
+                lines.append("🎯 <b>Goals progress:</b>")
+                for g in goals[:5]:
+                    bar_filled = round(g.percentage / 10)
+                    bar = "█" * bar_filled + "░" * (10 - bar_filled)
+                    lines.append(f"  • {g.name}: {g.percentage:.0f}% [{bar}]")
+                lines.append("")
+
+            # AI tip via Groq
+            from app.config import settings as cfg2
+            if cfg2.GROQ_API_KEY and (total_b > 0 or all_tasks):
+                prompt = (
+                    f"User's week: {done_b}/{total_b} timetable blocks done, "
+                    f"{done_t}/{len(all_tasks)} tasks completed, "
+                    f"top category: {top_cat}. "
+                    f"Give ONE specific, actionable improvement tip for next week in 1-2 sentences. Be direct."
+                )
+                try:
+                    tip = _call_groq(prompt)
+                    if tip:
+                        lines += ["💡 <b>AI tip for next week:</b>", tip, ""]
+                except Exception:
+                    pass
+
+            completion_pct = round(done_b / total_b * 100) if total_b else 0
+            if completion_pct == 100:
+                lines.append("🏆 Perfect week! Outstanding!")
+            elif completion_pct >= 70:
+                lines.append("🌟 Great week! Keep the momentum.")
+            else:
+                lines.append("💪 New week, new chance. You've got this!")
+
+            if send_message("\n".join(lines), chat_id=chat_id):
+                sent += 1
+
+        logger.info("send_weekly_review: sent to %d users", sent)
+        return {"sent": sent}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("send_weekly_review failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60 * 5)
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. Carry-over missed recurring tasks → next-day block (runs at 00:10 UTC)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.carryover_missed_tasks", bind=True, max_retries=2)
+def carryover_missed_tasks(self):
+    """
+    00:10 UTC daily — for each recurring task that had no completion log yesterday,
+    create a timetable block today as a reminder (if one doesn't already exist).
+    """
+    db = SessionLocal()
+    created = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        yesterday = today - timedelta(days=1)
+
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+        for person in persons:
+            recurring_tasks = (
+                db.query(models.Task)
+                .join(models.Goal, models.Task.goal_id == models.Goal.id)
+                .filter(
+                    models.Goal.person_id == person.id,
+                    models.Goal.deleted == False,
+                    models.Task.deleted == False,
+                    models.Task.is_recurring == True,
+                )
+                .all()
+            )
+
+            done_yesterday = set(
+                r.task_id for r in db.query(models.ProgressLogTask).filter(
+                    models.ProgressLogTask.log_date == yesterday,
+                    models.ProgressLogTask.task_id.in_([t.id for t in recurring_tasks]),
+                ).all()
+            )
+
+            for task in recurring_tasks:
+                if task.id in done_yesterday:
+                    continue  # completed yesterday, no carry-over needed
+
+                # Check if a block already exists for today linked to this task
+                existing = db.query(models.TimeBlock).filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.task_id == task.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                ).first()
+                if existing:
+                    continue
+
+                # Create a carry-over block (default 08:00, duration from task or 30 min)
+                dur = task.estimated_duration or 30
+                start = "08:00"
+                eh = 8 + dur // 60; em = dur % 60
+                end = f"{eh:02d}:{em:02d}"
+
+                block = models.TimeBlock(
+                    person_id=person.id,
+                    title=f"↩ {task.name}",
+                    date=today,
+                    start_time=start,
+                    end_time=end,
+                    category="work",
+                    task_id=task.id,
+                    is_recurring=False,
+                )
+                db.add(block)
+                created += 1
+
+        db.commit()
+        logger.info("carryover_missed_tasks: created %d carry-over blocks", created)
+        return {"created": created}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("carryover_missed_tasks failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Goal deadline warnings (weekly, Monday 08:00 Tashkent = 03:00 UTC)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.goal_deadline_warnings", bind=True, max_retries=2)
+def goal_deadline_warnings(self):
+    """
+    Monday 08:00 Tashkent — warn if a goal's deadline is within 14 days and progress < 50%.
+    """
+    if not is_configured():
+        return {"skipped": True}
+
+    db = SessionLocal()
+    warned = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        deadline_threshold = today + timedelta(days=14)
+
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+        for person in persons:
+            chat_id = person.telegram_chat_id
+            if not chat_id:
+                from app.config import settings as cfg
+                chat_id = cfg.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+
+            at_risk = db.query(models.Goal).filter(
+                models.Goal.person_id == person.id,
+                models.Goal.deleted == False,
+                models.Goal.status == "active",
+                models.Goal.target_date <= deadline_threshold,
+                models.Goal.target_date >= today,
+                models.Goal._stored_percentage < 50,
+            ).all()
+
+            for goal in at_risk:
+                days_left = (goal.target_date - today).days
+                msg = (
+                    f"⚠️ <b>Goal deadline approaching!</b>\n\n"
+                    f"<b>{goal.name}</b>\n"
+                    f"Progress: {goal.percentage:.0f}% — only {days_left} days left!\n\n"
+                    f"You need to accelerate to hit this goal. "
+                    f"Consider scheduling more blocks this week."
+                )
+                if send_message(msg, chat_id=chat_id):
+                    warned += 1
+
+        logger.info("goal_deadline_warnings: warned %d goals", warned)
+        return {"warned": warned}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("goal_deadline_warnings failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Auto-trigger milestone at 25 / 50 / 75 / 100 %
+# ─────────────────────────────────────────────────────────────────────────────
+
+MILESTONE_THRESHOLDS = [25, 50, 75, 100]
+
+def check_and_trigger_milestones(db, goal: "models.Goal") -> None:
+    """
+    Called whenever a goal's percentage changes.
+    Creates auto-milestones at 25/50/75/100% if not already achieved,
+    and sends a Telegram congratulation.
+    """
+    pct = goal.percentage
+    for threshold in MILESTONE_THRESHOLDS:
+        if pct < threshold:
+            continue
+
+        # Check if we already have an auto-milestone for this threshold
+        existing = db.query(models.Milestone).filter(
+            models.Milestone.goal_id == goal.id,
+            models.Milestone.completion_percentage == float(threshold),
+            models.Milestone.achieved == True,
+        ).first()
+        if existing:
+            continue
+
+        # Mark any existing unachieved milestone at this threshold as achieved
+        pending = db.query(models.Milestone).filter(
+            models.Milestone.goal_id == goal.id,
+            models.Milestone.completion_percentage == float(threshold),
+            models.Milestone.achieved == False,
+            models.Milestone.deleted == False,
+        ).first()
+
+        if pending:
+            pending.achieved = True
+            pending.achieved_at = datetime.utcnow()
+        else:
+            # Create auto-milestone
+            labels = {25: "Quarter way", 50: "Halfway", 75: "Three quarters", 100: "Completed!"}
+            new_ms = models.Milestone(
+                goal_id=goal.id,
+                name=f"{labels[threshold]}: {goal.name}",
+                completion_percentage=float(threshold),
+                achieved=True,
+                achieved_at=datetime.utcnow(),
+            )
+            db.add(new_ms)
+
+        db.flush()
+
+        # Send Telegram congratulation
+        if not is_configured():
+            continue
+        person = goal.person
+        chat_id = getattr(person, "telegram_chat_id", None)
+        if not chat_id:
+            from app.config import settings as cfg
+            chat_id = cfg.TELEGRAM_CHAT_ID
+        if not chat_id:
+            continue
+
+        emojis = {25: "🌱", 50: "⚡", 75: "🔥", 100: "🏆"}
+        msg = (
+            f"{emojis[threshold]} <b>Milestone reached!</b>\n\n"
+            f"Goal: <b>{goal.name}</b>\n"
+            f"Progress: <b>{threshold}%</b> — {labels[threshold]}!\n\n"
+            + ("🎉 You completed this goal! Amazing work!" if threshold == 100
+               else "Keep going, you're making great progress!")
+        )
+        try:
+            send_message(msg, chat_id=chat_id)
+        except Exception:
+            pass

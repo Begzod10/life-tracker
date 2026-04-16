@@ -526,6 +526,20 @@ class TimeBlock(Base):
     task = relationship("Task", backref="time_blocks")
 
 
+class CategoryBudget(Base):
+    """Weekly hour target per timetable category."""
+    __tablename__ = "category_budgets"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    person_id           = Column(Integer, ForeignKey("person.id"), nullable=False)
+    category            = Column(String(50), nullable=False)   # work, learning, health …
+    weekly_hours_target = Column(Float, nullable=False, default=0.0)
+    created_at          = Column(DateTime, default=datetime.utcnow)
+    updated_at          = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    person = relationship("Person")
+
+
 class DailyConclusion(Base):
     """AI-generated daily conclusion for a person's day."""
     __tablename__ = "daily_conclusions"

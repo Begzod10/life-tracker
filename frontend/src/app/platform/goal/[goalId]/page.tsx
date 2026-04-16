@@ -18,7 +18,8 @@ import {
     Activity,
     CheckSquare,
     Plus,
-    Flag
+    Flag,
+    CalendarPlus
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 
 import { useGoalProfile } from '@/lib/hooks/use-goals'
-import { useTasksByGoal, useTaskCreate, useRecurringCompletions } from '@/lib/hooks/use-tasks'
+import { useTasksByGoal, useTaskCreate, useTaskUpdate, useRecurringCompletions } from '@/lib/hooks/use-tasks'
 import { useProgressLogsByGoal, useProgressLogCreate, useProgressLogUpdate, useProgressLogDelete } from '@/lib/hooks/use-progress-log'
 import { useUser } from '@/lib/hooks/use-auth'
 import { TaskList } from '@/components/features/tasks/tasks-view'
@@ -37,6 +38,9 @@ import { TaskForm } from '@/components/modals/forms/task-form'
 import { ProgressLogForm } from '@/components/modals/forms/progress-log-form'
 import { MilestoneForm } from '@/components/modals/forms/milestone-form'
 import { useMilestonesByGoal, useMilestoneDelete } from '@/lib/hooks/use-milestones'
+import { useHttp } from '@/lib/hooks/use-http'
+import { API_ENDPOINTS } from '@/lib/api/endpoints'
+import { useQueryClient } from '@tanstack/react-query'
 import { ProgressLog, Milestone } from '@/types'
 import { Pencil, Trash } from 'lucide-react'
 
@@ -392,7 +396,11 @@ export default function GoalPage() {
 
     // Task State
     const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false)
+    const [isEditTaskModalOpen, setIsEditTaskModalOpen] = useState(false)
+    const [editingTask, setEditingTask] = useState<any | null>(null)
+    const [isScheduling, setIsScheduling] = useState(false)
     const createTask = useTaskCreate()
+    const updateTask = useTaskUpdate()
 
     // Progress Log State
     const [isLogModalOpen, setIsLogModalOpen] = useState(false)
@@ -423,8 +431,24 @@ export default function GoalPage() {
     const updateLog = useProgressLogUpdate()
     const deleteLog = useProgressLogDelete()
     const deleteMilestone = useMilestoneDelete()
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
 
     const isLoaded = !isLoading && goalData
+
+    const handleScheduleThisWeek = async () => {
+        setIsScheduling(true)
+        try {
+            const result = await request(API_ENDPOINTS.TIMETABLE.AUTO_SCHEDULE(id as string), { method: 'POST' })
+            const count = Array.isArray(result) ? result.length : 0
+            queryClient.invalidateQueries({ queryKey: ['timetable'] })
+            alert(count > 0 ? `Scheduled ${count} block${count !== 1 ? 's' : ''} this week!` : 'No free slots found or all tasks already scheduled.')
+        } catch {
+            alert('Failed to auto-schedule. Please try again.')
+        } finally {
+            setIsScheduling(false)
+        }
+    }
 
     const handleEditMilestone = (milestone: Milestone) => {
         setSelectedMilestone(milestone)
@@ -1139,15 +1163,27 @@ export default function GoalPage() {
                                             {tasks?.length || 0}
                                         </Badge>
                                     </div>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => setIsAddTaskModalOpen(true)}
-                                        className="h-7 px-2 text-xs gap-1"
-                                        style={{ backgroundColor: 'oklch(0.55 0.18 250)', color: 'white' }}
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                        Add Task
-                                    </Button>
+                                    <div className="flex items-center gap-1.5">
+                                        <Button
+                                            size="sm"
+                                            onClick={handleScheduleThisWeek}
+                                            disabled={isScheduling}
+                                            className="h-7 px-2 text-xs gap-1"
+                                            style={{ backgroundColor: 'oklch(0.45 0.15 150)', color: 'white' }}
+                                        >
+                                            <CalendarPlus className="w-3 h-3" />
+                                            {isScheduling ? 'Scheduling...' : 'Schedule week'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setIsAddTaskModalOpen(true)}
+                                            className="h-7 px-2 text-xs gap-1"
+                                            style={{ backgroundColor: 'oklch(0.55 0.18 250)', color: 'white' }}
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            Add Task
+                                        </Button>
+                                    </div>
                                 </h2>
 
                                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -1159,14 +1195,14 @@ export default function GoalPage() {
                                         tasks.map((task: any) => (
                                             <div
                                                 key={task.id}
-                                                onClick={() => router.push(`/platform/task/${task.id}`)}
-                                                className="group p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all cursor-pointer flex items-center gap-3"
+                                                className="group p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all flex items-center gap-3"
                                             >
                                                 <div
-                                                    className={`p-1.5 rounded-md ${task.completed
+                                                    className={`p-1.5 rounded-md cursor-pointer ${task.completed
                                                         ? 'bg-green-500/10 text-green-500'
                                                         : 'bg-white/5 text-gray-400 group-hover:text-white'
                                                         }`}
+                                                    onClick={() => router.push(`/platform/task/${task.id}`)}
                                                 >
                                                     {task.completed ? (
                                                         <CheckCircle2 className="w-4 h-4" />
@@ -1174,7 +1210,10 @@ export default function GoalPage() {
                                                         <CheckSquare className="w-4 h-4" />
                                                     )}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
+                                                <div
+                                                    className="flex-1 min-w-0 cursor-pointer"
+                                                    onClick={() => router.push(`/platform/task/${task.id}`)}
+                                                >
                                                     <p className={`text-sm font-medium truncate ${task.completed ? 'text-gray-500 line-through' : 'text-white'
                                                         }`}>
                                                         {task.name}
@@ -1192,6 +1231,12 @@ export default function GoalPage() {
                                                 >
                                                     {task.priority}
                                                 </Badge>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setEditingTask(task); setIsEditTaskModalOpen(true) }}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                                                >
+                                                    <Pencil className="w-3.5 h-3.5" />
+                                                </button>
                                             </div>
                                         ))
                                     ) : (
@@ -1223,6 +1268,32 @@ export default function GoalPage() {
                         onCancel={() => setIsAddTaskModalOpen(false)}
                         initialData={{ goal_id: Number(id) }}
                     />
+                </BaseModal>
+
+                {/* Edit Task Modal */}
+                <BaseModal
+                    isOpen={isEditTaskModalOpen}
+                    onClose={() => { setIsEditTaskModalOpen(false); setEditingTask(null) }}
+                    title="Edit Task"
+                    size="lg"
+                >
+                    {editingTask && (
+                        <TaskForm
+                            onSubmit={(data: any) => {
+                                updateTask.mutate(
+                                    { id: editingTask.id, data },
+                                    {
+                                        onSuccess: () => {
+                                            setIsEditTaskModalOpen(false)
+                                            setEditingTask(null)
+                                        }
+                                    }
+                                )
+                            }}
+                            onCancel={() => { setIsEditTaskModalOpen(false); setEditingTask(null) }}
+                            initialData={editingTask}
+                        />
+                    )}
                 </BaseModal>
 
                 {/* Edit Modal */}

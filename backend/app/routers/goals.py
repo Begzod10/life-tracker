@@ -424,6 +424,15 @@ def recalculate_goal_progress(
         )
 
     db.refresh(goal)
+
+    # Auto-trigger milestones if thresholds crossed
+    try:
+        from app.tasks import check_and_trigger_milestones
+        check_and_trigger_milestones(db, goal)
+        db.commit()
+    except Exception:
+        pass
+
     return goal
 
 

@@ -3,8 +3,8 @@
 import { useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Clock, CheckCircle2, Flame, TrendingUp, BarChart2, Calendar, XCircle, Sparkles } from 'lucide-react'
-import { useTimetableStats, useDailyConclusions } from '@/lib/hooks/use-timetable'
+import { ArrowLeft, Clock, CheckCircle2, Flame, TrendingUp, BarChart2, Calendar, XCircle, Sparkles, Target, Pencil, Check, X, MoveRight, Trash2 } from 'lucide-react'
+import { useTimetableStats, useDailyConclusions, useCategoryBudgets, useCategoryBudgetUpsert, useCategoryBudgetDelete, useBulkReschedule } from '@/lib/hooks/use-timetable'
 import { useQueryClient } from '@tanstack/react-query'
 import { useHttp } from '@/lib/hooks/use-http'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
@@ -132,8 +132,22 @@ export default function TimetableStatsPage() {
     const [generating, setGenerating] = useState(false)
     const { data: stats, isLoading } = useTimetableStats(weeks)
     const { data: conclusions, isLoading: conclusionsLoading } = useDailyConclusions(weeks * 7)
+    const { data: budgets, isLoading: budgetsLoading } = useCategoryBudgets()
     const { request } = useHttp()
     const queryClient = useQueryClient()
+    const upsertBudget = useCategoryBudgetUpsert()
+    const deleteBudget = useCategoryBudgetDelete()
+    const bulkReschedule = useBulkReschedule()
+
+    // Budget editing state
+    const [editingBudget, setEditingBudget] = useState<string | null>(null)
+    const [budgetInput, setBudgetInput] = useState('')
+    const [newBudgetCategory, setNewBudgetCategory] = useState('')
+    const [newBudgetHours, setNewBudgetHours] = useState('')
+
+    // Bulk reschedule state
+    const [rescheduleFrom, setRescheduleFrom] = useState('')
+    const [rescheduleTo, setRescheduleTo] = useState('')
 
     const generateConclusion = useCallback(async () => {
         setGenerating(true)
@@ -147,6 +161,21 @@ export default function TimetableStatsPage() {
             setGenerating(false)
         }
     }, [request, queryClient])
+
+    const handleBulkReschedule = useCallback(() => {
+        if (!rescheduleFrom || !rescheduleTo) return
+        bulkReschedule.mutate(
+            { from_date: rescheduleFrom, to_date: rescheduleTo },
+            {
+                onSuccess: (data: any) => {
+                    alert(`Moved ${data.moved} block${data.moved !== 1 ? 's' : ''} to ${rescheduleTo}`)
+                    setRescheduleFrom('')
+                    setRescheduleTo('')
+                },
+                onError: () => alert('Failed to reschedule blocks.'),
+            }
+        )
+    }, [rescheduleFrom, rescheduleTo, bulkReschedule])
 
     const maxCatHours  = Math.max(...(stats?.by_category.map(c => c.hours) ?? [1]), 1)
     const maxWdCount   = Math.max(...(stats?.by_weekday.map(d => d.count) ?? [1]), 1)
@@ -411,6 +440,196 @@ export default function TimetableStatsPage() {
                                     })}
                                 </div>
                             )}
+                        </div>
+
+                        {/* ── Completion Rate Distribution ── */}
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" />Daily Completion Distribution
+                            </h2>
+                            {(() => {
+                                const days = stats.daily_summary.filter(d => d.total > 0)
+                                if (days.length === 0) return <p className="text-white/25 text-sm text-center py-8">No data</p>
+                                const tiers = [
+                                    { label: 'Perfect (100%)', min: 100, max: 100, color: 'bg-emerald-500', text: 'text-emerald-400' },
+                                    { label: 'Good (75–99%)', min: 75, max: 99, color: 'bg-emerald-500/50', text: 'text-emerald-300' },
+                                    { label: 'Partial (50–74%)', min: 50, max: 74, color: 'bg-amber-500/60', text: 'text-amber-300' },
+                                    { label: 'Low (25–49%)', min: 25, max: 49, color: 'bg-orange-500/50', text: 'text-orange-300' },
+                                    { label: 'Poor (<25%)', min: 0, max: 24, color: 'bg-red-500/50', text: 'text-red-300' },
+                                ]
+                                return (
+                                    <div className="space-y-3">
+                                        {tiers.map(tier => {
+                                            const count = days.filter(d => {
+                                                const pct = Math.round(d.completed / d.total * 100)
+                                                return pct >= tier.min && pct <= tier.max
+                                            }).length
+                                            const pct = Math.round(count / days.length * 100)
+                                            return (
+                                                <div key={tier.label} className="flex items-center gap-3">
+                                                    <span className={`text-xs w-36 shrink-0 ${tier.text}`}>{tier.label}</span>
+                                                    <div className="flex-1 h-5 bg-white/4 rounded-lg overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${pct}%` }}
+                                                            transition={{ duration: 0.5, ease: 'easeOut' }}
+                                                            className={`h-full rounded-lg ${tier.color}`}
+                                                        />
+                                                    </div>
+                                                    <span className="text-xs text-white/40 w-16 text-right shrink-0">{count}d · {pct}%</span>
+                                                </div>
+                                            )
+                                        })}
+                                        <p className="text-xs text-white/25 pt-2">Based on {days.length} days with blocks in the selected period</p>
+                                    </div>
+                                )
+                            })()}
+                        </div>
+
+                        {/* ── Category Time Budgets ── */}
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <div className="flex items-center justify-between mb-5">
+                                <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
+                                    <Target className="w-4 h-4" />Weekly Time Budgets
+                                </h2>
+                            </div>
+                            {budgetsLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {(budgets ?? []).map(b => {
+                                        const pct = b.weekly_hours_target > 0
+                                            ? Math.min(100, (b.actual_hours / b.weekly_hours_target) * 100)
+                                            : 0
+                                        const over = b.actual_hours > b.weekly_hours_target && b.weekly_hours_target > 0
+                                        const style = CATEGORY_COLORS[b.category] ?? CATEGORY_COLORS.other
+                                        return (
+                                            <div key={b.category} className="rounded-xl bg-white/4 p-3">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-sm font-medium capitalize ${style.text}`}>{b.category}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {editingBudget === b.category ? (
+                                                            <>
+                                                                <input
+                                                                    type="number"
+                                                                    value={budgetInput}
+                                                                    onChange={e => setBudgetInput(e.target.value)}
+                                                                    className="w-16 px-2 py-0.5 rounded bg-white/10 border border-white/20 text-xs text-white text-center"
+                                                                    min="0" step="0.5"
+                                                                    autoFocus
+                                                                />
+                                                                <span className="text-xs text-white/40">h/wk</span>
+                                                                <button onClick={() => {
+                                                                    upsertBudget.mutate({ category: b.category, weekly_hours_target: parseFloat(budgetInput) || 0 })
+                                                                    setEditingBudget(null)
+                                                                }} className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400">
+                                                                    <Check className="w-3 h-3" />
+                                                                </button>
+                                                                <button onClick={() => setEditingBudget(null)} className="p-1 rounded hover:bg-white/10 text-white/40">
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className={`text-xs ${over ? 'text-amber-400' : 'text-white/50'}`}>
+                                                                    {b.actual_hours.toFixed(1)} / {b.weekly_hours_target}h
+                                                                </span>
+                                                                <button onClick={() => { setEditingBudget(b.category); setBudgetInput(String(b.weekly_hours_target)) }}
+                                                                    className="p-1 rounded hover:bg-white/10 text-white/30 hover:text-white transition-all">
+                                                                    <Pencil className="w-3 h-3" />
+                                                                </button>
+                                                                <button onClick={() => deleteBudget.mutate(b.category)}
+                                                                    className="p-1 rounded hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all">
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="h-1.5 bg-white/6 rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${pct}%` }}
+                                                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                                                        className={`h-full rounded-full ${over ? 'bg-amber-500' : style.bar}`}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+
+                                    {/* Add new budget row */}
+                                    <div className="rounded-xl bg-white/2 border border-dashed border-white/10 p-3 flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="category"
+                                            value={newBudgetCategory}
+                                            onChange={e => setNewBudgetCategory(e.target.value)}
+                                            className="flex-1 px-2 py-1 rounded bg-white/8 border border-white/10 text-xs text-white placeholder-white/25 capitalize"
+                                        />
+                                        <input
+                                            type="number"
+                                            placeholder="hours/wk"
+                                            value={newBudgetHours}
+                                            onChange={e => setNewBudgetHours(e.target.value)}
+                                            className="w-20 px-2 py-1 rounded bg-white/8 border border-white/10 text-xs text-white placeholder-white/25 text-center"
+                                            min="0" step="0.5"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (!newBudgetCategory || !newBudgetHours) return
+                                                upsertBudget.mutate({
+                                                    category: newBudgetCategory.toLowerCase(),
+                                                    weekly_hours_target: parseFloat(newBudgetHours),
+                                                })
+                                                setNewBudgetCategory('')
+                                                setNewBudgetHours('')
+                                            }}
+                                            className="px-3 py-1 rounded bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-medium hover:bg-indigo-600/40 transition-all"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── Bulk Reschedule ── */}
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                <MoveRight className="w-4 h-4" />Bulk Reschedule
+                            </h2>
+                            <p className="text-xs text-white/35 mb-4">Move all incomplete blocks from one day to another.</p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] text-white/35 uppercase tracking-wider">From</label>
+                                    <input
+                                        type="date"
+                                        value={rescheduleFrom}
+                                        onChange={e => setRescheduleFrom(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white"
+                                    />
+                                </div>
+                                <MoveRight className="w-4 h-4 text-white/30 mt-4" />
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] text-white/35 uppercase tracking-wider">To</label>
+                                    <input
+                                        type="date"
+                                        value={rescheduleTo}
+                                        onChange={e => setRescheduleTo(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white"
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleBulkReschedule}
+                                    disabled={!rescheduleFrom || !rescheduleTo || bulkReschedule.isPending}
+                                    className="mt-4 px-4 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium hover:bg-indigo-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    {bulkReschedule.isPending ? 'Moving…' : 'Move Blocks'}
+                                </button>
+                            </div>
                         </div>
 
                         {/* ── Peak Hours ── */}

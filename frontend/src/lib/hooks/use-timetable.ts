@@ -149,3 +149,58 @@ export function useTimeBlockToggle() {
         },
     })
 }
+
+// ── Category Budgets ──────────────────────────────────────────────────────────
+
+export type CategoryBudget = {
+    id: number
+    category: string
+    weekly_hours_target: number
+    actual_hours: number
+}
+
+export function useCategoryBudgets() {
+    const { request } = useHttp()
+    return useQuery<CategoryBudget[]>({
+        queryKey: ['category-budgets'],
+        queryFn: () => request(API_ENDPOINTS.TIMETABLE.CATEGORY_BUDGETS),
+    })
+}
+
+export function useCategoryBudgetUpsert() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: ({ category, weekly_hours_target }: { category: string; weekly_hours_target: number }) =>
+            request(API_ENDPOINTS.TIMETABLE.CATEGORY_BUDGET(category), {
+                method: 'PUT',
+                body: { weekly_hours_target },
+            }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['category-budgets'] }),
+    })
+}
+
+export function useCategoryBudgetDelete() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (category: string) =>
+            request(API_ENDPOINTS.TIMETABLE.CATEGORY_BUDGET(category), { method: 'DELETE' }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['category-budgets'] }),
+    })
+}
+
+// ── Bulk Reschedule ──────────────────────────────────────────────────────────
+
+export function useBulkReschedule() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: ({ from_date, to_date }: { from_date: string; to_date: string }) =>
+            request(API_ENDPOINTS.TIMETABLE.BULK_RESCHEDULE, {
+                method: 'POST',
+                body: { from_date, to_date },
+            }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timetable'] }),
+    })
+}

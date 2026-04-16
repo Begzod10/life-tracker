@@ -307,6 +307,86 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text("📋 Sending your daily summary…")
 
 
+async def focus_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the current active timetable block and its linked task."""
+    chat_id = str(update.effective_chat.id)
+    db = get_db()
+    try:
+        person = db.query(Person).filter(Person.telegram_chat_id == chat_id).first()
+        if not person:
+            await update.message.reply_text("❌ Account not linked. Use /start to connect.")
+            return
+
+        now_tashkent = datetime.utcnow() + timedelta(hours=5)
+        today = now_tashkent.date()
+        now_str = now_tashkent.strftime("%H:%M")
+
+        # Find block active right now
+        blocks = (
+            db.query(TimeBlock)
+            .filter(
+                TimeBlock.person_id == person.id,
+                TimeBlock.date == today,
+                TimeBlock.deleted == False,
+                TimeBlock.is_completed == False,
+                TimeBlock.start_time <= now_str,
+                TimeBlock.end_time > now_str,
+            )
+            .all()
+        )
+
+        if not blocks:
+            # Find next upcoming block today
+            next_block = (
+                db.query(TimeBlock)
+                .filter(
+                    TimeBlock.person_id == person.id,
+                    TimeBlock.date == today,
+                    TimeBlock.deleted == False,
+                    TimeBlock.is_completed == False,
+                    TimeBlock.start_time > now_str,
+                )
+                .order_by(TimeBlock.start_time.asc())
+                .first()
+            )
+            if next_block:
+                await update.message.reply_text(
+                    f"⏳ No active block right now.\n\n"
+                    f"📌 *Next:* {next_block.title}\n"
+                    f"🕐 {next_block.start_time}–{next_block.end_time}",
+                    parse_mode="Markdown",
+                )
+            else:
+                await update.message.reply_text("✅ No more blocks scheduled for today!")
+            return
+
+        block = blocks[0]
+        # Calculate time remaining
+        eh, em = block.end_time.split(":")
+        nh, nm = now_str.split(":")
+        remaining = (int(eh) * 60 + int(em)) - (int(nh) * 60 + int(nm))
+
+        lines = [
+            f"🎯 *Current block:* {block.title}",
+            f"🕐 {block.start_time}–{block.end_time} ({remaining}m remaining)",
+        ]
+        if block.task:
+            lines.append(f"📋 *Linked task:* {block.task.name}")
+
+        lines += ["", "How's it going?"]
+
+        await update.message.reply_text(
+            "\n".join(lines),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Done early!", callback_data=f"block_done_{block.id}"),
+                InlineKeyboardButton("🔄 Still going", callback_data=f"block_focus_{block.id}"),
+            ]]),
+        )
+    finally:
+        db.close()
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -367,6 +447,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 name = "block"
             await query.edit_message_text(f"✅ Marked as done: *{name}*", parse_mode="Markdown")
 
+        elif data.startswith("block_focus_"):
+            await query.edit_message_text("💪 Keep going! You've got this.", parse_mode="Markdown")
+
         elif data.startswith("block_skip_"):
             block_id = int(data.split("_")[2])
             block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
@@ -416,6 +499,7 @@ class TelegramBotService:
         self._app.add_handler(CommandHandler("upcoming", upcoming_command))
         self._app.add_handler(CommandHandler("check", check_command))
         self._app.add_handler(CommandHandler("summary", summary_command))
+        self._app.add_handler(CommandHandler("focus", focus_command))
         self._app.add_handler(CallbackQueryHandler(button_callback))
 
     @property
@@ -444,6 +528,7 @@ class TelegramBotService:
         await self._app.bot.set_my_commands([
             BotCommand("tasks",    "Today's tasks"),
             BotCommand("today",    "Today's timetable blocks"),
+            BotCommand("focus",    "Current active block + progress check"),
             BotCommand("check",    "Check overdue tasks"),
             BotCommand("upcoming", "Upcoming schedule (next 3 days)"),
             BotCommand("summary",  "Daily summary — blocks & tasks"),

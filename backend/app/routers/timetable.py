@@ -276,3 +276,139 @@ def trigger_conclusion(
     task = generate_daily_conclusion.delay()
     return {"message": "Conclusion generation queued", "task_id": task.id}
 
+
+
+# ── Auto-schedule goal tasks this week ───────────────────────────────────────
+
+@router.post("/auto-schedule/{goal_id}")
+def auto_schedule_goal(
+    goal_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """
+    Find free slots this week and insert timetable blocks for unscheduled
+    tasks belonging to goal_id. Respects existing blocks (no overlaps).
+    Returns list of created blocks.
+    """
+    from datetime import datetime as dt
+
+    goal = db.query(models.Goal).filter(
+        models.Goal.id == goal_id,
+        models.Goal.person_id == current_user.id,
+        models.Goal.deleted == False,
+    ).first()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+
+    today = date.today()
+    week_end = today + timedelta(days=6)
+
+    # Tasks not yet linked to a block this week
+    tasks = [t for t in goal.tasks if not t.deleted and not t.completed]
+    if not tasks:
+        return {"created": [], "message": "No pending tasks for this goal"}
+
+    # Existing blocks this week (for overlap checking)
+    existing = db.query(models.TimeBlock).filter(
+        models.TimeBlock.person_id == current_user.id,
+        models.TimeBlock.date >= today,
+        models.TimeBlock.date <= week_end,
+        models.TimeBlock.deleted == False,
+    ).all()
+
+    def to_min(t: str) -> int:
+        h, m = t.split(":")
+        return int(h) * 60 + int(m)
+
+    def is_free(day: date, start: int, end: int) -> bool:
+        for b in existing:
+            if b.date != day:
+                continue
+            bs, be = to_min(b.start_time), to_min(b.end_time)
+            if start < be and end > bs:
+                return False
+        return True
+
+    # Try to slot each task into working hours 09:00–18:00
+    created = []
+    for task in tasks:
+        dur = task.estimated_duration or 30
+        scheduled = False
+        for offset in range(7):
+            day = today + timedelta(days=offset)
+            for hour in range(9, 18):
+                start_min = hour * 60
+                end_min = start_min + dur
+                if end_min > 18 * 60:
+                    break
+                if is_free(day, start_min, end_min):
+                    start_str = f"{start_min // 60:02d}:{start_min % 60:02d}"
+                    end_str   = f"{end_min   // 60:02d}:{end_min   % 60:02d}"
+                    block = models.TimeBlock(
+                        person_id=current_user.id,
+                        title=task.name,
+                        date=day,
+                        start_time=start_str,
+                        end_time=end_str,
+                        category="work",
+                        task_id=task.id,
+                    )
+                    db.add(block)
+                    # Add to existing so next task doesn't overlap
+                    existing.append(block)
+                    created.append({
+                        "task": task.name,
+                        "date": str(day),
+                        "start": start_str,
+                        "end": end_str,
+                    })
+                    scheduled = True
+                    break
+            if scheduled:
+                break
+
+    db.commit()
+    return {"created": created, "count": len(created)}
+
+
+# ── Bulk reschedule ───────────────────────────────────────────────────────────
+
+@router.post("/bulk-reschedule")
+def bulk_reschedule(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """
+    Move all non-deleted blocks from `from_date` to `to_date`.
+    Completed blocks are skipped. Returns count of moved blocks.
+    """
+    from_date_str = body.get("from_date")
+    to_date_str = body.get("to_date")
+    if not from_date_str or not to_date_str:
+        raise HTTPException(status_code=400, detail="from_date and to_date are required")
+
+    try:
+        from_d = date.fromisoformat(from_date_str)
+        to_d = date.fromisoformat(to_date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if from_d == to_d:
+        raise HTTPException(status_code=400, detail="from_date and to_date must be different")
+
+    blocks = db.query(models.TimeBlock).filter(
+        models.TimeBlock.person_id == current_user.id,
+        models.TimeBlock.date == from_d,
+        models.TimeBlock.deleted == False,
+        models.TimeBlock.is_completed == False,
+    ).all()
+
+    for block in blocks:
+        block.date = to_d
+        block.is_missed = False
+        block.notified_at = None
+
+    db.commit()
+    return {"moved": len(blocks), "from_date": from_date_str, "to_date": to_date_str}

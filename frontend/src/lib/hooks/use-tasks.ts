@@ -86,6 +86,23 @@ export function useTaskProfile(id: number | string) {
     }
 }
 
+export function useTaskUpdate() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: (data: { id: number | string; data: any }) =>
+            request(API_ENDPOINTS.TASKS.UPDATE(String(data.id)), {
+                method: 'PUT',
+                body: data.data,
+            }),
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['task', variables.id] })
+            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        },
+    })
+}
+
 export function useTaskCreate() {
     const { request } = useHttp()
     const queryClient = useQueryClient()
