@@ -1,7 +1,7 @@
 """
 Celery tasks for the Life Tracker backend.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from sqlalchemy import or_
 import logging
 
@@ -252,6 +252,72 @@ def send_morning_tasks(self):
         db.close()
 
 
+@celery_app.task(name="app.tasks.check_block_completions", bind=True, max_retries=2)
+def check_block_completions(self):
+    """
+    Runs every 5 minutes. Asks users about timetable blocks that just ended.
+    Tashkent = UTC+5, blocks store times as "HH:MM" strings.
+    """
+    if not is_configured():
+        return {"skipped": True}
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        now_tashkent = datetime.utcnow() + TASHKENT
+        today_tashkent = now_tashkent.date()
+
+        # Check blocks whose end_time falls in the last 5 minutes
+        now_str = now_tashkent.strftime("%H:%M")
+        window_start_str = (now_tashkent - timedelta(minutes=5)).strftime("%H:%M")
+
+        blocks = (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.date == today_tashkent,
+                models.TimeBlock.deleted == False,
+                models.TimeBlock.is_completed == False,
+                models.TimeBlock.end_time > window_start_str,
+                models.TimeBlock.end_time <= now_str,
+            )
+            .all()
+        )
+
+        for block in blocks:
+            person = db.query(models.Person).filter(models.Person.id == block.person_id).first()
+            if not person:
+                continue
+            chat_id = person.telegram_chat_id
+            if not chat_id:
+                from app.config import settings
+                chat_id = settings.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+
+            send_message(
+                f"⏰ Time's up! Did you complete: <b>{block.title}</b> ({block.start_time}–{block.end_time})?",
+                chat_id=chat_id,
+                reply_markup={
+                    "inline_keyboard": [[
+                        {"text": "✅ Yes!", "callback_data": f"block_done_{block.id}"},
+                        {"text": "❌ No", "callback_data": f"block_skip_{block.id}"},
+                    ]]
+                },
+            )
+            sent += 1
+
+        logger.info("check_block_completions: sent %d notifications", sent)
+        return {"sent": sent}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("check_block_completions failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.send_evening_checkup", bind=True, max_retries=2)
 def send_evening_checkup(self):
     """
@@ -377,30 +443,6 @@ def send_evening_checkup(self):
                             ]]
                         },
                     )
-
-            # Ask about each incomplete timetable block from today
-            todays_blocks = (
-                db.query(models.TimeBlock)
-                .filter(
-                    models.TimeBlock.person_id == person.id,
-                    models.TimeBlock.date == today,
-                    models.TimeBlock.deleted == False,
-                    models.TimeBlock.is_completed == False,
-                )
-                .order_by(models.TimeBlock.start_time.asc())
-                .all()
-            )
-            for block in todays_blocks:
-                send_message(
-                    f"🗓 Did you complete: <b>{block.title}</b> ({block.start_time}–{block.end_time})?",
-                    chat_id=chat_id,
-                    reply_markup={
-                        "inline_keyboard": [[
-                            {"text": "✅ Yes!", "callback_data": f"block_done_{block.id}"},
-                            {"text": "❌ No", "callback_data": f"block_skip_{block.id}"},
-                        ]]
-                    },
-                )
 
         logger.info("send_evening_checkup: sent to %d users", sent)
         return {"sent": sent}

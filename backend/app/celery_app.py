@@ -19,6 +19,12 @@ celery_app.conf.update(
 
 # ─── Beat schedule ─────────────────────────────────────────────────────────────
 celery_app.conf.beat_schedule = {
+    # Every 5 minutes — ask about timetable blocks that just ended
+    "check-block-completions": {
+        "task": "app.tasks.check_block_completions",
+        "schedule": crontab(minute="*/5"),
+    },
+
     # Daily 00:05 UTC — mark incomplete blocks from previous days as missed
     "mark-missed-blocks": {
         "task": "app.tasks.mark_missed_blocks",
