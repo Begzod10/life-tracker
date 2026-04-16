@@ -136,8 +136,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         f"You'll receive daily task reminders here.\n\n"
                         f"Commands:\n"
                         f"/tasks — today's tasks\n"
+                        f"/today — today's timetable blocks\n"
                         f"/check — overdue tasks\n"
-                        f"/upcoming — upcoming tasks",
+                        f"/upcoming — upcoming schedule\n"
+                        f"/summary — daily summary",
                         parse_mode="HTML",
                     )
                     return
@@ -153,12 +155,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Normal /start
     await update.message.reply_text(
-        f"👋 <b>Life Tracker Bot</b>\n\n"
+        f"👋 <b>Life Tracker Bot ready!</b>\n\n"
         f"Your Chat ID: <code>{chat_id}</code>\n\n"
-        f"Commands:\n"
         f"/tasks — today's tasks\n"
-        f"/check — overdue tasks\n"
-        f"/upcoming — upcoming tasks",
+        f"/today — today's timetable blocks\n"
+        f"/check — check overdue tasks\n"
+        f"/upcoming — upcoming schedule\n"
+        f"/summary — daily summary",
         parse_mode="HTML",
     )
 
@@ -249,6 +252,59 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     finally:
         db.close()
+
+
+async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show today's timetable blocks with completion status."""
+    chat_id = str(update.effective_chat.id)
+    db = get_db()
+    try:
+        person = db.query(Person).filter(Person.telegram_chat_id == chat_id).first()
+        if not person:
+            await update.message.reply_text("❌ Account not linked. Use /start to connect.")
+            return
+
+        today = date.today()
+        blocks = (
+            db.query(TimeBlock)
+            .filter(
+                TimeBlock.person_id == person.id,
+                TimeBlock.date == today,
+                TimeBlock.deleted == False,
+            )
+            .order_by(TimeBlock.start_time.asc())
+            .all()
+        )
+
+        if not blocks:
+            await update.message.reply_text("📭 No blocks scheduled for today!")
+            return
+
+        cat_emoji = {
+            "work": "💼", "personal": "🧍", "health": "💪",
+            "learning": "📚", "social": "👥", "other": "📌",
+        }
+        done = sum(1 for b in blocks if b.is_completed)
+        lines = [f"🗓 *Today's Schedule ({done}/{len(blocks)} done):*\n"]
+        for b in blocks:
+            if b.is_completed:
+                icon = "✅"
+            elif b.is_missed:
+                icon = "❌"
+            else:
+                icon = cat_emoji.get(b.category, "📌")
+            lines.append(f"{icon} {b.start_time}–{b.end_time}  {b.title}")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    finally:
+        db.close()
+
+
+async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Trigger the daily summary for this user right now."""
+    from app.tasks import send_daily_summary
+    send_daily_summary.delay()
+    await update.message.reply_text("📋 Sending your daily summary…")
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -351,8 +407,10 @@ class TelegramBotService:
         )
         self._app.add_handler(CommandHandler("start", start))
         self._app.add_handler(CommandHandler("tasks", tasks_command))
+        self._app.add_handler(CommandHandler("today", today_command))
         self._app.add_handler(CommandHandler("upcoming", upcoming_command))
         self._app.add_handler(CommandHandler("check", check_command))
+        self._app.add_handler(CommandHandler("summary", summary_command))
         self._app.add_handler(CallbackQueryHandler(button_callback))
 
     @property
@@ -375,6 +433,17 @@ class TelegramBotService:
             logger.info("Telegram webhook registered: %s", webhook_url)
         else:
             logger.info("WEBHOOK_BASE_URL not set — webhook not registered (use polling or set the URL)")
+
+        # Register command list so they appear in Telegram's "/" menu
+        from telegram import BotCommand
+        await self._app.bot.set_my_commands([
+            BotCommand("tasks",    "Today's tasks"),
+            BotCommand("today",    "Today's timetable blocks"),
+            BotCommand("check",    "Check overdue tasks"),
+            BotCommand("upcoming", "Upcoming schedule (next 3 days)"),
+            BotCommand("summary",  "Daily summary — blocks & tasks"),
+        ])
+        logger.info("Telegram bot commands registered")
 
     async def shutdown(self):
         if not self._app:
