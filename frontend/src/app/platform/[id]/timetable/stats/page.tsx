@@ -33,6 +33,75 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
     )
 }
 
+function LineChart({ data }: { data: { date: string; completed: number; missed: number; total: number }[] }) {
+    const past = data.filter(d => d.total > 0)
+    if (past.length < 2) return <p className="text-white/25 text-sm text-center py-8">Not enough data yet</p>
+
+    const W = 800, H = 140, PAD = { t: 12, b: 28, l: 28, r: 12 }
+    const chartW = W - PAD.l - PAD.r
+    const chartH = H - PAD.t - PAD.b
+    const maxVal = Math.max(...past.map(d => Math.max(d.completed, d.missed)), 1)
+
+    const xOf = (i: number) => PAD.l + (i / (past.length - 1)) * chartW
+    const yOf = (v: number) => PAD.t + chartH - (v / maxVal) * chartH
+
+    const pathFor = (key: 'completed' | 'missed') =>
+        past.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(1)} ${yOf(d[key]).toFixed(1)}`).join(' ')
+
+    const areaFor = (key: 'completed' | 'missed') => {
+        const line = pathFor(key)
+        const last = past.length - 1
+        return `${line} L ${xOf(last).toFixed(1)} ${(PAD.t + chartH).toFixed(1)} L ${PAD.l.toFixed(1)} ${(PAD.t + chartH).toFixed(1)} Z`
+    }
+
+    // Y grid lines
+    const yTicks = [0, Math.round(maxVal / 2), maxVal]
+
+    // X labels: show first, last, and every ~7 days
+    const xLabels = past.map((d, i) => {
+        const show = i === 0 || i === past.length - 1 || i % Math.max(1, Math.floor(past.length / 6)) === 0
+        return show ? { i, label: d.date.slice(5) } : null
+    }).filter(Boolean) as { i: number; label: string }[]
+
+    return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 160 }}>
+            {/* Grid lines */}
+            {yTicks.map(v => (
+                <g key={v}>
+                    <line x1={PAD.l} x2={W - PAD.r} y1={yOf(v)} y2={yOf(v)}
+                        stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                    <text x={PAD.l - 4} y={yOf(v) + 4} textAnchor="end"
+                        fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
+                </g>
+            ))}
+
+            {/* Area fills */}
+            <path d={areaFor('completed')} fill="rgba(34,197,94,0.08)" />
+            <path d={areaFor('missed')}    fill="rgba(239,68,68,0.08)" />
+
+            {/* Lines */}
+            <path d={pathFor('completed')} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            <path d={pathFor('missed')}    fill="none" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+            {/* Dots */}
+            {past.map((d, i) => (
+                <g key={i}>
+                    <circle cx={xOf(i)} cy={yOf(d.completed)} r="3" fill="#22c55e" />
+                    <circle cx={xOf(i)} cy={yOf(d.missed)}    r="3" fill="#ef4444" />
+                    {/* Invisible wide hit area for title */}
+                    <title>{d.date}: {d.completed} done, {d.missed} not finished</title>
+                </g>
+            ))}
+
+            {/* X labels */}
+            {xLabels.map(({ i, label }) => (
+                <text key={i} x={xOf(i)} y={H - 4} textAnchor="middle"
+                    fontSize="9" fill="rgba(255,255,255,0.3)">{label}</text>
+            ))}
+        </svg>
+    )
+}
+
 export default function TimetableStatsPage() {
     const params   = useParams()
     const router   = useRouter()
@@ -115,6 +184,26 @@ export default function TimetableStatsPage() {
                                 color={stats.missed_blocks === 0 ? 'text-emerald-400' : stats.missed_rate <= 20 ? 'text-amber-400' : 'text-red-400'} />
                             <StatCard icon={<Flame className="w-3.5 h-3.5" />} label="Active Streak"
                                 value={`${stats.streak_days}d`} sub="consecutive days with blocks" color="text-amber-400" />
+                        </div>
+
+                        {/* ── Daily Progress Line Chart ── */}
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4" />Daily Progress
+                                </h2>
+                                <div className="flex items-center gap-4 text-xs text-white/40">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-6 h-0.5 rounded-full bg-emerald-500" />
+                                        Completed
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-6 h-0.5 rounded-full bg-red-500" />
+                                        Not Finished
+                                    </div>
+                                </div>
+                            </div>
+                            <LineChart data={stats.daily_summary} />
                         </div>
 
                         {/* ── Activity Heatmap ── */}
