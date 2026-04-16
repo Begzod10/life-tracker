@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Clock, CheckCircle2, Flame, RefreshCw, TrendingUp, BarChart2, Calendar, XCircle } from 'lucide-react'
-import { useTimetableStats } from '@/lib/hooks/use-timetable'
+import { ArrowLeft, Clock, CheckCircle2, Flame, TrendingUp, BarChart2, Calendar, XCircle, Sparkles } from 'lucide-react'
+import { useTimetableStats, useDailyConclusions } from '@/lib/hooks/use-timetable'
 
 const CATEGORY_COLORS: Record<string, { bg: string; bar: string; text: string }> = {
     work:     { bg: 'bg-indigo-500/15',  bar: 'bg-indigo-500',  text: 'text-indigo-300' },
@@ -127,6 +127,7 @@ export default function TimetableStatsPage() {
     const personId = params.id as string
     const [weeks, setWeeks] = useState(4)
     const { data: stats, isLoading } = useTimetableStats(weeks)
+    const { data: conclusions } = useDailyConclusions(weeks * 7)
 
     const maxCatHours  = Math.max(...(stats?.by_category.map(c => c.hours) ?? [1]), 1)
     const maxWdCount   = Math.max(...(stats?.by_weekday.map(d => d.count) ?? [1]), 1)
@@ -340,6 +341,34 @@ export default function TimetableStatsPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* ── AI Daily Conclusions ── */}
+                        {conclusions && conclusions.length > 0 && (
+                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                                <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-indigo-400" />AI Daily Conclusions
+                                </h2>
+                                <div className="space-y-4">
+                                    {conclusions.map(c => {
+                                        const d = new Date(c.date + 'T00:00:00')
+                                        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                        return (
+                                            <motion.div key={c.date}
+                                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                                                className="flex gap-4 group">
+                                                <div className="shrink-0 pt-0.5">
+                                                    <div className="w-2 h-2 rounded-full bg-indigo-500/60 mt-1.5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs text-white/35 font-medium mb-1">{label}</p>
+                                                    <p className="text-sm text-white/75 leading-relaxed">{c.conclusion}</p>
+                                                </div>
+                                            </motion.div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* ── Peak Hours ── */}
                         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">

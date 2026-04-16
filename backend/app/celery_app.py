@@ -46,6 +46,12 @@ celery_app.conf.beat_schedule = {
         ),
     },
 
+    # Daily 17:30 UTC = 22:30 Tashkent — AI conclusion for the day
+    "generate-daily-conclusion": {
+        "task": "app.tasks.generate_daily_conclusion",
+        "schedule": crontab(hour=17, minute=30),
+    },
+
     # Daily 17:00 UTC = 22:00 Tashkent — full day summary (blocks + tasks)
     "send-daily-summary": {
         "task": "app.tasks.send_daily_summary",

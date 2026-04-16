@@ -60,6 +60,20 @@ const keys = {
     stats: (weeks: number) => ['timetable', 'stats', weeks] as const,
 }
 
+export interface DailyConclusion {
+    date: string
+    conclusion: string
+    created_at: string
+}
+
+export function useDailyConclusions(limit = 30) {
+    const { request } = useHttp()
+    return useQuery<DailyConclusion[]>({
+        queryKey: ['timetable', 'conclusions', limit],
+        queryFn: () => request(API_ENDPOINTS.TIMETABLE.CONCLUSIONS(limit)),
+    })
+}
+
 export function useTimetableStats(weeks = 4) {
     const { request } = useHttp()
     return useQuery<TimetableStats>({

@@ -575,3 +575,165 @@ def send_daily_summary(self):
         raise self.retry(exc=exc, countdown=60 * 5)
     finally:
         db.close()
+
+
+def _call_groq(prompt: str) -> str:
+    """Call Groq API and return the generated text."""
+    import httpx
+    from app.config import settings
+
+    if not settings.GROQ_API_KEY:
+        return ""
+
+    resp = httpx.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+        json={
+            "model": "llama-3.1-8b-instant",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.7,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+@celery_app.task(name="app.tasks.generate_daily_conclusion", bind=True, max_retries=2)
+def generate_daily_conclusion(self):
+    """
+    22:30 Tashkent (17:30 UTC) — generate AI conclusion for each user's day.
+    Summarises completed/missed blocks and tasks, saves to daily_conclusions.
+    """
+    from app.config import settings
+
+    if not settings.GROQ_API_KEY:
+        logger.info("generate_daily_conclusion: GROQ_API_KEY not set, skipping")
+        return {"skipped": True}
+
+    db = SessionLocal()
+    generated = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        not_deleted_task = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+
+        for person in persons:
+            # Skip if already generated today
+            existing = db.query(models.DailyConclusion).filter(
+                models.DailyConclusion.person_id == person.id,
+                models.DailyConclusion.date == today,
+            ).first()
+            if existing:
+                continue
+
+            # Collect today's blocks
+            blocks = (
+                db.query(models.TimeBlock)
+                .filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                )
+                .order_by(models.TimeBlock.start_time.asc())
+                .all()
+            )
+
+            # Collect today's tasks
+            all_tasks = (
+                db.query(models.Task)
+                .join(models.Goal, models.Task.goal_id == models.Goal.id)
+                .filter(
+                    models.Goal.person_id == person.id,
+                    models.Goal.deleted == False,
+                    not_deleted_task,
+                    or_(
+                        models.Task.due_date == today,
+                        models.Task.is_recurring == True,
+                        models.Task.task_type == "daily",
+                    ),
+                )
+                .all()
+            )
+
+            if not blocks and not all_tasks:
+                continue
+
+            # Build prompt
+            lines = [f"Date: {today.strftime('%A, %B %d %Y')}", ""]
+
+            if blocks:
+                done_b = sum(1 for b in blocks if b.is_completed)
+                lines.append(f"Timetable blocks ({done_b}/{len(blocks)} completed):")
+                for b in blocks:
+                    status = "✅ done" if b.is_completed else "❌ not finished"
+                    lines.append(f"  - {b.title} ({b.start_time}–{b.end_time}): {status}")
+                lines.append("")
+
+            if all_tasks:
+                recurring_done = set(
+                    row.task_id for row in db.query(models.ProgressLogTask).filter(
+                        models.ProgressLogTask.log_date == today,
+                        models.ProgressLogTask.task_id.in_([t.id for t in all_tasks]),
+                    ).all()
+                )
+                def task_done(t) -> bool:
+                    return t.id in recurring_done if t.is_recurring else t.completed
+
+                done_t = sum(1 for t in all_tasks if task_done(t))
+                lines.append(f"Tasks ({done_t}/{len(all_tasks)} completed):")
+                for t in all_tasks:
+                    status = "✅ done" if task_done(t) else "❌ not done"
+                    lines.append(f"  - {t.name}: {status}")
+                lines.append("")
+
+            day_data = "\n".join(lines)
+            prompt = (
+                f"You are a personal productivity coach. Here is the user's day:\n\n"
+                f"{day_data}\n"
+                f"Write a brief 2-3 sentence conclusion about this day. "
+                f"Be honest about what was missed but stay motivating. "
+                f"Mention one specific thing they did well and one improvement for tomorrow. "
+                f"Be concise and personal."
+            )
+
+            try:
+                conclusion_text = _call_groq(prompt)
+                if not conclusion_text:
+                    continue
+
+                conclusion = models.DailyConclusion(
+                    person_id=person.id,
+                    date=today,
+                    conclusion=conclusion_text,
+                )
+                db.add(conclusion)
+                db.commit()
+                generated += 1
+
+                # Send to Telegram if configured
+                chat_id = person.telegram_chat_id
+                if not chat_id:
+                    chat_id = settings.TELEGRAM_CHAT_ID
+                if chat_id:
+                    send_message(
+                        f"🤖 <b>AI Daily Conclusion</b>\n\n{conclusion_text}",
+                        chat_id=chat_id,
+                    )
+            except Exception as e:
+                logger.exception("generate_daily_conclusion: failed for person %d: %s", person.id, e)
+                db.rollback()
+                continue
+
+        logger.info("generate_daily_conclusion: generated %d conclusions", generated)
+        return {"generated": generated}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("generate_daily_conclusion failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60 * 5)
+    finally:
+        db.close()

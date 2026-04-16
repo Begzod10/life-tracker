@@ -524,3 +524,16 @@ class TimeBlock(Base):
 
     person = relationship("Person", back_populates="time_blocks")
     task = relationship("Task", backref="time_blocks")
+
+
+class DailyConclusion(Base):
+    """AI-generated daily conclusion for a person's day."""
+    __tablename__ = "daily_conclusions"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    person_id  = Column(Integer, ForeignKey("person.id"), nullable=False)
+    date       = Column(Date, nullable=False, index=True)
+    conclusion = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    person = relationship("Person")

@@ -188,5 +188,7 @@ export const API_ENDPOINTS = {
         UPDATE: (id: string | number) => `${API_URL}/timetable/${id}`,
         DELETE: (id: string | number) => `${API_URL}/timetable/${id}`,
         TOGGLE: (id: string | number) => `${API_URL}/timetable/${id}/toggle`,
+        CONCLUSIONS: (limit = 30) => `${API_URL}/timetable/conclusions?limit=${limit}`,
+        GENERATE_CONCLUSION: `${API_URL}/timetable/conclusions/generate`,
     },
 }

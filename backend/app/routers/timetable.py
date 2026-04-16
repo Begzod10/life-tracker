@@ -245,3 +245,34 @@ def toggle_time_block(
     db.commit()
     db.refresh(db_block)
     return db_block
+
+
+# ── Daily AI Conclusions ──────────────────────────────────────────────────────
+
+@router.get("/conclusions")
+def get_conclusions(
+    limit: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return the most recent AI daily conclusions for the current user."""
+    rows = (
+        db.query(models.DailyConclusion)
+        .filter(models.DailyConclusion.person_id == current_user.id)
+        .order_by(models.DailyConclusion.date.desc())
+        .limit(limit)
+        .all()
+    )
+    return [{"date": str(r.date), "conclusion": r.conclusion, "created_at": str(r.created_at)} for r in rows]
+
+
+@router.post("/conclusions/generate")
+def trigger_conclusion(
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Manually trigger AI conclusion generation for today."""
+    from app.tasks import generate_daily_conclusion
+    task = generate_daily_conclusion.delay()
+    return {"message": "Conclusion generation queued", "task_id": task.id}
+
