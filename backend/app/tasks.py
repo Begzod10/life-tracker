@@ -255,7 +255,8 @@ def send_morning_tasks(self):
 @celery_app.task(name="app.tasks.check_block_completions", bind=True, max_retries=2)
 def check_block_completions(self):
     """
-    Runs every 5 minutes. Asks users about timetable blocks that just ended.
+    Runs every 5 minutes. Asks about any incomplete blocks that have already ended today
+    and haven't been notified yet. Uses notified_at to prevent duplicate messages.
     Tashkent = UTC+5, blocks store times as "HH:MM" strings.
     """
     if not is_configured():
@@ -267,18 +268,16 @@ def check_block_completions(self):
         TASHKENT = timedelta(hours=5)
         now_tashkent = datetime.utcnow() + TASHKENT
         today_tashkent = now_tashkent.date()
-
-        # Check blocks whose end_time falls in the last 5 minutes
         now_str = now_tashkent.strftime("%H:%M")
-        window_start_str = (now_tashkent - timedelta(minutes=5)).strftime("%H:%M")
 
+        # All incomplete blocks for today that have already ended and not yet notified
         blocks = (
             db.query(models.TimeBlock)
             .filter(
                 models.TimeBlock.date == today_tashkent,
                 models.TimeBlock.deleted == False,
                 models.TimeBlock.is_completed == False,
-                models.TimeBlock.end_time > window_start_str,
+                models.TimeBlock.notified_at.is_(None),
                 models.TimeBlock.end_time <= now_str,
             )
             .all()
@@ -295,7 +294,7 @@ def check_block_completions(self):
             if not chat_id:
                 continue
 
-            send_message(
+            if send_message(
                 f"⏰ Time's up! Did you complete: <b>{block.title}</b> ({block.start_time}–{block.end_time})?",
                 chat_id=chat_id,
                 reply_markup={
@@ -304,9 +303,11 @@ def check_block_completions(self):
                         {"text": "❌ No", "callback_data": f"block_skip_{block.id}"},
                     ]]
                 },
-            )
-            sent += 1
+            ):
+                block.notified_at = datetime.utcnow()
+                sent += 1
 
+        db.commit()
         logger.info("check_block_completions: sent %d notifications", sent)
         return {"sent": sent}
 
