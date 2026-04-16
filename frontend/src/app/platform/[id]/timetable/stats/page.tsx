@@ -1,10 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Clock, CheckCircle2, Flame, TrendingUp, BarChart2, Calendar, XCircle, Sparkles } from 'lucide-react'
 import { useTimetableStats, useDailyConclusions } from '@/lib/hooks/use-timetable'
+import { useQueryClient } from '@tanstack/react-query'
+import { useHttp } from '@/lib/hooks/use-http'
+import { API_ENDPOINTS } from '@/lib/api/endpoints'
 
 const CATEGORY_COLORS: Record<string, { bg: string; bar: string; text: string }> = {
     work:     { bg: 'bg-indigo-500/15',  bar: 'bg-indigo-500',  text: 'text-indigo-300' },
@@ -126,8 +129,24 @@ export default function TimetableStatsPage() {
     const router   = useRouter()
     const personId = params.id as string
     const [weeks, setWeeks] = useState(4)
+    const [generating, setGenerating] = useState(false)
     const { data: stats, isLoading } = useTimetableStats(weeks)
-    const { data: conclusions } = useDailyConclusions(weeks * 7)
+    const { data: conclusions, isLoading: conclusionsLoading } = useDailyConclusions(weeks * 7)
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+
+    const generateConclusion = useCallback(async () => {
+        setGenerating(true)
+        try {
+            await request(API_ENDPOINTS.TIMETABLE.GENERATE_CONCLUSION, { method: 'POST' })
+            setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: ['timetable', 'conclusions'] })
+                setGenerating(false)
+            }, 4000)
+        } catch {
+            setGenerating(false)
+        }
+    }, [request, queryClient])
 
     const maxCatHours  = Math.max(...(stats?.by_category.map(c => c.hours) ?? [1]), 1)
     const maxWdCount   = Math.max(...(stats?.by_weekday.map(d => d.count) ?? [1]), 1)
@@ -343,32 +362,56 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── AI Daily Conclusions ── */}
-                        {conclusions && conclusions.length > 0 && (
-                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
-                                <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <div className="flex items-center justify-between mb-5">
+                                <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
                                     <Sparkles className="w-4 h-4 text-indigo-400" />AI Daily Conclusions
                                 </h2>
-                                <div className="space-y-4">
-                                    {conclusions.map(c => {
+                                <button onClick={generateConclusion} disabled={generating}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-medium hover:bg-indigo-600/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Sparkles className={`w-3 h-3 ${generating ? 'animate-pulse' : ''}`} />
+                                    {generating ? 'Generating…' : 'Generate for today'}
+                                </button>
+                            </div>
+
+                            {conclusionsLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : !conclusions || conclusions.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                                        <Sparkles className="w-5 h-5 text-indigo-400/50" />
+                                    </div>
+                                    <p className="text-sm text-white/30">No conclusions yet.</p>
+                                    <p className="text-xs text-white/20">Generated automatically at 22:30 each day, or click the button above.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-5">
+                                    {conclusions.map((c, idx) => {
                                         const d = new Date(c.date + 'T00:00:00')
-                                        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                                        const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
                                         return (
                                             <motion.div key={c.date}
                                                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                                                className="flex gap-4 group">
-                                                <div className="shrink-0 pt-0.5">
-                                                    <div className="w-2 h-2 rounded-full bg-indigo-500/60 mt-1.5" />
+                                                transition={{ delay: idx * 0.04 }}
+                                                className="flex gap-4">
+                                                <div className="flex flex-col items-center gap-1 shrink-0">
+                                                    <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5" />
+                                                    {idx < conclusions.length - 1 && (
+                                                        <div className="w-px flex-1 bg-white/6 mt-1" />
+                                                    )}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-white/35 font-medium mb-1">{label}</p>
-                                                    <p className="text-sm text-white/75 leading-relaxed">{c.conclusion}</p>
+                                                <div className="flex-1 min-w-0 pb-4">
+                                                    <p className="text-xs text-indigo-400/70 font-semibold mb-1.5">{label}</p>
+                                                    <p className="text-sm text-white/70 leading-relaxed">{c.conclusion}</p>
                                                 </div>
                                             </motion.div>
                                         )
                                     })}
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         {/* ── Peak Hours ── */}
                         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
