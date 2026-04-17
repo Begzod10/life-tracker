@@ -941,11 +941,24 @@ def carryover_missed_tasks(self):
                 .all()
             )
 
+            task_ids = [t.id for t in recurring_tasks]
             done_yesterday = set(
                 r.task_id for r in db.query(models.ProgressLogTask).filter(
                     models.ProgressLogTask.log_date == yesterday,
-                    models.ProgressLogTask.task_id.in_([t.id for t in recurring_tasks]),
+                    models.ProgressLogTask.task_id.in_(task_ids),
                 ).all()
+            )
+            # Also count tasks whose timetable block was completed via UI yesterday
+            done_yesterday |= set(
+                b.task_id
+                for b in db.query(models.TimeBlock).filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == yesterday,
+                    models.TimeBlock.deleted == False,
+                    models.TimeBlock.is_completed == True,
+                    models.TimeBlock.task_id.in_(task_ids),
+                ).all()
+                if b.task_id is not None
             )
 
             for task in recurring_tasks:
