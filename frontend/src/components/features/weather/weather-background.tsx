@@ -1,8 +1,14 @@
 'use client'
 
 import { useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { motion } from 'framer-motion'
 import type { WeatherTheme, WeatherData } from '@/lib/hooks/use-weather'
+
+const Weather3D = dynamic(
+  () => import('./weather-3d').then(m => m.Weather3D),
+  { ssr: false }
+)
 
 // ── Per-theme visual config ────────────────────────────────────────────────────
 
@@ -296,6 +302,9 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
       {cfg.kind === 'fog' && <FogLayer />}
       {cfg.kind === 'sun' && <SunLayer />}
       {cfg.kind === 'thunder-rain' && <ThunderFlash />}
+
+      {/* 3D layer */}
+      <Weather3D theme={theme} />
 
       {/* Vignette to ground the content */}
       <div
