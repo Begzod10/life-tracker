@@ -182,10 +182,31 @@ function PlatformPageContent() {
     }
 
 
+    const [previewTheme, setPreviewTheme] = useState<import('@/lib/hooks/use-weather').WeatherTheme | null>(null)
+    const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
+
     return (
         <div className="bg-[#0a0a0f] relative overflow-hidden min-h-screen">
             {/* Dynamic weather background */}
-            <WeatherBackground theme={weather?.theme ?? 'unknown'} />
+            <WeatherBackground theme={activeTheme} />
+
+            {/* Weather theme tester */}
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1.5 p-2 rounded-2xl backdrop-blur-md border border-white/10" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                {(['clear','partly-cloudy','cloudy','fog','rain','snow','thunder'] as const).map(t => (
+                    <button
+                        key={t}
+                        onClick={() => setPreviewTheme(previewTheme === t ? null : t)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                            activeTheme === t
+                                ? 'bg-white/20 text-white'
+                                : 'text-white/50 hover:text-white hover:bg-white/10'
+                        }`}
+                    >
+                        {{ clear:'☀️', 'partly-cloudy':'⛅', cloudy:'☁️', fog:'🌫️', rain:'🌧️', snow:'❄️', thunder:'⛈️' }[t]}
+                        {' '}{t}
+                    </button>
+                ))}
+            </div>
 
             <AnimatePresence mode="wait">
                 {!selectedCategory || ['timetable', 'finances', 'health'].includes(selectedCategory) ? (
