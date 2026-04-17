@@ -51,18 +51,23 @@ export function useWeather() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const cached = localStorage.getItem(CACHE_KEY)
-    if (cached) {
-      try {
+    if (typeof window === 'undefined') {
+      setLoading(false)
+      return
+    }
+
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
         const { data: cachedData, timestamp } = JSON.parse(cached)
         if (Date.now() - timestamp < CACHE_TTL) {
           setData(cachedData)
           setLoading(false)
           return
         }
-      } catch {
-        localStorage.removeItem(CACHE_KEY)
       }
+    } catch {
+      try { localStorage.removeItem(CACHE_KEY) } catch {}
     }
 
     if (!navigator.geolocation) {

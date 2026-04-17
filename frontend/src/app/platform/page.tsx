@@ -24,7 +24,7 @@ import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/
 import { GoalsView } from '@/components/features/goals/goals-view'
 import { TaskList } from '@/components/features/tasks/tasks-view'
 import { Goal, GoalOverviewStats } from '@/types'
-import { useWeather } from '@/lib/hooks/use-weather'
+import { useWeather, type WeatherData } from '@/lib/hooks/use-weather'
 import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
 
 type TaskStats = {
@@ -212,7 +212,7 @@ function PlatformPageContent() {
 function CategoriesGrid({ categories, onSelect, weather }: {
     categories: categoryType[]
     onSelect: (id: string) => void
-    weather: import('@/lib/hooks/use-weather').WeatherData | null
+    weather: WeatherData | null
 }) {
     return (
         <motion.div
