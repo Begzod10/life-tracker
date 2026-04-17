@@ -461,6 +461,50 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 name = "block"
             await query.edit_message_text(f"❌ Marked as missed: *{name}*", parse_mode="Markdown")
 
+        elif data.startswith("carryover_"):
+            # carryover_{original_block_id}_{YYYYMMDD}_{HHMM}
+            parts = data.split("_")
+            orig_block_id = int(parts[1])
+            date_str = parts[2]       # e.g. 20260418
+            time_str = parts[3]       # e.g. 0800
+
+            orig = db.query(TimeBlock).filter(TimeBlock.id == orig_block_id).first()
+            if orig:
+                target_date = date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8]))
+                start_h = int(time_str[:2])
+                start_m = int(time_str[2:4])
+                dur = 30
+                if orig.start_time and orig.end_time:
+                    try:
+                        sh, sm = map(int, orig.start_time.split(":"))
+                        eh, em = map(int, orig.end_time.split(":"))
+                        dur = (eh * 60 + em) - (sh * 60 + sm)
+                    except Exception:
+                        pass
+                end_total = start_h * 60 + start_m + dur
+                start = f"{start_h:02d}:{start_m:02d}"
+                end = f"{end_total // 60:02d}:{end_total % 60:02d}"
+
+                new_block = TimeBlock(
+                    person_id=orig.person_id,
+                    title=f"↩ {orig.title.lstrip('↩ ')}",
+                    date=target_date,
+                    start_time=start,
+                    end_time=end,
+                    category=orig.category or "work",
+                    task_id=orig.task_id,
+                    is_recurring=False,
+                )
+                db.add(new_block)
+                db.commit()
+                title = orig.title.lstrip("↩ ")
+                await query.edit_message_text(
+                    f"✅ Scheduled *{title}* for {target_date.strftime('%b %d')} at {start}",
+                    parse_mode="Markdown",
+                )
+            else:
+                await query.edit_message_text("Block not found.", parse_mode="Markdown")
+
     finally:
         db.close()
 

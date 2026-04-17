@@ -911,132 +911,148 @@ def send_weekly_review(self):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Carry-over missed recurring tasks → next-day block (runs at 00:10 UTC)
+# 3. Carry-over missed recurring blocks → tomorrow (runs at 17:05 UTC = 22:05 Tashkent)
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _to_minutes(t: str) -> int:
+    h, m = t.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _find_free_slot(occupied: list, dur: int, start_from_h: int = 8, limit_h: int = 22) -> tuple | None:
+    """Return (hour, minute) of the first free slot before limit_h, or None."""
+    for h in range(start_from_h, limit_h):
+        for m in (0, 30):
+            s = h * 60 + m
+            e = s + dur
+            if e > limit_h * 60:
+                return None
+            if all(not (s < _to_minutes(et) and e > _to_minutes(st)) for st, et in occupied):
+                return (h, m)
+    return None
+
 
 @celery_app.task(name="app.tasks.carryover_missed_tasks", bind=True, max_retries=2)
 def carryover_missed_tasks(self):
     """
-    00:10 UTC daily — for each recurring task that had no completion log yesterday,
-    create a timetable block today as a reminder (if one doesn't already exist).
+    17:05 UTC (22:05 Tashkent) daily — for each missed recurring block today,
+    schedule it for tomorrow in a free slot before 22:00.
+    If no free slot exists, send a Telegram message asking the user to pick a time.
     """
     db = SessionLocal()
     created = 0
+    asked = 0
     try:
         TASHKENT = timedelta(hours=5)
-        today = (datetime.utcnow() + TASHKENT).date()
-        yesterday = today - timedelta(days=1)
+        now_tashkent = datetime.utcnow() + TASHKENT
+        today = now_tashkent.date()
+        tomorrow = today + timedelta(days=1)
 
         persons = db.query(models.Person).filter(models.Person.is_active == True).all()
         for person in persons:
-            recurring_tasks = (
-                db.query(models.Task)
-                .join(models.Goal, models.Task.goal_id == models.Goal.id)
-                .filter(
-                    models.Goal.person_id == person.id,
-                    models.Goal.deleted == False,
-                    models.Task.deleted == False,
-                    models.Task.is_recurring == True,
-                )
-                .all()
-            )
+            chat_id = getattr(person, "telegram_chat_id", None)
+            if not chat_id:
+                from app.config import settings
+                chat_id = settings.TELEGRAM_CHAT_ID
 
-            task_ids = [t.id for t in recurring_tasks]
-            done_yesterday = set(
-                r.task_id for r in db.query(models.ProgressLogTask).filter(
-                    models.ProgressLogTask.log_date == yesterday,
-                    models.ProgressLogTask.task_id.in_(task_ids),
-                ).all()
-            )
-            # Also count tasks whose timetable block was completed via UI yesterday
-            done_yesterday |= set(
-                b.task_id
-                for b in db.query(models.TimeBlock).filter(
-                    models.TimeBlock.person_id == person.id,
-                    models.TimeBlock.date == yesterday,
-                    models.TimeBlock.deleted == False,
-                    models.TimeBlock.is_completed == True,
-                    models.TimeBlock.task_id.in_(task_ids),
-                ).all()
-                if b.task_id is not None
-            )
+            # Missed blocks today: not completed, end_time has passed, linked to recurring task or block is recurring
+            now_str = now_tashkent.strftime("%H:%M")
+            todays_blocks = db.query(models.TimeBlock).filter(
+                models.TimeBlock.person_id == person.id,
+                models.TimeBlock.date == today,
+                models.TimeBlock.deleted == False,
+                models.TimeBlock.is_completed == False,
+            ).all()
 
-            for task in recurring_tasks:
-                if task.id in done_yesterday:
-                    continue  # completed yesterday, no carry-over needed
+            missed_blocks = [
+                b for b in todays_blocks
+                if b.end_time and b.end_time <= now_str
+                and (b.is_recurring or (b.task_id and _is_recurring_task(db, b.task_id)))
+            ]
 
-                # Check if a block already exists for today linked to this task
-                existing = db.query(models.TimeBlock).filter(
-                    models.TimeBlock.person_id == person.id,
-                    models.TimeBlock.task_id == task.id,
-                    models.TimeBlock.date == today,
-                    models.TimeBlock.deleted == False,
-                ).first()
-                if existing:
-                    continue
+            # Tomorrow's existing blocks for slot conflict check
+            tomorrow_blocks = db.query(models.TimeBlock).filter(
+                models.TimeBlock.person_id == person.id,
+                models.TimeBlock.date == tomorrow,
+                models.TimeBlock.deleted == False,
+            ).all()
+            occupied_tomorrow = [
+                (b.start_time, b.end_time)
+                for b in tomorrow_blocks
+                if b.start_time and b.end_time
+            ]
 
-                # Create a carry-over block — find a free slot starting from 08:00
-                dur = task.estimated_duration or 30
-                todays_blocks = db.query(models.TimeBlock).filter(
-                    models.TimeBlock.person_id == person.id,
-                    models.TimeBlock.date == today,
-                    models.TimeBlock.deleted == False,
-                ).all()
-
-                def _to_minutes(t: str) -> int:
-                    h, m = t.split(":")
-                    return int(h) * 60 + int(m)
-
-                occupied = [(b.start_time, b.end_time) for b in todays_blocks if b.start_time and b.end_time]
-
-                def _slot_free(h: int, m: int) -> bool:
-                    s = h * 60 + m
-                    e = s + dur
-                    for st, et in occupied:
-                        bs = _to_minutes(st)
-                        be = _to_minutes(et)
-                        if s < be and e > bs:
-                            return False
-                    return True
-
-                slot_h, slot_m = 8, 0
-                for candidate_h in range(8, 23):
-                    for candidate_m in (0, 30):
-                        if candidate_h * 60 + candidate_m + dur > 23 * 60:
-                            break
-                        if _slot_free(candidate_h, candidate_m):
-                            slot_h, slot_m = candidate_h, candidate_m
-                            break
-                    else:
+            for block in missed_blocks:
+                # Skip if already has a carry-over block for tomorrow for this task
+                if block.task_id:
+                    existing = db.query(models.TimeBlock).filter(
+                        models.TimeBlock.person_id == person.id,
+                        models.TimeBlock.task_id == block.task_id,
+                        models.TimeBlock.date == tomorrow,
+                        models.TimeBlock.deleted == False,
+                    ).first()
+                    if existing:
                         continue
-                    break
 
-                start = f"{slot_h:02d}:{slot_m:02d}"
-                end_total = slot_h * 60 + slot_m + dur
-                end = f"{end_total // 60:02d}:{end_total % 60:02d}"
+                dur = block.end_time and block.start_time and (
+                    _to_minutes(block.end_time) - _to_minutes(block.start_time)
+                ) or 30
 
-                block = models.TimeBlock(
-                    person_id=person.id,
-                    title=f"↩ {task.name}",
-                    date=today,
-                    start_time=start,
-                    end_time=end,
-                    category="work",
-                    task_id=task.id,
-                    is_recurring=False,
-                )
-                db.add(block)
-                created += 1
+                free_slot = _find_free_slot(occupied_tomorrow, dur)
+
+                if free_slot:
+                    slot_h, slot_m = free_slot
+                    start = f"{slot_h:02d}:{slot_m:02d}"
+                    end_total = slot_h * 60 + slot_m + dur
+                    end = f"{end_total // 60:02d}:{end_total % 60:02d}"
+
+                    new_block = models.TimeBlock(
+                        person_id=person.id,
+                        title=f"↩ {block.title.lstrip('↩ ')}",
+                        date=tomorrow,
+                        start_time=start,
+                        end_time=end,
+                        category=block.category or "work",
+                        task_id=block.task_id,
+                        is_recurring=False,
+                    )
+                    db.add(new_block)
+                    occupied_tomorrow.append((start, end))
+                    created += 1
+                else:
+                    # No free slot — ask user to pick a time via Telegram
+                    if chat_id and is_configured():
+                        title = block.title.lstrip("↩ ")
+                        date_str = tomorrow.strftime("%Y%m%d")
+                        # Offer 6 time options spread across the day
+                        options = ["08:00", "10:00", "12:00", "14:00", "18:00", "20:00"]
+                        buttons = [
+                            {"text": t, "callback_data": f"carryover_{block.id}_{date_str}_{t.replace(':', '')}"}
+                            for t in options
+                        ]
+                        # Two rows of 3
+                        keyboard = [buttons[:3], buttons[3:]]
+                        send_message(
+                            f"📅 No free slot for <b>{title}</b> tomorrow.\nWhen would you like to do it?",
+                            chat_id=chat_id,
+                            reply_markup={"inline_keyboard": keyboard},
+                        )
+                        asked += 1
 
         db.commit()
-        logger.info("carryover_missed_tasks: created %d carry-over blocks", created)
-        return {"created": created}
+        logger.info("carryover_missed_tasks: created=%d asked=%d", created, asked)
+        return {"created": created, "asked": asked}
     except Exception as exc:
         db.rollback()
         logger.exception("carryover_missed_tasks failed: %s", exc)
         raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()
+
+
+def _is_recurring_task(db, task_id: int) -> bool:
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    return bool(task and task.is_recurring)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

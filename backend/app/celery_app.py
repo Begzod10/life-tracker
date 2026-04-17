@@ -25,7 +25,13 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=15, minute=0, day_of_week=0),
     },
 
-# Monday 03:00 UTC = 08:00 Tashkent — goal deadline warnings
+    # Daily 17:05 UTC = 22:05 Tashkent — carry-over missed recurring blocks to tomorrow
+    "carryover-missed-tasks": {
+        "task": "app.tasks.carryover_missed_tasks",
+        "schedule": crontab(hour=17, minute=5),
+    },
+
+    # Monday 03:00 UTC = 08:00 Tashkent — goal deadline warnings
     "goal-deadline-warnings": {
         "task": "app.tasks.goal_deadline_warnings",
         "schedule": crontab(hour=3, minute=0, day_of_week=1),
