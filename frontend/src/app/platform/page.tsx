@@ -131,6 +131,7 @@ function PlatformPageContent() {
 
     const { data: user, isLoading: isUserLoading, error } = useUser()
     const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam)
+    const { data: weather } = useWeather()
 
     // Sync state with URL param
     useEffect(() => {
@@ -180,8 +181,6 @@ function PlatformPageContent() {
         return null // Редирект произойдет автоматически
     }
 
-
-    const { data: weather } = useWeather()
 
     return (
         <div className="bg-[#0a0a0f] relative overflow-hidden min-h-screen">
