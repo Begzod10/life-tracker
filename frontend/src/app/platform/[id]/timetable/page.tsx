@@ -791,7 +791,7 @@ export default function TimetablePage() {
     }, [isTodayDay])
 
     return (
-        <div className="min-h-screen bg-[#09090f] text-white">
+        <div className="min-h-screen text-white">
             {/* Top gradient glow */}
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/30 to-transparent pointer-events-none z-0" />
 

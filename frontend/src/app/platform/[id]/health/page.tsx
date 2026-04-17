@@ -100,7 +100,7 @@ function HealthProfilePage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-[#0a0a0f]">
+            <div className="min-h-screen">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <Skeleton className="h-12 w-48 mb-8" />
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -121,7 +121,7 @@ function HealthProfilePage() {
 
     if (error || !data) {
         return (
-            <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <Card className="bg-[#1a1b26] border-[#2a2b36] max-w-md w-full">
                     <CardContent className="pt-6 text-center">
                         <p className="text-gray-400 mb-6">Record Not Found</p>
@@ -163,7 +163,7 @@ function HealthProfilePage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f]">
+        <div className="min-h-screen">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <motion.div

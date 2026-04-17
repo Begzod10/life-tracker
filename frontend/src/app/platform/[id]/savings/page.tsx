@@ -811,7 +811,7 @@ export default function SavingsProfilePage() {
 
     if (accountLoading || isLoading) {
         return (
-            <div className="min-h-screen bg-[#0a0a0f] p-6">
+            <div className="min-h-screen p-6">
                 <div className="max-w-7xl mx-auto">
                     <Skeleton className="h-12 w-48 mb-4" />
                     <Skeleton className="h-6 w-32 mb-8" />
@@ -834,7 +834,7 @@ export default function SavingsProfilePage() {
 
     if (isError || !account) {
         return (
-            <div className="min-h-screen bg-[#0a0a0f] p-6 flex items-center justify-center">
+            <div className="min-h-screen p-6 flex items-center justify-center">
                 <Card className="p-8 border border-white/5 bg-white/[0.025] max-w-md text-center">
                     <h2 className="text-2xl font-bold text-white mb-2">Account Not Found</h2>
                     <p className="text-gray-400 mb-6">The savings account you&apos;re looking for doesn&apos;t exist.</p>
@@ -848,7 +848,7 @@ export default function SavingsProfilePage() {
     const TypeIcon = typeConfig.icon
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] p-6">
+        <div className="min-h-screen p-6">
             <div className="max-w-7xl mx-auto">
 
                 {/* Header */}

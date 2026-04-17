@@ -194,7 +194,7 @@ export default function TimetableStatsPage() {
     const hourLabel = (h: number) => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
 
     return (
-        <div className="min-h-screen bg-[#09090f] text-white">
+        <div className="min-h-screen text-white">
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/25 to-transparent pointer-events-none z-0" />
 
             <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">

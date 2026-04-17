@@ -52,13 +52,13 @@ export default function ProfilePage() {
 
     if (isLoading) return <ProfileSkeleton />
     if (isError || !profile) return (
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center">
             <p className="text-gray-400">Failed to load profile</p>
         </div>
     )
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f]">
+        <div className="min-h-screen">
             <div className="container mx-auto px-6 py-6">
                 <OwnProfile profile={profile} isEditMode={isEditMode} setIsEditMode={setIsEditMode} />
             </div>
@@ -68,7 +68,7 @@ export default function ProfilePage() {
 
 function ProfileSkeleton() {
     return (
-        <div className="min-h-screen bg-[#0a0a0f]">
+        <div className="min-h-screen">
             <div className="container mx-auto px-6 py-6 space-y-6">
                 <Skeleton className="h-40 w-full rounded-xl" />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

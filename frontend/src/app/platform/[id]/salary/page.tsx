@@ -810,7 +810,7 @@ function AddExpenseForm({ personId, salaryMonthId, onClose }: {
 
 export default function SalaryPageWrapper() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>}>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>}>
             <SalaryPage />
         </Suspense>
     )
@@ -845,7 +845,7 @@ function SalaryPage() {
 
     if (!data && !isLoading) {
         return (
-            <div className="min-h-screen bg-[#0a0a0f] p-8">
+            <div className="min-h-screen p-8">
                 <Card className="p-8 text-center border border-red-500/50 bg-red-500/5">
                     <h2 className="text-xl font-semibold text-white mb-4">Salary Month Not Found</h2>
                     <p className="text-white/50 text-sm mb-4">The requested salary month could not be loaded.</p>
@@ -858,7 +858,7 @@ function SalaryPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] p-8">
+        <div className="min-h-screen p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <SalaryHeader data={data} job={job ?? null} onEdit={() => setEditModalOpen(true)} />

@@ -2832,7 +2832,7 @@ export default function FinancesPage() {
     const savingsRate = summary ? summary.savings_rate : 0
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] p-8">
+        <div className="min-h-screen p-8">
             <div className="max-w-7xl mx-auto">
                 <FinancesHeader id={params.id} />
 
