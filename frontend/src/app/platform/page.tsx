@@ -24,7 +24,7 @@ import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/
 import { GoalsView } from '@/components/features/goals/goals-view'
 import { TaskList } from '@/components/features/tasks/tasks-view'
 import { Goal, GoalOverviewStats } from '@/types'
-import { useWeather, type WeatherData } from '@/lib/hooks/use-weather'
+import { useWeather, type WeatherData, type WeatherTheme } from '@/lib/hooks/use-weather'
 import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
 
 type TaskStats = {
@@ -132,6 +132,7 @@ function PlatformPageContent() {
     const { data: user, isLoading: isUserLoading, error } = useUser()
     const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam)
     const { data: weather } = useWeather()
+    const [previewTheme, setPreviewTheme] = useState<WeatherTheme | null>(null)
 
     // Sync state with URL param
     useEffect(() => {
@@ -182,7 +183,6 @@ function PlatformPageContent() {
     }
 
 
-    const [previewTheme, setPreviewTheme] = useState<import('@/lib/hooks/use-weather').WeatherTheme | null>(null)
     const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
 
     return (
