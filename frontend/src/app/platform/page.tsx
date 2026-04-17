@@ -128,41 +128,27 @@ function PlatformPageContent() {
     const categoryParam = searchParams.get('category')
 
     const { data: user, isLoading: isUserLoading, error } = useUser()
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam)
-
-    // Sync state with URL param
-    useEffect(() => {
-        if (categoryParam) {
-            setSelectedCategory(categoryParam)
-        } else {
-            setSelectedCategory(null)
-        }
-    }, [categoryParam])
 
     const DEDICATED_PAGES = ['timetable', 'finances', 'health']
 
-    // Auto-redirect dedicated categories whenever user loads or selected category changes
+    // Redirect dedicated pages to their own routes once user is loaded
     useEffect(() => {
         if (!user?.id) return
-        if (selectedCategory && DEDICATED_PAGES.includes(selectedCategory)) {
-            router.replace(`/platform/${user.id}/${selectedCategory}`)
+        if (categoryParam && DEDICATED_PAGES.includes(categoryParam)) {
+            router.replace(`/platform/${user.id}/${categoryParam}`)
         }
-    }, [selectedCategory, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [categoryParam, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Update URL when category changes
+    // URL is the source of truth — no local state needed
     const handleSelectCategory = useCallback((id: string | null) => {
         if (!id) {
-            setSelectedCategory(null)
             router.push('/platform')
             return
         }
-
         if (DEDICATED_PAGES.includes(id) && user?.id) {
             router.push(`/platform/${user.id}/${id}`)
             return
         }
-
-        setSelectedCategory(id)
         router.push(`/platform?category=${id}`)
     }, [user?.id, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -179,10 +165,12 @@ function PlatformPageContent() {
     }
 
 
+    const showExpanded = categoryParam && !DEDICATED_PAGES.includes(categoryParam)
+
     return (
         <div className="relative overflow-hidden min-h-screen">
             <AnimatePresence mode="wait">
-                {!selectedCategory || ['timetable', 'finances', 'health'].includes(selectedCategory) ? (
+                {!showExpanded ? (
                     <CategoriesGrid
                         key="grid"
                         categories={categories}
@@ -191,7 +179,7 @@ function PlatformPageContent() {
                 ) : (
                     <CategoryExpanded
                         key="expanded"
-                        category={categories.find(c => c.id === selectedCategory)!}
+                        category={categories.find(c => c.id === categoryParam)!}
                         onBack={() => handleSelectCategory(null)}
                     />
                 )}
