@@ -158,12 +158,26 @@ def _get_todays_tasks(db, person_id: int, today: date):
     """
     Return all non-deleted, non-completed tasks for a person that are relevant today:
     - due_date == today
-    - OR is_recurring == True (daily tasks that reset every day)
-    - OR task_type == 'daily' with no due_date (always show daily tasks)
+    - OR (is_recurring OR task_type == 'daily') AND has a timetable block scheduled for today
+    Recurring tasks without a block today are excluded — they may not be on today's schedule.
     """
     from sqlalchemy import or_
     not_deleted = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
-    return (
+
+    # Task IDs that have a non-deleted block scheduled for today
+    block_task_ids = set(
+        row[0]
+        for row in db.query(models.TimeBlock.task_id)
+        .filter(
+            models.TimeBlock.person_id == person_id,
+            models.TimeBlock.date == today,
+            models.TimeBlock.deleted == False,
+            models.TimeBlock.task_id.isnot(None),
+        )
+        .all()
+    )
+
+    all_tasks = (
         db.query(models.Task)
         .join(models.Goal, models.Task.goal_id == models.Goal.id)
         .filter(
@@ -177,11 +191,17 @@ def _get_todays_tasks(db, person_id: int, today: date):
                 models.Task.task_type == "daily",
             ),
         )
-        .order_by(
-            models.Task.priority.asc(),  # high → medium → low alphabetically? use custom sort below
-        )
+        .order_by(models.Task.priority.asc())
         .all()
     )
+
+    result = []
+    for task in all_tasks:
+        if task.due_date == today:
+            result.append(task)
+        elif task.id in block_task_ids:
+            result.append(task)
+    return result
 
 
 def _format_task_line(task) -> str:
