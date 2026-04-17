@@ -975,11 +975,45 @@ def carryover_missed_tasks(self):
                 if existing:
                     continue
 
-                # Create a carry-over block (default 08:00, duration from task or 30 min)
+                # Create a carry-over block — find a free slot starting from 08:00
                 dur = task.estimated_duration or 30
-                start = "08:00"
-                eh = 8 + dur // 60; em = dur % 60
-                end = f"{eh:02d}:{em:02d}"
+                todays_blocks = db.query(models.TimeBlock).filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                ).all()
+
+                def _to_minutes(t: str) -> int:
+                    h, m = t.split(":")
+                    return int(h) * 60 + int(m)
+
+                occupied = [(b.start_time, b.end_time) for b in todays_blocks if b.start_time and b.end_time]
+
+                def _slot_free(h: int, m: int) -> bool:
+                    s = h * 60 + m
+                    e = s + dur
+                    for st, et in occupied:
+                        bs = _to_minutes(st)
+                        be = _to_minutes(et)
+                        if s < be and e > bs:
+                            return False
+                    return True
+
+                slot_h, slot_m = 8, 0
+                for candidate_h in range(8, 23):
+                    for candidate_m in (0, 30):
+                        if candidate_h * 60 + candidate_m + dur > 23 * 60:
+                            break
+                        if _slot_free(candidate_h, candidate_m):
+                            slot_h, slot_m = candidate_h, candidate_m
+                            break
+                    else:
+                        continue
+                    break
+
+                start = f"{slot_h:02d}:{slot_m:02d}"
+                end_total = slot_h * 60 + slot_m + dur
+                end = f"{end_total // 60:02d}:{end_total % 60:02d}"
 
                 block = models.TimeBlock(
                     person_id=person.id,
