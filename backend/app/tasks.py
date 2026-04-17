@@ -1023,18 +1023,32 @@ def carryover_missed_tasks(self):
                     occupied_tomorrow.append((start, end))
                     created += 1
                 else:
-                    # Truly no slot in the whole day — ask user to pick a time
+                    # Truly no slot in the whole day — ask user to pick a free time
                     if chat_id and is_configured():
                         title = block.title.lstrip("↩ ")
                         date_str = tomorrow.strftime("%Y%m%d")
-                        options = ["08:00", "10:00", "12:00", "14:00", "18:00", "20:00", "22:00", "23:00"]
+                        candidates = [
+                            f"{h:02d}:{m:02d}"
+                            for h in range(8, 24)
+                            for m in (0, 30)
+                            if h * 60 + m + dur <= 24 * 60
+                        ]
+                        free_options = [
+                            t for t in candidates
+                            if _find_free_slot(occupied_tomorrow, dur,
+                                               start_from_h=int(t[:2]),
+                                               limit_h=int(t[:2]) + 1) == (int(t[:2]), int(t[3:]))
+                        ][:8]
+                        if not free_options:
+                            free_options = candidates[-8:]  # last resort: show late slots
                         buttons = [
                             {"text": t, "callback_data": f"carryover_{block.id}_{date_str}_{t.replace(':', '')}"}
-                            for t in options
+                            for t in free_options
                         ]
-                        keyboard = [buttons[:4], buttons[4:]]
+                        mid = len(buttons) // 2
+                        keyboard = [buttons[:mid], buttons[mid:]]
                         send_message(
-                            f"📅 Tomorrow is fully booked for <b>{title}</b>.\nWhen would you like to do it?",
+                            f"📅 Tomorrow is fully booked for <b>{title}</b>.\nChoose a free time:",
                             chat_id=chat_id,
                             reply_markup={"inline_keyboard": keyboard},
                         )
