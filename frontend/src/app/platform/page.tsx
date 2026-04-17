@@ -24,6 +24,8 @@ import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/
 import { GoalsView } from '@/components/features/goals/goals-view'
 import { TaskList } from '@/components/features/tasks/tasks-view'
 import { Goal, GoalOverviewStats } from '@/types'
+import { useWeather } from '@/lib/hooks/use-weather'
+import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
 
 type TaskStats = {
     total: number
@@ -179,14 +181,20 @@ function PlatformPageContent() {
     }
 
 
+    const { data: weather } = useWeather()
+
     return (
-        <div className="bg-[#0a0a0f] relative overflow-hidden">
+        <div className="bg-[#0a0a0f] relative overflow-hidden min-h-screen">
+            {/* Dynamic weather background */}
+            <WeatherBackground theme={weather?.theme ?? 'unknown'} />
+
             <AnimatePresence mode="wait">
                 {!selectedCategory || ['timetable', 'finances', 'health'].includes(selectedCategory) ? (
                     <CategoriesGrid
                         key="grid"
                         categories={categories}
                         onSelect={handleSelectCategory}
+                        weather={weather ?? null}
                     />
                 ) : (
                     <CategoryExpanded
@@ -201,18 +209,26 @@ function PlatformPageContent() {
 }
 
 // Grid View - все категории
-function CategoriesGrid({ categories, onSelect }: {
+function CategoriesGrid({ categories, onSelect, weather }: {
     categories: categoryType[]
     onSelect: (id: string) => void
+    weather: import('@/lib/hooks/use-weather').WeatherData | null
 }) {
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="min-h-screen flex items-center justify-center p-8"
+            className="relative min-h-screen flex items-center justify-center p-8"
         >
-            <div className="w-full max-w-6xl">
+            {/* Weather widget top-right */}
+            {weather && (
+                <div className="absolute top-6 right-6 z-20">
+                    <WeatherWidget data={weather} />
+                </div>
+            )}
+
+            <div className="relative z-10 w-full max-w-6xl">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {categories.map((category, index) => (
                         <CategoryCard
