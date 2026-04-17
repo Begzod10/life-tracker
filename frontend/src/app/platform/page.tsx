@@ -24,14 +24,6 @@ import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/
 import { GoalsView } from '@/components/features/goals/goals-view'
 import { TaskList } from '@/components/features/tasks/tasks-view'
 import { Goal, GoalOverviewStats } from '@/types'
-import { useWeather, type WeatherData, type WeatherTheme } from '@/lib/hooks/use-weather'
-import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
-
-const WEATHER_THEMES = ['clear', 'partly-cloudy', 'cloudy', 'fog', 'rain', 'snow', 'thunder'] as const
-const WEATHER_EMOJI: Record<string, string> = {
-    clear: '☀️', 'partly-cloudy': '⛅', cloudy: '☁️',
-    fog: '🌫️', rain: '🌧️', snow: '❄️', thunder: '⛈️',
-}
 
 type TaskStats = {
     total: number
@@ -137,8 +129,6 @@ function PlatformPageContent() {
 
     const { data: user, isLoading: isUserLoading, error } = useUser()
     const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam)
-    const { data: weather } = useWeather()
-    const [previewTheme, setPreviewTheme] = useState<WeatherTheme | null>(null)
 
     // Sync state with URL param
     useEffect(() => {
@@ -189,34 +179,14 @@ function PlatformPageContent() {
     }
 
 
-    const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
-
     return (
-        <div className="bg-[#0a0a0f] relative overflow-hidden min-h-screen">
-            <WeatherBackground theme={activeTheme} />
-
-            {/* Weather theme tester */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1 p-1.5 rounded-2xl backdrop-blur-md border border-white/10" style={{ background: 'rgba(0,0,0,0.55)' }}>
-                {WEATHER_THEMES.map(t => (
-                    <button
-                        key={t}
-                        onClick={() => setPreviewTheme(previewTheme === t ? null : t)}
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                            activeTheme === t ? 'bg-white/20 text-white' : 'text-white/45 hover:text-white hover:bg-white/10'
-                        }`}
-                    >
-                        {WEATHER_EMOJI[t]} {t}
-                    </button>
-                ))}
-            </div>
-
+        <div className="relative overflow-hidden min-h-screen">
             <AnimatePresence mode="wait">
                 {!selectedCategory || ['timetable', 'finances', 'health'].includes(selectedCategory) ? (
                     <CategoriesGrid
                         key="grid"
                         categories={categories}
                         onSelect={handleSelectCategory}
-                        weather={weather ?? null}
                     />
                 ) : (
                     <CategoryExpanded
@@ -231,10 +201,9 @@ function PlatformPageContent() {
 }
 
 // Grid View - все категории
-function CategoriesGrid({ categories, onSelect, weather }: {
+function CategoriesGrid({ categories, onSelect }: {
     categories: categoryType[]
     onSelect: (id: string) => void
-    weather: WeatherData | null
 }) {
     return (
         <motion.div
@@ -243,13 +212,6 @@ function CategoriesGrid({ categories, onSelect, weather }: {
             exit={{ opacity: 0 }}
             className="relative min-h-screen flex items-center justify-center p-8"
         >
-            {/* Weather widget top-right */}
-            {weather && (
-                <div className="absolute top-6 right-6 z-20">
-                    <WeatherWidget data={weather} />
-                </div>
-            )}
-
             <div className="relative z-10 w-full max-w-6xl">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {categories.map((category, index) => (
