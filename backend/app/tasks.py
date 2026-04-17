@@ -926,7 +926,7 @@ def _find_free_slot(occupied: list, dur: int, start_from_h: int = 8, limit_h: in
             s = h * 60 + m
             e = s + dur
             if e > limit_h * 60:
-                return None
+                continue
             if all(not (s < _to_minutes(et) and e > _to_minutes(st)) for st, et in occupied):
                 return (h, m)
     return None
@@ -998,7 +998,10 @@ def carryover_missed_tasks(self):
                     _to_minutes(block.end_time) - _to_minutes(block.start_time)
                 ) or 30
 
-                free_slot = _find_free_slot(occupied_tomorrow, dur)
+                # Try before 22:00 first, then extend to midnight if needed
+                free_slot = _find_free_slot(occupied_tomorrow, dur, limit_h=22)
+                if not free_slot:
+                    free_slot = _find_free_slot(occupied_tomorrow, dur, start_from_h=22, limit_h=24)
 
                 if free_slot:
                     slot_h, slot_m = free_slot
@@ -1020,20 +1023,18 @@ def carryover_missed_tasks(self):
                     occupied_tomorrow.append((start, end))
                     created += 1
                 else:
-                    # No free slot — ask user to pick a time via Telegram
+                    # Truly no slot in the whole day — ask user to pick a time
                     if chat_id and is_configured():
                         title = block.title.lstrip("↩ ")
                         date_str = tomorrow.strftime("%Y%m%d")
-                        # Offer 6 time options spread across the day
-                        options = ["08:00", "10:00", "12:00", "14:00", "18:00", "20:00"]
+                        options = ["08:00", "10:00", "12:00", "14:00", "18:00", "20:00", "22:00", "23:00"]
                         buttons = [
                             {"text": t, "callback_data": f"carryover_{block.id}_{date_str}_{t.replace(':', '')}"}
                             for t in options
                         ]
-                        # Two rows of 3
-                        keyboard = [buttons[:3], buttons[3:]]
+                        keyboard = [buttons[:4], buttons[4:]]
                         send_message(
-                            f"📅 No free slot for <b>{title}</b> tomorrow.\nWhen would you like to do it?",
+                            f"📅 Tomorrow is fully booked for <b>{title}</b>.\nWhen would you like to do it?",
                             chat_id=chat_id,
                             reply_markup={"inline_keyboard": keyboard},
                         )
