@@ -13,59 +13,59 @@ const Weather3D = dynamic(
 // ── Per-theme visual config ────────────────────────────────────────────────────
 
 const THEMES: Record<WeatherTheme, {
-  bg: string           // full-screen gradient
-  glow: string         // radial accent blob at top
+  bg: string
+  glow: string
   kind: 'none' | 'rain' | 'snow' | 'clouds' | 'fog' | 'sun' | 'thunder-rain'
   rainCount: number
   snowCount: number
 }> = {
   clear: {
-    bg: 'radial-gradient(ellipse 120% 55% at 50% -5%, rgba(251,146,60,0.22) 0%, rgba(10,10,15,0) 75%)',
-    glow: 'radial-gradient(circle 300px at 50% -60px, rgba(251,191,36,0.35) 0%, transparent 70%)',
+    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(251,146,60,0.38) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 400px at 50% -80px, rgba(251,191,36,0.55) 0%, transparent 65%)',
     kind: 'sun',
     rainCount: 0,
     snowCount: 0,
   },
   'partly-cloudy': {
-    bg: 'radial-gradient(ellipse 120% 55% at 50% -5%, rgba(80,120,200,0.18) 0%, rgba(10,10,15,0) 75%)',
-    glow: 'radial-gradient(circle 250px at 50% -40px, rgba(147,197,253,0.25) 0%, transparent 70%)',
+    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(80,130,220,0.32) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 350px at 50% -60px, rgba(147,197,253,0.45) 0%, transparent 65%)',
     kind: 'clouds',
     rainCount: 0,
     snowCount: 0,
   },
   cloudy: {
-    bg: 'linear-gradient(180deg, rgba(55,65,81,0.35) 0%, rgba(10,10,15,0) 65%)',
-    glow: 'radial-gradient(circle 400px at 50% -80px, rgba(100,116,139,0.3) 0%, transparent 70%)',
+    bg: 'linear-gradient(180deg, rgba(55,65,81,0.55) 0%, rgba(10,10,15,0) 60%)',
+    glow: 'radial-gradient(circle 500px at 50% -100px, rgba(100,116,139,0.5) 0%, transparent 65%)',
     kind: 'clouds',
     rainCount: 0,
     snowCount: 0,
   },
   fog: {
-    bg: 'linear-gradient(180deg, rgba(75,85,99,0.3) 0%, rgba(10,10,15,0) 60%)',
-    glow: '',
+    bg: 'linear-gradient(180deg, rgba(100,110,130,0.45) 0%, rgba(10,10,15,0) 60%)',
+    glow: 'radial-gradient(circle 600px at 50% 20%, rgba(148,163,184,0.2) 0%, transparent 70%)',
     kind: 'fog',
     rainCount: 0,
     snowCount: 0,
   },
   rain: {
-    bg: 'radial-gradient(ellipse 140% 60% at 50% -10%, rgba(23,37,90,0.45) 0%, rgba(10,10,15,0) 75%)',
-    glow: 'radial-gradient(circle 350px at 50% -60px, rgba(59,130,246,0.2) 0%, transparent 70%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(23,37,90,0.7) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 450px at 50% -80px, rgba(59,130,246,0.45) 0%, transparent 65%)',
     kind: 'rain',
-    rainCount: 80,
+    rainCount: 120,
     snowCount: 0,
   },
   snow: {
-    bg: 'radial-gradient(ellipse 140% 60% at 50% -10%, rgba(96,165,250,0.2) 0%, rgba(10,10,15,0) 75%)',
-    glow: 'radial-gradient(circle 300px at 50% -50px, rgba(186,230,253,0.2) 0%, transparent 70%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(96,165,250,0.35) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 400px at 50% -70px, rgba(186,230,253,0.4) 0%, transparent 65%)',
     kind: 'snow',
     rainCount: 0,
-    snowCount: 55,
+    snowCount: 80,
   },
   thunder: {
-    bg: 'radial-gradient(ellipse 140% 60% at 50% -10%, rgba(76,29,149,0.4) 0%, rgba(10,10,15,0) 75%)',
-    glow: 'radial-gradient(circle 400px at 50% -80px, rgba(139,92,246,0.25) 0%, transparent 70%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(76,29,149,0.65) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 500px at 50% -90px, rgba(139,92,246,0.5) 0%, transparent 65%)',
     kind: 'thunder-rain',
-    rainCount: 90,
+    rainCount: 130,
     snowCount: 0,
   },
   unknown: {
@@ -106,7 +106,7 @@ function useFlakes(count: number) {
   , [count])
 }
 
-function RainLayer({ count, color = 'rgba(147,197,253,0.45)' }: { count: number; color?: string }) {
+function RainLayer({ count, color = 'rgba(147,197,253,0.7)' }: { count: number; color?: string }) {
   const drops = useDrops(count)
   return (
     <>
@@ -116,10 +116,10 @@ function RainLayer({ count, color = 'rgba(147,197,253,0.45)' }: { count: number;
           className="absolute top-0 rounded-full"
           style={{
             left: `${d.x}%`,
-            width: '1.5px',
-            height: d.len,
-            background: `linear-gradient(180deg, transparent, ${color})`,
-            opacity: d.opacity,
+            width: `${1 + (d.id % 2)}px`,
+            height: d.len + 10,
+            background: `linear-gradient(180deg, transparent 0%, ${color} 100%)`,
+            opacity: d.opacity + 0.2,
           }}
           animate={{ y: ['-5vh', '110vh'] }}
           transition={{ duration: d.dur, delay: d.delay, repeat: Infinity, ease: 'linear' }}
@@ -148,11 +148,11 @@ function SnowLayer({ count }: { count: number }) {
 
 function CloudLayer() {
   const clouds = useMemo(() => [
-    { w: 500, h: 100, top: '4%',  dur: 40, delay: 0,    opacity: 0.09 },
-    { w: 700, h: 130, top: '10%', dur: 60, delay: -20,  opacity: 0.07 },
-    { w: 400, h: 80,  top: '2%',  dur: 30, delay: -10,  opacity: 0.11 },
-    { w: 600, h: 110, top: '16%', dur: 75, delay: -35,  opacity: 0.06 },
-    { w: 350, h: 70,  top: '8%',  dur: 28, delay: -5,   opacity: 0.10 },
+    { w: 600, h: 120, top: '3%',  dur: 40, delay: 0,    opacity: 0.18 },
+    { w: 800, h: 150, top: '9%',  dur: 60, delay: -20,  opacity: 0.14 },
+    { w: 500, h: 100, top: '1%',  dur: 30, delay: -10,  opacity: 0.20 },
+    { w: 700, h: 130, top: '15%', dur: 75, delay: -35,  opacity: 0.12 },
+    { w: 450, h: 90,  top: '7%',  dur: 28, delay: -5,   opacity: 0.16 },
   ], [])
 
   return (
@@ -179,14 +179,14 @@ function CloudLayer() {
 function FogLayer() {
   return (
     <>
-      {[0, 1, 2, 3].map(i => (
+      {[0, 1, 2, 3, 4].map(i => (
         <motion.div
           key={i}
           className="absolute inset-x-0 blur-3xl"
           style={{
-            top: `${8 + i * 10}%`,
-            height: 80,
-            background: 'linear-gradient(90deg, transparent 0%, rgba(150,160,180,0.12) 20%, rgba(150,160,180,0.12) 80%, transparent 100%)',
+            top: `${5 + i * 8}%`,
+            height: 100,
+            background: 'linear-gradient(90deg, transparent 0%, rgba(180,190,210,0.22) 20%, rgba(180,190,210,0.22) 80%, transparent 100%)',
           }}
           animate={{ x: ['-8%', '8%', '-8%'] }}
           transition={{ duration: 12 + i * 3, repeat: Infinity, ease: 'easeInOut' }}

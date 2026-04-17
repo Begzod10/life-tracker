@@ -24,7 +24,7 @@ import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/
 import { GoalsView } from '@/components/features/goals/goals-view'
 import { TaskList } from '@/components/features/tasks/tasks-view'
 import { Goal, GoalOverviewStats } from '@/types'
-import { useWeather, type WeatherData, type WeatherTheme } from '@/lib/hooks/use-weather'
+import { useWeather, type WeatherData } from '@/lib/hooks/use-weather'
 import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
 
 type TaskStats = {
@@ -132,7 +132,6 @@ function PlatformPageContent() {
     const { data: user, isLoading: isUserLoading, error } = useUser()
     const [selectedCategory, setSelectedCategory] = useState<string | null>(categoryParam)
     const { data: weather } = useWeather()
-    const [previewTheme, setPreviewTheme] = useState<WeatherTheme | null>(null)
 
     // Sync state with URL param
     useEffect(() => {
@@ -183,29 +182,8 @@ function PlatformPageContent() {
     }
 
 
-    const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
-
     return (
         <div className="relative overflow-hidden min-h-screen">
-
-            {/* Weather theme tester */}
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1.5 p-2 rounded-2xl backdrop-blur-md border border-white/10" style={{ background: 'rgba(0,0,0,0.5)' }}>
-                {(['clear','partly-cloudy','cloudy','fog','rain','snow','thunder'] as const).map(t => (
-                    <button
-                        key={t}
-                        onClick={() => setPreviewTheme(previewTheme === t ? null : t)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                            activeTheme === t
-                                ? 'bg-white/20 text-white'
-                                : 'text-white/50 hover:text-white hover:bg-white/10'
-                        }`}
-                    >
-                        {{ clear:'☀️', 'partly-cloudy':'⛅', cloudy:'☁️', fog:'🌫️', rain:'🌧️', snow:'❄️', thunder:'⛈️' }[t]}
-                        {' '}{t}
-                    </button>
-                ))}
-            </div>
-
             <AnimatePresence mode="wait">
                 {!selectedCategory || ['timetable', 'finances', 'health'].includes(selectedCategory) ? (
                     <CategoriesGrid
