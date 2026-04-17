@@ -186,9 +186,7 @@ function PlatformPageContent() {
     const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
 
     return (
-        <div className="bg-[#0a0a0f] relative overflow-hidden min-h-screen">
-            {/* Dynamic weather background */}
-            <WeatherBackground theme={activeTheme} />
+        <div className="relative overflow-hidden min-h-screen">
 
             {/* Weather theme tester */}
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1.5 p-2 rounded-2xl backdrop-blur-md border border-white/10" style={{ background: 'rgba(0,0,0,0.5)' }}>
