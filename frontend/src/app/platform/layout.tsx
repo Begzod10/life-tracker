@@ -31,9 +31,9 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 </main>
             </div>
 
-            {/* Weather widget top-right */}
+            {/* Weather widget center-top */}
             {weather && (
-                <div className="fixed top-4 right-6 z-30">
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30">
                     <WeatherWidget data={weather} />
                 </div>
             )}
