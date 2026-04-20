@@ -401,16 +401,18 @@ function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
 
     if (isLoading || recurring.length === 0) return null
 
-    // Build last-28-days date list
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    const days: Date[] = Array.from({ length: 28 }, (_, i) => {
-        const d = new Date(today); d.setDate(today.getDate() - 27 + i); return d
-    })
     const fmt = (d: Date) => d.toISOString().slice(0, 10)
-    const dayLabel = (d: Date) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getDay()]
+    const todayStr = fmt(today)
 
-    const priorityDot: Record<string, string> = {
-        high: 'bg-red-400', medium: 'bg-yellow-400', low: 'bg-green-400'
+    // Last 14 days for the mini-grid (2 weeks fits any screen)
+    const last14: Date[] = Array.from({ length: 14 }, (_, i) => {
+        const d = new Date(today); d.setDate(today.getDate() - 13 + i); return d
+    })
+    const dayAbbr = (d: Date) => ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()]
+
+    const priorityColor: Record<string, string> = {
+        high: '#f87171', medium: '#fbbf24', low: '#34d399'
     }
 
     return (
@@ -420,103 +422,92 @@ function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
             transition={{ delay: 0.15 }}
         >
             <Card
-                className="p-6 border border-white/5 backdrop-blur-sm"
+                className="p-5 border border-white/5 backdrop-blur-sm"
                 style={{ backgroundColor: 'oklch(0.18 0.02 240)', borderColor: 'oklch(0.25 0.02 240)' }}
             >
-                <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                        <span>🔄</span> Recurring Tasks
-                        <span className="text-xs font-normal text-white/40 ml-1">— last 4 weeks</span>
-                    </h2>
-                </div>
+                <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                    🔄 Recurring Tasks
+                    <span className="text-xs font-normal text-white/35">— last 2 weeks</span>
+                </h2>
 
-                {/* Day header */}
-                <div className="flex gap-1 mb-2 pl-[200px]">
-                    {days.map((d, i) => (
-                        <div key={i} className="w-6 flex-shrink-0 text-center">
-                            {i % 7 === 0 && (
-                                <span className="text-[9px] text-white/25 font-medium">{dayLabel(d)}</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="space-y-2">
+                <div className="space-y-4">
                     {recurring.map(task => {
                         const completionSet = new Set(task.completions)
-                        const totalDone = task.completions.length
-                        const streak = (() => {
-                            let s = 0
-                            for (let i = 27; i >= 0; i--) {
-                                if (completionSet.has(fmt(days[i]))) s++
-                                else break
-                            }
-                            return s
-                        })()
+
+                        // Streak: consecutive days ending today or yesterday
+                        let streak = 0
+                        let check = new Date(today)
+                        while (completionSet.has(fmt(check))) {
+                            streak++
+                            check = new Date(check); check.setDate(check.getDate() - 1)
+                        }
+
+                        const done28 = last14.filter(d => completionSet.has(fmt(d))).length
+                        const rate = Math.round((done28 / 14) * 100)
 
                         return (
-                            <div key={task.task_id} className="flex items-center gap-2">
-                                {/* Task name */}
-                                <div className="w-[192px] flex items-center gap-2 shrink-0">
-                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority] ?? 'bg-white/30'}`} />
-                                    <span className="text-sm text-white/80 truncate" title={task.task_name}>
-                                        {task.task_name}
-                                    </span>
+                            <div key={task.task_id} className="rounded-xl p-4 bg-white/[0.03] border border-white/[0.06]">
+                                {/* Top row: name + streak */}
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span
+                                            className="w-2 h-2 rounded-full shrink-0"
+                                            style={{ backgroundColor: priorityColor[task.priority] ?? '#9ca3af' }}
+                                        />
+                                        <span className="text-sm font-medium text-white/85 truncate">
+                                            {task.task_name}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {streak > 0 && (
+                                            <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                                                🔥 {streak}d
+                                            </span>
+                                        )}
+                                        <span className="text-xs text-white/35">{rate}%</span>
+                                    </div>
                                 </div>
 
-                                {/* Day cells */}
+                                {/* Mini day grid — 14 cells, always fits */}
                                 <div className="flex gap-1">
-                                    {days.map((d, i) => {
+                                    {last14.map((d, i) => {
                                         const dateStr = fmt(d)
                                         const done = completionSet.has(dateStr)
-                                        const isToday = dateStr === fmt(today)
+                                        const isToday = dateStr === todayStr
+                                        const isPast = d < today
                                         return (
-                                            <div key={i}
-                                                title={`${dateStr}${done ? ' ✓' : ''}`}
-                                                className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center transition-all
-                                                    ${done
-                                                        ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
-                                                        : isToday
-                                                            ? 'bg-white/10 border border-white/20'
-                                                            : d > today
-                                                                ? 'bg-transparent'
-                                                                : 'bg-white/5'
+                                            <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                                                <span className="text-[8px] text-white/20">{dayAbbr(d)}</span>
+                                                <div
+                                                    title={`${dateStr}${done ? ' ✓' : ''}`}
+                                                    className={`w-full aspect-square rounded-md transition-all ${
+                                                        done
+                                                            ? 'bg-emerald-500 shadow-sm shadow-emerald-500/30'
+                                                            : isToday
+                                                                ? 'bg-white/10 ring-1 ring-white/20'
+                                                                : isPast
+                                                                    ? 'bg-white/[0.04]'
+                                                                    : 'bg-transparent'
                                                     }`}
-                                            >
-                                                {done && <span className="text-[9px] text-white font-bold">✓</span>}
+                                                />
                                             </div>
                                         )
                                     })}
                                 </div>
 
-                                {/* Stats */}
-                                <div className="ml-2 flex items-center gap-3 shrink-0">
-                                    <span className="text-xs text-white/40">{totalDone}/28</span>
-                                    {streak > 0 && (
-                                        <span className="text-xs text-amber-400 font-semibold">
-                                            🔥 {streak}d
-                                        </span>
-                                    )}
+                                {/* Thin progress bar */}
+                                <div className="mt-3 h-1 rounded-full bg-white/5">
+                                    <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                            width: `${rate}%`,
+                                            backgroundColor: rate >= 70 ? '#34d399' : rate >= 40 ? '#fbbf24' : '#f87171'
+                                        }}
+                                    />
                                 </div>
                             </div>
                         )
                     })}
-                </div>
-
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                        <span className="text-xs text-white/35">Completed</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-3 h-3 rounded-sm bg-white/5" />
-                        <span className="text-xs text-white/35">Missed</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-amber-400">🔥</span>
-                        <span className="text-xs text-white/35">Current streak</span>
-                    </div>
                 </div>
             </Card>
         </motion.div>
