@@ -380,26 +380,35 @@ export function TaskList({
 
                 {/* Filters and View Toggle */}
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <Select value={`${priorityFilter}|${completedFilter}`} onValueChange={(value) => {
-                            const [p, c] = value.split('|')
-                            setPriorityFilter(p)
-                            setCompletedFilter(c)
-                        }}>
-                            <SelectTrigger className="w-36 h-9 text-sm bg-[oklch(0.18_0.02_240)] border-[oklch(0.25_0.02_240)]">
-                                <SelectValue placeholder="Filter tasks" />
+
+                        {/* Status filter */}
+                        <Select value={completedFilter} onValueChange={setCompletedFilter}>
+                            <SelectTrigger className="w-32 h-9 text-sm bg-[oklch(0.18_0.02_240)] border-[oklch(0.25_0.02_240)]">
+                                <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all|all">All tasks</SelectItem>
-                                <SelectItem value="high|all">High priority</SelectItem>
-                                <SelectItem value="medium|all">Medium priority</SelectItem>
-                                <SelectItem value="low|all">Low priority</SelectItem>
-                                <SelectItem value="all|completed">Completed</SelectItem>
-                                <SelectItem value="all|pending">Incomplete</SelectItem>
+                                <SelectItem value="all">All tasks</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="completed">✅ Completed</SelectItem>
                             </SelectContent>
                         </Select>
 
+                        {/* Priority filter */}
+                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                            <SelectTrigger className="w-32 h-9 text-sm bg-[oklch(0.18_0.02_240)] border-[oklch(0.25_0.02_240)]">
+                                <SelectValue placeholder="Priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All priorities</SelectItem>
+                                <SelectItem value="high">🔴 High</SelectItem>
+                                <SelectItem value="medium">🟡 Medium</SelectItem>
+                                <SelectItem value="low">🟢 Low</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Type filter */}
                         <Select value={typeFilter} onValueChange={setTypeFilter}>
                             <SelectTrigger className="w-32 h-9 text-sm bg-[oklch(0.18_0.02_240)] border-[oklch(0.25_0.02_240)]">
                                 <SelectValue placeholder="Type" />
