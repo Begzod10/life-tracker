@@ -6,6 +6,8 @@ import { Header } from '@/components/layouts/header'
 import { AICoach } from '@/components/features/ai-coach/ai-coach'
 import { useWeather, type WeatherTheme } from '@/lib/hooks/use-weather'
 import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
+import { useUser } from '@/lib/hooks/use-auth'
+import { useVoiceGreeting } from '@/lib/hooks/use-voice-greeting'
 
 const WEATHER_THEMES = ['clear', 'partly-cloudy', 'cloudy', 'fog', 'rain', 'snow', 'thunder'] as const
 const WEATHER_EMOJI: Record<string, string> = {
@@ -17,6 +19,8 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
     const { data: weather } = useWeather()
     const [previewTheme, setPreviewTheme] = useState<WeatherTheme | null>(null)
     const activeTheme = previewTheme ?? weather?.theme ?? 'unknown'
+    const { data: user } = useUser()
+    useVoiceGreeting(user?.name)
 
     return (
         <div className="dark bg-[#0a0a0f] relative min-h-screen">
