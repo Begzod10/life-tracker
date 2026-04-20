@@ -243,6 +243,24 @@ def toggle_time_block(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
     db_block.is_completed = not db_block.is_completed
     db.commit()
+
+    # Sync ProgressLogTask for linked recurring tasks so streak counts the block completion
+    if db_block.task_id:
+        task = db.query(models.Task).filter(models.Task.id == db_block.task_id).first()
+        if task and task.is_recurring:
+            log_date = db_block.date
+            existing_log = db.query(models.ProgressLogTask).filter(
+                models.ProgressLogTask.task_id == db_block.task_id,
+                models.ProgressLogTask.log_date == log_date,
+            ).first()
+
+            if db_block.is_completed and not existing_log:
+                db.add(models.ProgressLogTask(task_id=db_block.task_id, log_date=log_date))
+                db.commit()
+            elif not db_block.is_completed and existing_log:
+                db.delete(existing_log)
+                db.commit()
+
     db.refresh(db_block)
     return db_block
 

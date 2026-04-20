@@ -48,6 +48,16 @@ def get_recurring_stats(db: Session = Depends(get_db), current_user=Depends(get_
             models.ProgressLogTask.task_id == task.id
         ).all()
         completed_dates = {log.log_date for log in logs}
+
+        # Also count days where a linked timetable block was completed
+        block_dates = {
+            b.date for b in db.query(models.TimeBlock).filter(
+                models.TimeBlock.task_id == task.id,
+                models.TimeBlock.is_completed == True,
+                models.TimeBlock.deleted == False,
+            ).all()
+        }
+        completed_dates = completed_dates | block_dates
         days_completed = len(completed_dates)
 
         start = task.created_at.date() if task.created_at else today
