@@ -32,3 +32,8 @@ out/
 alembic/versions/
 *.http
 structure/
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
