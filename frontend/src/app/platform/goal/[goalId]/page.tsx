@@ -42,7 +42,11 @@ import { useHttp } from '@/lib/hooks/use-http'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { useQueryClient } from '@tanstack/react-query'
 import { ProgressLog, Milestone } from '@/types'
-import { Pencil, Trash } from 'lucide-react'
+import { Pencil, Trash, BarChart2 } from 'lucide-react'
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, Cell
+} from 'recharts'
 
 // Helper function to get category icon
 const getCategoryIcon = (category: string) => {
@@ -231,6 +235,163 @@ const Timeline = ({
                 </div>
             </div>
         </div>
+    )
+}
+
+// ─── Recurring Task Statistics ───────────────────────────────────────────────
+function GoalRecurringStats({ goalId }: { goalId: string }) {
+    const { data: recurring = [], isLoading } = useRecurringCompletions(goalId, 4)
+    const [activeTab, setActiveTab] = useState<'daily' | 'rate'>('daily')
+
+    if (isLoading || recurring.length === 0) return null
+
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const days: Date[] = Array.from({ length: 28 }, (_, i) => {
+        const d = new Date(today); d.setDate(today.getDate() - 27 + i); return d
+    })
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+    // Daily aggregate: how many tasks completed each day
+    const dailyData = days.map(d => {
+        const dateStr = fmt(d)
+        const count = recurring.filter(t => t.completions.includes(dateStr)).length
+        return {
+            date: dateStr.slice(5),   // "MM-DD"
+            count,
+            max: recurring.length,
+        }
+    })
+
+    // Per-task completion rate over 28 days
+    const rateData = recurring.map(t => {
+        const pastDays = days.filter(d => d <= today).length
+        const done = t.completions.filter(c => days.some(d => fmt(d) === c)).length
+        const rate = pastDays > 0 ? Math.round((done / pastDays) * 100) : 0
+        return { name: t.task_name, rate, done, total: pastDays, priority: t.priority }
+    }).sort((a, b) => b.rate - a.rate)
+
+    const priorityColor: Record<string, string> = {
+        high: '#f87171', medium: '#fbbf24', low: '#34d399'
+    }
+
+    const tabs = [
+        { key: 'daily' as const, label: 'Daily Completions' },
+        { key: 'rate' as const, label: 'Per-Task Rate' },
+    ]
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+        >
+            <Card
+                className="p-6 border border-white/5 backdrop-blur-sm"
+                style={{ backgroundColor: 'oklch(0.18 0.02 240)', borderColor: 'oklch(0.25 0.02 240)' }}
+            >
+                <div className="flex items-center justify-between mb-5">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <BarChart2 className="w-4 h-4 text-indigo-400" />
+                        Recurring Task Statistics
+                        <span className="text-xs font-normal text-white/40 ml-1">— last 4 weeks</span>
+                    </h2>
+                </div>
+
+                {/* Tab bar */}
+                <div className="flex gap-1 mb-5 p-1 rounded-lg bg-white/5 border border-white/5 w-fit">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                activeTab === tab.key
+                                    ? 'bg-white/10 text-white'
+                                    : 'text-white/40 hover:text-white'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {activeTab === 'daily' ? (
+                    <>
+                        <p className="text-xs text-white/30 mb-3">Tasks completed per day (out of {recurring.length} recurring)</p>
+                        <ResponsiveContainer width="100%" height={160}>
+                            <BarChart data={dailyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                                <XAxis
+                                    dataKey="date"
+                                    tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 9 }}
+                                    tickLine={false}
+                                    interval={6}
+                                />
+                                <YAxis
+                                    tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 9 }}
+                                    tickLine={false}
+                                    allowDecimals={false}
+                                    domain={[0, recurring.length]}
+                                />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1e1f2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                                    labelStyle={{ color: 'rgba(255,255,255,0.6)', fontSize: 11 }}
+                                    itemStyle={{ color: '#6ee7b7', fontSize: 11 }}
+                                    formatter={(v) => [`${v} task${Number(v) !== 1 ? 's' : ''}`, 'Completed']}
+                                />
+                                <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                                    {dailyData.map((entry, i) => (
+                                        <Cell
+                                            key={i}
+                                            fill={entry.count === entry.max && entry.max > 0
+                                                ? '#6ee7b7'
+                                                : entry.count > 0
+                                                    ? '#34d399'
+                                                    : 'rgba(255,255,255,0.06)'}
+                                        />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </>
+                ) : (
+                    <>
+                        <p className="text-xs text-white/30 mb-3">Completion rate per task over last 28 days</p>
+                        <div className="space-y-3">
+                            {rateData.map(t => (
+                                <div key={t.name}>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span
+                                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                style={{ backgroundColor: priorityColor[t.priority] ?? '#9ca3af' }}
+                                            />
+                                            <span className="text-sm text-white/70 truncate">{t.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                                            <span className="text-xs text-white/35">{t.done}/{t.total}d</span>
+                                            <span className="text-xs font-semibold text-white w-10 text-right">{t.rate}%</span>
+                                        </div>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-white/5">
+                                        <div
+                                            className="h-full rounded-full transition-all"
+                                            style={{
+                                                width: `${t.rate}%`,
+                                                backgroundColor: t.rate >= 70
+                                                    ? '#34d399'
+                                                    : t.rate >= 40
+                                                        ? '#fbbf24'
+                                                        : '#f87171',
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
+            </Card>
+        </motion.div>
     )
 }
 
@@ -1247,6 +1408,9 @@ export default function GoalPage() {
                                 </div>
                             </Card>
                         </motion.div>
+
+                        {/* ── Recurring Task Statistics ── */}
+                        <GoalRecurringStats goalId={id as string} />
 
                         {/* ── Recurring Tasks Weekly Progress ── */}
                         <RecurringWeeklyProgress goalId={id as string} />
