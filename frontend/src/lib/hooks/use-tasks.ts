@@ -224,6 +224,15 @@ export type RecurringTaskStat = {
     streak: number
 }
 
+export function useTaskCompletionDates(taskId: string | number) {
+    const { request } = useHttp()
+    return useQuery<string[]>({
+        queryKey: ['tasks', 'completion-dates', taskId],
+        queryFn: () => request(API_ENDPOINTS.TASKS.COMPLETION_DATES(taskId)),
+        enabled: !!taskId,
+    })
+}
+
 export function useRecurringStats() {
     const { request } = useHttp()
     return useQuery<Record<number, RecurringTaskStat>>({

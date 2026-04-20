@@ -81,6 +81,35 @@ def get_recurring_stats(db: Session = Depends(get_db), current_user=Depends(get_
     return result
 
 
+@router.get('/{task_id}/completion-dates')
+def get_task_completion_dates(task_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
+    """Return all dates (ISO strings) when this task was completed — from progress logs + timetable blocks."""
+    task = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    log_dates = {
+        str(log.log_date)
+        for log in db.query(models.ProgressLogTask).filter(
+            models.ProgressLogTask.task_id == task_id
+        ).all()
+    }
+    block_dates = {
+        str(b.date)
+        for b in db.query(models.TimeBlock).filter(
+            models.TimeBlock.task_id == task_id,
+            models.TimeBlock.is_completed == True,
+            models.TimeBlock.deleted == False,
+        ).all()
+    }
+    return sorted(log_dates | block_dates)
+
+
 @router.get('/deleted/goal/{goal_id}', response_model=List[schemas.Task])
 def get_deleted_tasks(goal_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get all soft-deleted tasks for a specific goal"""

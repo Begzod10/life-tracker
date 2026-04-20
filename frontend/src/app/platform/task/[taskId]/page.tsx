@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTaskProfile, useSubtaskCreate, useSubtasks, useSubtaskUpdate, useSubtaskDelete } from '@/lib/hooks/use-tasks'
+import { useTaskProfile, useSubtaskCreate, useSubtasks, useSubtaskUpdate, useSubtaskDelete, useTaskCompletionDates } from '@/lib/hooks/use-tasks'
 import { useGoal } from '@/lib/hooks/use-goals'
 import { BaseModal } from '@/components/modals/base-modal'
 import { TaskForm } from '@/components/modals/forms/task-form'
@@ -607,14 +607,18 @@ function CompletionHeatmap({ logDates }: { logDates: Set<string> }) {
 }
 
 // Statistics Chart Card
-function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; task: TaskData }) {
+function StatsChartCard({ progressLogs, task, completionDates }: { progressLogs: ProgressLog[]; task: TaskData; completionDates: string[] }) {
     const [activeTab, setActiveTab] = useState<'completions' | 'value' | 'energy'>('completions')
 
     const sorted = [...progressLogs].sort(
         (a, b) => new Date(a.log_date || a.created_at).getTime() - new Date(b.log_date || b.created_at).getTime()
     )
 
-    const logDates = new Set(sorted.map(l => (l.log_date || l.created_at).slice(0, 10)))
+    // completionDates from backend = union of progress logs + completed timetable blocks
+    const logDates = new Set(completionDates.length > 0
+        ? completionDates
+        : sorted.map(l => (l.log_date || l.created_at).slice(0, 10))
+    )
 
     const valueData = sorted.map((log) => ({
         date: new Date(log.log_date || log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -780,6 +784,7 @@ export default function TaskProfilePage() {
     const deleteSubtask = useSubtaskDelete()
 
     const { data: progressLogs = [], isLoading: isLogsLoading } = useProgressLogsByTask(id as string)
+    const { data: completionDates = [] } = useTaskCompletionDates(id as string)
     const createLog = useTaskProgressLogCreate()
     const updateLog = useTaskProgressLogUpdate()
     const deleteLog = useTaskProgressLogDelete()
@@ -971,7 +976,7 @@ export default function TaskProfilePage() {
                             onDeleteSubtask={setDeletingSubtask}
                             onToggleSubtask={handleSubtaskToggle}
                         />
-                        <StatsChartCard progressLogs={progressLogs} task={taskData} />
+                        <StatsChartCard progressLogs={progressLogs} task={taskData} completionDates={completionDates} />
                         <ProgressLogsCard
                             progressLogs={progressLogs}
                             onAddLog={() => { setEditingLog(null); setIsLogModalOpen(true) }}

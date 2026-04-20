@@ -57,6 +57,7 @@ export const API_ENDPOINTS = {
         RECURRING_COMPLETIONS: (goalId: string | number, weeks = 4) =>
             `${API_URL}/tasks/goal/${goalId}/recurring-completions?weeks=${weeks}`,
         RECURRING_STATS: `${API_URL}/tasks/recurring-stats`,
+        COMPLETION_DATES: (taskId: string | number) => `${API_URL}/tasks/${taskId}/completion-dates`,
     },
 
     // Subtasks
