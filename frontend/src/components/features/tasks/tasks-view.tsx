@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useTasksList } from "@/lib/hooks/use-tasks"
+import { useTasksList, useRecurringStats, type RecurringTaskStat } from "@/lib/hooks/use-tasks"
 
 interface Task {
     id: number
@@ -41,6 +41,7 @@ interface Task {
     completed: boolean
     completed_at: string | null
     created_at: string
+    is_recurring?: boolean
 }
 
 interface TaskListProps {
@@ -108,10 +109,12 @@ function TaskCard({
     task,
     isGridView,
     onTaskComplete,
+    recurringStats,
 }: {
     task: Task
     isGridView: boolean
     onTaskComplete?: (taskId: number, completed: boolean) => void
+    recurringStats?: RecurringTaskStat
 }) {
     const router = useRouter()
     const config = priorityConfig[task.priority]
@@ -235,6 +238,37 @@ function TaskCard({
                 </Badge>
             </div>
 
+            {/* Recurring stats */}
+            {task.is_recurring && recurringStats && (
+                <div className="mb-3 p-2 rounded-md bg-[oklch(0.14_0.02_240)] border border-[oklch(0.22_0.02_240)]">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="text-muted-foreground font-medium">Streak</span>
+                        <span className="text-amber-400 font-bold">🔥 {recurringStats.streak}d</span>
+                    </div>
+                    <div className="flex gap-3 text-xs">
+                        <span className="flex items-center gap-1 text-green-400">
+                            <span>✅</span>
+                            <span>{recurringStats.days_completed} done</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-red-400">
+                            <span>❌</span>
+                            <span>{recurringStats.days_missed} missed</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-muted-foreground ml-auto">
+                            {recurringStats.total_days}d total
+                        </span>
+                    </div>
+                    {recurringStats.total_days > 0 && (
+                        <div className="mt-1.5 h-1 rounded-full bg-[oklch(0.22_0.02_240)] overflow-hidden">
+                            <div
+                                className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400"
+                                style={{ width: `${Math.round((recurringStats.days_completed / recurringStats.total_days) * 100)}%` }}
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Footer with date and duration */}
             <div className="flex items-center justify-between gap-2 pt-3 border-t border-[oklch(0.25_0.02_240)]">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -265,6 +299,7 @@ export function TaskList({
     userId?: number | string
 }) {
     const { data: fetchedTasks, isLoading: isLoadingTask } = useTasksList({ person_id: userId })
+    const { data: recurringStats } = useRecurringStats()
     const tasks = propTasks || fetchedTasks
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [searchQuery, setSearchQuery] = useState('')
@@ -443,6 +478,7 @@ export function TaskList({
                                         task={task}
                                         isGridView={true}
                                         onTaskComplete={onTaskComplete}
+                                        recurringStats={recurringStats?.[task.id]}
                                     />
                                 ))}
                             </motion.div>
@@ -454,6 +490,7 @@ export function TaskList({
                                         task={task}
                                         isGridView={false}
                                         onTaskComplete={onTaskComplete}
+                                        recurringStats={recurringStats?.[task.id]}
                                     />
                                 ))}
                             </motion.div>

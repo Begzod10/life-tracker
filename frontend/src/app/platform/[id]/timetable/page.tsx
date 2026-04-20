@@ -795,7 +795,7 @@ export default function TimetablePage() {
             {/* Top gradient glow */}
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/30 to-transparent pointer-events-none z-0" />
 
-            <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
                 {/* ── Header ── */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-8">
@@ -848,7 +848,7 @@ export default function TimetablePage() {
                 />
 
                 {/* ── Body ── */}
-                <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 items-start">
+                <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5 items-start">
 
                     {/* Timeline */}
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-sm overflow-hidden">

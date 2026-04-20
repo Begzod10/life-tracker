@@ -347,7 +347,7 @@ export function AICoach() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
-                        className="fixed bottom-24 right-6 z-50 w-[380px] max-h-[580px] flex flex-col rounded-2xl border border-[#2a2b36] bg-[#13141f] shadow-2xl shadow-black/60 overflow-hidden"
+                        className="fixed bottom-24 right-4 left-4 sm:left-auto sm:right-6 z-50 sm:w-[380px] max-h-[80vh] sm:max-h-[580px] flex flex-col rounded-2xl border border-[#2a2b36] bg-[#13141f] shadow-2xl shadow-black/60 overflow-hidden"
                     >
                         {/* Header */}
                         <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2a2b36] bg-gradient-to-r from-violet-900/40 to-purple-900/20">

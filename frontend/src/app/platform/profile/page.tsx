@@ -59,7 +59,7 @@ export default function ProfilePage() {
 
     return (
         <div className="min-h-screen">
-            <div className="container mx-auto px-6 py-6">
+            <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
                 <OwnProfile profile={profile} isEditMode={isEditMode} setIsEditMode={setIsEditMode} />
             </div>
         </div>
@@ -69,7 +69,7 @@ export default function ProfilePage() {
 function ProfileSkeleton() {
     return (
         <div className="min-h-screen">
-            <div className="container mx-auto px-6 py-6 space-y-6">
+            <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6">
                 <Skeleton className="h-40 w-full rounded-xl" />
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
@@ -200,8 +200,8 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
                 </div>
             </Card>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-6">
                     {isEditMode && (
                         <Card className="bg-[#1a1b26] border-[#2a2b36]">
                             <div className="p-6 space-y-4">

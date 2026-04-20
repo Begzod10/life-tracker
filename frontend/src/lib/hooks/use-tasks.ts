@@ -216,6 +216,22 @@ export function useSubtaskDelete() {
     })
 }
 
+// ─── Recurring task stats (completed / missed / streak) ──────────────────────
+export type RecurringTaskStat = {
+    days_completed: number
+    days_missed: number
+    total_days: number
+    streak: number
+}
+
+export function useRecurringStats() {
+    const { request } = useHttp()
+    return useQuery<Record<number, RecurringTaskStat>>({
+        queryKey: ['tasks', 'recurring-stats'],
+        queryFn: () => request(API_ENDPOINTS.TASKS.RECURRING_STATS),
+    })
+}
+
 // ─── Recurring task completion history ───────────────────────────────────────
 export type RecurringCompletion = {
     task_id: number

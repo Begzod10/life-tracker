@@ -312,7 +312,7 @@ function EditExpenseForm({ expense, salaryMonthId, onClose, onSavingChange }: {
                 <TextInput value={formData.name} onChange={(v: string) => updateField('name', v)} />
             </FormField>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Amount" required>
                     <NumberInput value={formData.amount} onChange={(v: number) => updateField('amount', v)} placeholder="0" min={0} />
                 </FormField>
@@ -322,7 +322,7 @@ function EditExpenseForm({ expense, salaryMonthId, onClose, onSavingChange }: {
                 </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Category">
                     <SelectInput value={formData.category} onChange={(v: string) => updateField('category', v)}
                         options={[
@@ -336,7 +336,7 @@ function EditExpenseForm({ expense, salaryMonthId, onClose, onSavingChange }: {
                 </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Payment Type">
                     <SelectInput value={formData.payment_type} onChange={(v: string) => updateField('payment_type', v)}
                         options={[{ value: 'card', label: 'Card' }, { value: 'cash', label: 'Cash' }, { value: 'transfer', label: 'Transfer' }]} />
@@ -453,7 +453,7 @@ function ExpenseCard({ expense, salaryMonthId }: { expense: Expense; salaryMonth
 
             {/* Edit Dialog */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto w-full max-w-2xl">
+                <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-white">Edit Expense</DialogTitle>
                     </DialogHeader>
@@ -682,7 +682,7 @@ function AddExpenseForm({ personId, salaryMonthId, onClose }: {
                 />
             </FormField>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Amount" required>
                     <NumberInput
                         value={formData.amount}
@@ -704,7 +704,7 @@ function AddExpenseForm({ personId, salaryMonthId, onClose }: {
                 </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Category">
                     <SelectInput
                         value={formData.category}
@@ -729,7 +729,7 @@ function AddExpenseForm({ personId, salaryMonthId, onClose }: {
                 </FormField>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Payment Type">
                     <SelectInput
                         value={formData.payment_type}
@@ -895,7 +895,7 @@ function SalaryPage() {
 
             {/* Add Expense Modal */}
             <Dialog open={addExpenseModalOpen} onOpenChange={setAddExpenseModalOpen}>
-                <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto w-full max-w-2xl">
+                <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-white">Add New Expense</DialogTitle>
                         <DialogDescription className="text-white/60">{data?.month}</DialogDescription>

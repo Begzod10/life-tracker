@@ -40,7 +40,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
 
             {/* Weather theme tester */}
             <div
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1 p-1.5 rounded-2xl backdrop-blur-md border border-white/10"
+                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-1 p-1.5 rounded-2xl backdrop-blur-md border border-white/10 overflow-x-auto max-w-[calc(100vw-2rem)] scrollbar-none"
                 style={{ background: 'rgba(0,0,0,0.55)' }}
             >
                 {WEATHER_THEMES.map(t => (

@@ -431,7 +431,7 @@ const EditJobButton: React.FC<{ job: Job; personId: string | number }> = React.m
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Monthly Salary" error={errors.salary} required>
                             <NumberInput
                                 value={formData.salary}
@@ -449,7 +449,7 @@ const EditJobButton: React.FC<{ job: Job; personId: string | number }> = React.m
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Start Date">
                             <DatePicker
                                 value={formData.start_date}
@@ -619,7 +619,7 @@ const JobFormModal: React.FC<{ personId: string; onAdd?: (job: Job) => void }> =
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Monthly Salary" error={errors.salary} required>
                             <NumberInput
                                 value={formData.salary}
@@ -637,7 +637,7 @@ const JobFormModal: React.FC<{ personId: string; onAdd?: (job: Job) => void }> =
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Start Date">
                             <DatePicker
                                 value={formData.start_date}
@@ -744,7 +744,7 @@ const SalaryFormModal: React.FC<{ personId: string | number }> = ({ personId }) 
                     Add Salary
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto w-full max-w-2xl">
+            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Add New Salary Record</DialogTitle>
                 </DialogHeader>
@@ -757,7 +757,7 @@ const SalaryFormModal: React.FC<{ personId: string | number }> = ({ personId }) 
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Month (YYYY-MM)" required>
                             <TextInput
                                 value={formData.month}
@@ -773,7 +773,7 @@ const SalaryFormModal: React.FC<{ personId: string | number }> = ({ personId }) 
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <FormField label="Gross Salary" required>
                             <NumberInput
                                 value={formData.salary_amount}
@@ -1144,7 +1144,7 @@ const OverviewTab: React.FC = () => {
                     <p className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
                         <Wallet className="w-4 h-4 text-amber-400" /> Net Worth Breakdown
                     </p>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <p className="text-xs text-white/40 mb-1">Savings Accounts</p>
                             <p className="text-base font-semibold text-amber-300">{fmt((netWorth as any).breakdown?.savings_accounts)}</p>
@@ -1316,7 +1316,7 @@ const ExpenseFormModal: React.FC<{ personId: string | number }> = ({ personId })
                     Add Expense
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto w-full max-w-2xl">
+            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Add New Expense</DialogTitle>
                 </DialogHeader>
@@ -1329,7 +1329,7 @@ const ExpenseFormModal: React.FC<{ personId: string | number }> = ({ personId })
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Amount" required>
                             <NumberInput
                                 value={formData.amount}
@@ -1347,7 +1347,7 @@ const ExpenseFormModal: React.FC<{ personId: string | number }> = ({ personId })
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Category">
                             <SelectInput
                                 value={formData.category}
@@ -1364,7 +1364,7 @@ const ExpenseFormModal: React.FC<{ personId: string | number }> = ({ personId })
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Payment Type">
                             <SelectInput
                                 value={formData.payment_type}
@@ -1520,7 +1520,7 @@ const EditExpenseButton: React.FC<{ expense: Expense; personId: string | number 
                     <Edit2 className="w-4 h-4" />
                 </button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto w-full max-w-2xl">
+            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Edit Expense</DialogTitle>
                 </DialogHeader>
@@ -1532,7 +1532,7 @@ const EditExpenseButton: React.FC<{ expense: Expense; personId: string | number 
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Amount" required>
                             <NumberInput
                                 value={formData.amount}
@@ -1550,7 +1550,7 @@ const EditExpenseButton: React.FC<{ expense: Expense; personId: string | number 
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Category">
                             <SelectInput
                                 value={formData.category}
@@ -1566,7 +1566,7 @@ const EditExpenseButton: React.FC<{ expense: Expense; personId: string | number 
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Payment Type">
                             <SelectInput
                                 value={formData.payment_type}
@@ -1963,7 +1963,7 @@ const BudgetFormModal: React.FC<{ personId: string; budgetToEdit?: Budget }> = (
                     <DialogTitle className="text-white">{isEditing ? 'Edit Budget' : 'Set New Budget'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Category" required>
                             <SelectInput
                                 value={formData.category}
@@ -1981,7 +1981,7 @@ const BudgetFormModal: React.FC<{ personId: string; budgetToEdit?: Budget }> = (
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Period (YYYY-MM)" required>
                             <TextInput
                                 value={formData.period}
@@ -2248,7 +2248,7 @@ const IncomeSourceFormModal: React.FC<{ personId: string; sourceToEdit?: IncomeS
                     <DialogTitle className="text-white">{isEditing ? 'Edit Income Source' : 'Add New Income Source'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Source Name">
                             <TextInput
                                 value={formData.source_name}
@@ -2272,7 +2272,7 @@ const IncomeSourceFormModal: React.FC<{ personId: string; sourceToEdit?: IncomeS
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Amount">
                             <NumberInput
                                 value={formData.amount}
@@ -2289,7 +2289,7 @@ const IncomeSourceFormModal: React.FC<{ personId: string; sourceToEdit?: IncomeS
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Frequency">
                             <SelectInput
                                 value={formData.frequency}
@@ -2519,7 +2519,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                     <DialogTitle className="text-white">{isEditing ? 'Edit Savings Account' : 'Add New Account'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Account Name">
                             <TextInput
                                 value={formData.account_name}
@@ -2542,7 +2542,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Platform / Bank">
                             <TextInput
                                 value={formData.platform}
@@ -2563,7 +2563,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Initial Amount">
                             <NumberInput
                                 value={formData.initial_amount}
@@ -2578,7 +2578,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Interest Rate (%)">
                             <NumberInput
                                 value={formData.interest_rate}
@@ -2597,7 +2597,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Start Date">
                             <DatePicker
                                 value={formData.start_date ? new Date(formData.start_date) : undefined}
@@ -2832,7 +2832,7 @@ export default function FinancesPage() {
     const savingsRate = summary ? summary.savings_rate : 0
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-8">
             <div className="max-w-7xl mx-auto">
                 <FinancesHeader id={params.id} />
 

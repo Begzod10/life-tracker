@@ -26,6 +26,51 @@ def get_tasks(db: Session = Depends(get_db), current_user=Depends(get_current_ac
     )
 
 
+@router.get('/recurring-stats')
+def get_recurring_stats(db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
+    """Return completion/missed/streak stats for all recurring tasks of the current user."""
+    recurring_tasks = (
+        db.query(models.Task)
+        .join(models.Goal)
+        .filter(
+            models.Goal.person_id == current_user.id,
+            models.Task.is_recurring == True,
+            models.Task.deleted == False,
+        )
+        .all()
+    )
+
+    today = date.today()
+    result = {}
+
+    for task in recurring_tasks:
+        logs = db.query(models.ProgressLogTask).filter(
+            models.ProgressLogTask.task_id == task.id
+        ).all()
+        completed_dates = {log.log_date for log in logs}
+        days_completed = len(completed_dates)
+
+        start = task.created_at.date() if task.created_at else today
+        total_days = max((today - start).days, 0)  # exclude today
+        days_missed = max(total_days - days_completed, 0)
+
+        # Current streak: consecutive days ending yesterday (or today if completed today)
+        streak = 0
+        check = today if today in completed_dates else today - timedelta(days=1)
+        while check in completed_dates:
+            streak += 1
+            check -= timedelta(days=1)
+
+        result[task.id] = {
+            "days_completed": days_completed,
+            "days_missed": days_missed,
+            "total_days": total_days,
+            "streak": streak,
+        }
+
+    return result
+
+
 @router.get('/deleted/goal/{goal_id}', response_model=List[schemas.Task])
 def get_deleted_tasks(goal_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_active_user)):
     """Get all soft-deleted tasks for a specific goal"""

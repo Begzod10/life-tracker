@@ -234,7 +234,7 @@ const CategoryCard = memo(function CategoryCard({ category, index, onClick }: {
             layoutId={`category-${category.id}`}
         >
             <Card
-                className="relative overflow-hidden bg-[#1a1b26] border-[#2a2b36] hover:border-[#3a3b46] cursor-pointer transition-all duration-300 h-[200px]"
+                className="relative overflow-hidden bg-[#1a1b26] border-[#2a2b36] hover:border-[#3a3b46] cursor-pointer transition-all duration-300 h-[160px] sm:h-[200px]"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 onClick={onClick}
@@ -296,15 +296,15 @@ function CategoryExpanded({ category, onBack }: {
             {/* <Header category={category} onBack={onBack} /> */}
 
             {/* Main Content */}
-            <div className="container mx-auto px-6 py-6">
+            <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Side - Statistics (2/3) */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Time Range Selector */}
                         <Card className="bg-[#1a1b26] border-[#2a2b36] p-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <h2 className="text-lg font-semibold text-white">Statistics</h2>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     {(['day', 'week', 'month', 'year', 'all'] as const).map((range) => (
                                         <Button
                                             key={range}

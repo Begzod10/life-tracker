@@ -237,7 +237,7 @@ function EditSavingsModal({ account }: { account: SavingsAccount }) {
                     <DialogTitle className="text-white">Edit Savings Account</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Account Name">
                             <TextInput value={formData.account_name} onChange={(v: string) => updateField('account_name', v)} placeholder="e.g. Emergency Fund" required />
                         </FormField>
@@ -251,7 +251,7 @@ function EditSavingsModal({ account }: { account: SavingsAccount }) {
                             ]} />
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Platform / Bank">
                             <TextInput value={formData.platform} onChange={(v: string) => updateField('platform', v)} placeholder="e.g. NBU" />
                         </FormField>
@@ -263,7 +263,7 @@ function EditSavingsModal({ account }: { account: SavingsAccount }) {
                             ]} />
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Initial Amount">
                             <NumberInput value={formData.initial_amount} onChange={(v: number) => updateField('initial_amount', v)} />
                         </FormField>
@@ -271,7 +271,7 @@ function EditSavingsModal({ account }: { account: SavingsAccount }) {
                             <NumberInput value={formData.target_amount} onChange={(v: number) => updateField('target_amount', v)} />
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Interest Rate (%)">
                             <NumberInput value={formData.interest_rate} onChange={(v: number) => updateField('interest_rate', v)} />
                         </FormField>
@@ -283,7 +283,7 @@ function EditSavingsModal({ account }: { account: SavingsAccount }) {
                             ]} />
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label="Start Date">
                             <DatePicker value={formData.start_date ? new Date(formData.start_date) : undefined} onChange={(date) => date && updateField('start_date', date.toISOString().split('T')[0])} />
                         </FormField>
@@ -523,7 +523,7 @@ function BalanceOverviewCard({ account }: { account: SavingsAccount }) {
                         />
                     </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <p className="text-gray-400 text-xs uppercase mb-1">Initial</p>
                         <p className="text-white font-semibold">{formatCurrency(account.initial_amount, account.currency)}</p>

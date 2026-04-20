@@ -218,7 +218,7 @@ function HealthProfilePage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {/* Weight */}
                                         <div className="bg-[#0f0f1a] rounded-lg p-4">
                                             <div className="flex items-center gap-2 mb-3">

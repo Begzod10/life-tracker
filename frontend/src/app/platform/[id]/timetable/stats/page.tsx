@@ -197,7 +197,7 @@ export default function TimetableStatsPage() {
         <div className="min-h-screen text-white">
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/25 to-transparent pointer-events-none z-0" />
 
-            <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
+            <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">

@@ -364,7 +364,7 @@ function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
 
 // Skeleton Loader
 const GoalSkeleton = () => (
-    <div className="space-y-8 p-6 max-w-7xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 p-4 sm:p-6 max-w-7xl mx-auto">
         <div className="space-y-4">
             <Skeleton className="h-12 w-32" />
             <Skeleton className="h-10 w-3/4" />
@@ -632,7 +632,7 @@ export default function GoalPage() {
             }}
         >
             <motion.div
-                className="max-w-7xl mx-auto space-y-8"
+                className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
