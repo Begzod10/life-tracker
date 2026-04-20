@@ -538,35 +538,89 @@ function StatisticsCard({ task, goalName }: { task: TaskData; goalName?: string 
     )
 }
 
+// GitHub-style heatmap for daily completions
+function CompletionHeatmap({ logDates }: { logDates: Set<string> }) {
+    const weeks = 10
+    const totalDays = weeks * 7
+    const today = new Date()
+    const [tooltip, setTooltip] = useState<{ label: string; done: boolean } | null>(null)
+
+    const days: { key: string; label: string; done: boolean }[] = []
+    for (let i = totalDays - 1; i >= 0; i--) {
+        const d = new Date(today)
+        d.setDate(d.getDate() - i)
+        const key = d.toISOString().slice(0, 10)
+        days.push({
+            key,
+            label: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+            done: logDates.has(key),
+        })
+    }
+
+    const columns: typeof days[] = []
+    for (let w = 0; w < weeks; w++) {
+        columns.push(days.slice(w * 7, w * 7 + 7))
+    }
+
+    return (
+        <div>
+            <div className="flex gap-1.5">
+                {columns.map((col, wi) => (
+                    <div key={wi} className="flex flex-col gap-1.5">
+                        {col.map((day) => (
+                            <div
+                                key={day.key}
+                                onMouseEnter={() => setTooltip({ label: day.label, done: day.done })}
+                                onMouseLeave={() => setTooltip(null)}
+                                className={`w-6 h-6 rounded-sm cursor-default transition-transform hover:scale-110 ${
+                                    day.done
+                                        ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]'
+                                        : 'bg-white/8 border border-white/5'
+                                }`}
+                            />
+                        ))}
+                    </div>
+                ))}
+            </div>
+
+            <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-white/10 border border-white/5" />
+                        Missed
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-sm bg-green-500" />
+                        Done
+                    </span>
+                </div>
+                {tooltip ? (
+                    <span className={`font-medium ${tooltip.done ? 'text-green-400' : 'text-red-400'}`}>
+                        {tooltip.label} — {tooltip.done ? 'Done ✅' : 'Missed ❌'}
+                    </span>
+                ) : (
+                    <span>Hover a cell to inspect</span>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // Statistics Chart Card
 function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; task: TaskData }) {
-    const [activeTab, setActiveTab] = useState<'value' | 'energy' | 'completions'>('completions')
+    const [activeTab, setActiveTab] = useState<'completions' | 'value' | 'energy'>('completions')
 
     const sorted = [...progressLogs].sort(
         (a, b) => new Date(a.log_date || a.created_at).getTime() - new Date(b.log_date || b.created_at).getTime()
     )
+
+    const logDates = new Set(sorted.map(l => (l.log_date || l.created_at).slice(0, 10)))
 
     const valueData = sorted.map((log) => ({
         date: new Date(log.log_date || log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         value: log.value_logged ?? 0,
         energy: log.energy_level ?? null,
     }))
-
-    // Rolling 30-day completion chart for recurring tasks
-    const completionData = (() => {
-        const days: { date: string; done: number }[] = []
-        const logDates = new Set(sorted.map(l => (l.log_date || l.created_at).slice(0, 10)))
-        for (let i = 29; i >= 0; i--) {
-            const d = new Date()
-            d.setDate(d.getDate() - i)
-            const key = d.toISOString().slice(0, 10)
-            days.push({
-                date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                done: logDates.has(key) ? 1 : 0,
-            })
-        }
-        return days
-    })()
 
     const tabs = [
         { key: 'completions' as const, label: 'Daily Completions' },
@@ -575,6 +629,7 @@ function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; t
     ]
 
     const hasData = progressLogs.length > 0
+    const energyLogs = progressLogs.filter(l => l.energy_level)
 
     return (
         <motion.div
@@ -605,12 +660,14 @@ function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; t
                     ))}
                 </div>
 
-                {!hasData && activeTab !== 'completions' ? (
+                {activeTab === 'completions' ? (
+                    <CompletionHeatmap logDates={logDates} />
+                ) : !hasData ? (
                     <div className="flex items-center justify-center h-48 text-muted-foreground text-sm rounded-lg bg-white/5 border border-dashed border-white/10">
                         No progress logs yet — add logs to see the chart
                     </div>
                 ) : (
-                    <ResponsiveContainer width="100%" height={220}>
+                    <ResponsiveContainer width="100%" height={200}>
                         {activeTab === 'value' ? (
                             <AreaChart data={valueData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                                 <defs>
@@ -622,72 +679,40 @@ function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; t
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
                                 <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                <Tooltip
-                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                                    labelStyle={{ color: '#e5e7eb' }}
-                                    itemStyle={{ color: '#3b82f6' }}
-                                />
+                                <Tooltip contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#e5e7eb' }} itemStyle={{ color: '#3b82f6' }} />
                                 <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#valueGrad)" dot={{ r: 3, fill: '#3b82f6' }} activeDot={{ r: 5 }} />
                             </AreaChart>
-                        ) : activeTab === 'energy' ? (
+                        ) : (
                             <LineChart data={valueData.filter(d => d.energy !== null)} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
                                 <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                <Tooltip
-                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                                    labelStyle={{ color: '#e5e7eb' }}
-                                    itemStyle={{ color: '#a78bfa' }}
-                                />
+                                <Tooltip contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} labelStyle={{ color: '#e5e7eb' }} itemStyle={{ color: '#a78bfa' }} />
                                 <Line type="monotone" dataKey="energy" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3, fill: '#a78bfa' }} activeDot={{ r: 5 }} />
                             </LineChart>
-                        ) : (
-                            <AreaChart data={completionData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="doneGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} interval={4} />
-                                <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(v) => v === 1 ? '✓' : '✗'} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
-                                <Tooltip
-                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                                    labelStyle={{ color: '#e5e7eb' }}
-                                    formatter={(v) => [Number(v) === 1 ? 'Done ✅' : 'Missed ❌', '']}
-                                />
-                                <Area type="monotone" dataKey="done" stroke="#22c55e" strokeWidth={2} fill="url(#doneGrad)" dot={{ r: 3, fill: '#22c55e' }} activeDot={{ r: 5 }} />
-                            </AreaChart>
                         )}
                     </ResponsiveContainer>
                 )}
 
-                {/* Summary stats row */}
-                {hasData && (
-                    <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-white/5">
-                        <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-0.5">Total Logs</p>
-                            <p className="text-lg font-bold text-foreground">{progressLogs.length}</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-0.5">Avg Value</p>
-                            <p className="text-lg font-bold text-blue-400">
-                                {progressLogs.length > 0
-                                    ? (progressLogs.reduce((s, l) => s + (l.value_logged ?? 0), 0) / progressLogs.length).toFixed(1)
-                                    : '—'}
-                            </p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs text-muted-foreground mb-0.5">Avg Energy</p>
-                            <p className="text-lg font-bold text-purple-400">
-                                {progressLogs.filter(l => l.energy_level).length > 0
-                                    ? (progressLogs.reduce((s, l) => s + (l.energy_level ?? 0), 0) / progressLogs.filter(l => l.energy_level).length).toFixed(1)
-                                    : '—'}
-                            </p>
-                        </div>
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-white/5">
+                    <div className="text-center">
+                        <p className="text-xs text-muted-foreground mb-0.5">Days Done</p>
+                        <p className="text-lg font-bold text-green-400">{logDates.size}</p>
                     </div>
-                )}
+                    <div className="text-center">
+                        <p className="text-xs text-muted-foreground mb-0.5">Avg Value</p>
+                        <p className="text-lg font-bold text-blue-400">
+                            {hasData ? (progressLogs.reduce((s, l) => s + (l.value_logged ?? 0), 0) / progressLogs.length).toFixed(1) : '—'}
+                        </p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-xs text-muted-foreground mb-0.5">Avg Energy</p>
+                        <p className="text-lg font-bold text-purple-400">
+                            {energyLogs.length > 0 ? (energyLogs.reduce((s, l) => s + (l.energy_level ?? 0), 0) / energyLogs.length).toFixed(1) : '—'}
+                        </p>
+                    </div>
+                </div>
             </Card>
         </motion.div>
     )
