@@ -540,7 +540,7 @@ function StatisticsCard({ task, goalName }: { task: TaskData; goalName?: string 
 
 // Statistics Chart Card
 function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; task: TaskData }) {
-    const [activeTab, setActiveTab] = useState<'value' | 'energy' | 'completions'>('value')
+    const [activeTab, setActiveTab] = useState<'value' | 'energy' | 'completions'>('completions')
 
     const sorted = [...progressLogs].sort(
         (a, b) => new Date(a.log_date || a.created_at).getTime() - new Date(b.log_date || b.created_at).getTime()
@@ -569,9 +569,9 @@ function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; t
     })()
 
     const tabs = [
+        { key: 'completions' as const, label: 'Daily Completions' },
         { key: 'value' as const, label: 'Progress Value' },
         { key: 'energy' as const, label: 'Energy Level' },
-        { key: 'completions' as const, label: 'Daily Completions' },
     ]
 
     const hasData = progressLogs.length > 0
