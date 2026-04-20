@@ -377,16 +377,29 @@ def get_recurring_completions(goal_id: int, weeks: int = Query(default=4, ge=1, 
 
     result = []
     for task in recurring_tasks:
-        logs = db.query(models.ProgressLogTask).filter(
-            models.ProgressLogTask.task_id == task.id,
-            models.ProgressLogTask.log_date >= since,
-        ).order_by(models.ProgressLogTask.log_date).all()
+        log_dates = {
+            log.log_date
+            for log in db.query(models.ProgressLogTask).filter(
+                models.ProgressLogTask.task_id == task.id,
+                models.ProgressLogTask.log_date >= since,
+            ).all()
+        }
+        block_dates = {
+            b.date
+            for b in db.query(models.TimeBlock).filter(
+                models.TimeBlock.task_id == task.id,
+                models.TimeBlock.is_completed == True,
+                models.TimeBlock.deleted == False,
+                models.TimeBlock.date >= since,
+            ).all()
+        }
+        all_dates = sorted(log_dates | block_dates)
 
         result.append(schemas.RecurringCompletionTask(
             task_id=task.id,
             task_name=task.name,
             priority=task.priority,
-            completions=[log.log_date for log in logs],
+            completions=all_dates,
         ))
 
     return result
