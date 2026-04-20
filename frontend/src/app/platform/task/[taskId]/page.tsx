@@ -18,7 +18,18 @@ import { SubtaskList } from '@/components/subtasks/subtask-list'
 import { useProgressLogsByTask, useTaskProgressLogCreate, useTaskProgressLogUpdate, useTaskProgressLogDelete } from '@/lib/hooks/use-progress-log'
 import { ProgressLogForm } from '@/components/modals/forms/progress-log-form'
 import { ProgressLog } from '@/types'
-import { TrendingUp, Plus } from 'lucide-react'
+import { TrendingUp, Plus, BarChart2 } from 'lucide-react'
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    Area,
+    AreaChart,
+} from 'recharts'
 
 // Mock hook - replace with actual implementation
 // const useTaskProfile = (id: string) => {
@@ -527,6 +538,161 @@ function StatisticsCard({ task, goalName }: { task: TaskData; goalName?: string 
     )
 }
 
+// Statistics Chart Card
+function StatsChartCard({ progressLogs, task }: { progressLogs: ProgressLog[]; task: TaskData }) {
+    const [activeTab, setActiveTab] = useState<'value' | 'energy' | 'completions'>('value')
+
+    const sorted = [...progressLogs].sort(
+        (a, b) => new Date(a.log_date || a.created_at).getTime() - new Date(b.log_date || b.created_at).getTime()
+    )
+
+    const valueData = sorted.map((log) => ({
+        date: new Date(log.log_date || log.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: log.value_logged ?? 0,
+        energy: log.energy_level ?? null,
+    }))
+
+    // Rolling 30-day completion chart for recurring tasks
+    const completionData = (() => {
+        const days: { date: string; done: number }[] = []
+        const logDates = new Set(sorted.map(l => (l.log_date || l.created_at).slice(0, 10)))
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date()
+            d.setDate(d.getDate() - i)
+            const key = d.toISOString().slice(0, 10)
+            days.push({
+                date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                done: logDates.has(key) ? 1 : 0,
+            })
+        }
+        return days
+    })()
+
+    const tabs = [
+        { key: 'value' as const, label: 'Progress Value' },
+        { key: 'energy' as const, label: 'Energy Level' },
+        { key: 'completions' as const, label: 'Daily Completions' },
+    ]
+
+    const hasData = progressLogs.length > 0
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+        >
+            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+                <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5" />
+                    Statistics
+                </h2>
+
+                {/* Tab bar */}
+                <div className="flex gap-1 mb-6 p-1 rounded-lg bg-white/5 border border-white/5 w-fit">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setActiveTab(tab.key)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                activeTab === tab.key
+                                    ? 'bg-white/10 text-foreground'
+                                    : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {!hasData && activeTab !== 'completions' ? (
+                    <div className="flex items-center justify-center h-48 text-muted-foreground text-sm rounded-lg bg-white/5 border border-dashed border-white/10">
+                        No progress logs yet — add logs to see the chart
+                    </div>
+                ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                        {activeTab === 'value' ? (
+                            <AreaChart data={valueData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                <Tooltip
+                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                                    labelStyle={{ color: '#e5e7eb' }}
+                                    itemStyle={{ color: '#3b82f6' }}
+                                />
+                                <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#valueGrad)" dot={{ r: 3, fill: '#3b82f6' }} activeDot={{ r: 5 }} />
+                            </AreaChart>
+                        ) : activeTab === 'energy' ? (
+                            <LineChart data={valueData.filter(d => d.energy !== null)} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                <Tooltip
+                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                                    labelStyle={{ color: '#e5e7eb' }}
+                                    itemStyle={{ color: '#a78bfa' }}
+                                />
+                                <Line type="monotone" dataKey="energy" stroke="#a78bfa" strokeWidth={2} dot={{ r: 3, fill: '#a78bfa' }} activeDot={{ r: 5 }} />
+                            </LineChart>
+                        ) : (
+                            <AreaChart data={completionData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="doneGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} interval={4} />
+                                <YAxis domain={[0, 1]} ticks={[0, 1]} tickFormatter={(v) => v === 1 ? '✓' : '✗'} tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                                <Tooltip
+                                    contentStyle={{ background: '#1a1b26', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                                    labelStyle={{ color: '#e5e7eb' }}
+                                    formatter={(v) => [Number(v) === 1 ? 'Done ✅' : 'Missed ❌', '']}
+                                />
+                                <Area type="monotone" dataKey="done" stroke="#22c55e" strokeWidth={2} fill="url(#doneGrad)" dot={{ r: 3, fill: '#22c55e' }} activeDot={{ r: 5 }} />
+                            </AreaChart>
+                        )}
+                    </ResponsiveContainer>
+                )}
+
+                {/* Summary stats row */}
+                {hasData && (
+                    <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-white/5">
+                        <div className="text-center">
+                            <p className="text-xs text-muted-foreground mb-0.5">Total Logs</p>
+                            <p className="text-lg font-bold text-foreground">{progressLogs.length}</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-xs text-muted-foreground mb-0.5">Avg Value</p>
+                            <p className="text-lg font-bold text-blue-400">
+                                {progressLogs.length > 0
+                                    ? (progressLogs.reduce((s, l) => s + (l.value_logged ?? 0), 0) / progressLogs.length).toFixed(1)
+                                    : '—'}
+                            </p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-xs text-muted-foreground mb-0.5">Avg Energy</p>
+                            <p className="text-lg font-bold text-purple-400">
+                                {progressLogs.filter(l => l.energy_level).length > 0
+                                    ? (progressLogs.reduce((s, l) => s + (l.energy_level ?? 0), 0) / progressLogs.filter(l => l.energy_level).length).toFixed(1)
+                                    : '—'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </Card>
+        </motion.div>
+    )
+}
+
 // Loading Skeleton Component
 function TaskProfileSkeleton() {
     return (
@@ -780,6 +946,7 @@ export default function TaskProfilePage() {
                             onDeleteSubtask={setDeletingSubtask}
                             onToggleSubtask={handleSubtaskToggle}
                         />
+                        <StatsChartCard progressLogs={progressLogs} task={taskData} />
                         <ProgressLogsCard
                             progressLogs={progressLogs}
                             onAddLog={() => { setEditingLog(null); setIsLogModalOpen(true) }}
