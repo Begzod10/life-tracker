@@ -240,7 +240,21 @@ def send_morning_tasks(self):
             priority_order = {"high": 0, "medium": 1, "low": 2}
             first_name = person.name.split()[0]
 
+            # Fetch today's timetable blocks
+            blocks = db.query(models.TimeBlock).filter(
+                models.TimeBlock.person_id == person.id,
+                models.TimeBlock.date == today,
+                models.TimeBlock.deleted == False,
+            ).order_by(models.TimeBlock.start_time).all()
+
             msg = f"🌅 <b>Good morning, {first_name}!</b>\n\n"
+
+            # Timetable section
+            if blocks:
+                msg += f"🗓 <b>Today's schedule ({len(blocks)} blocks):</b>\n"
+                for b in blocks:
+                    msg += f"  ⏰ {b.start_time}–{b.end_time}  {b.title}\n"
+                msg += "\n"
 
             if not tasks:
                 msg += "No tasks scheduled for today. Enjoy your day! 🎉"
@@ -434,6 +448,16 @@ def send_evening_checkup(self):
                 filled = round(completion_pct / 10)
                 bar = "█" * filled + "░" * (10 - filled)
 
+                # Timetable block stats
+                blocks_today = db.query(models.TimeBlock).filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                ).all()
+                blocks_done = [b for b in blocks_today if b.is_completed]
+                blocks_missed = [b for b in blocks_today if b.is_missed]
+                blocks_pending = [b for b in blocks_today if not b.is_completed and not b.is_missed]
+
                 lines = [
                     f"🌙 <b>Good evening, {person.name.split()[0]}!</b>",
                     "",
@@ -441,6 +465,19 @@ def send_evening_checkup(self):
                     f"[{bar}]",
                     "",
                 ]
+
+                if blocks_today:
+                    b_total = len(blocks_today)
+                    b_done = len(blocks_done)
+                    b_pct = round(b_done / b_total * 100) if b_total else 0
+                    lines.append(f"🗓 <b>Schedule: {b_done}/{b_total} blocks done ({b_pct}%)</b>")
+                    if blocks_done:
+                        lines += [f"  ✅ {b.start_time} {b.title}" for b in blocks_done]
+                    if blocks_missed:
+                        lines += [f"  ❌ {b.start_time} {b.title}" for b in blocks_missed]
+                    if blocks_pending:
+                        lines += [f"  ⏳ {b.start_time} {b.title}" for b in blocks_pending]
+                    lines.append("")
 
                 if done_list:
                     lines.append("✅ <b>Completed:</b>")
