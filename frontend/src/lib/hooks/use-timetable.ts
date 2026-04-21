@@ -118,8 +118,12 @@ export function useTimeBlockUpdate() {
     const { request } = useHttp()
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: TimeBlockUpdate }) =>
-            request(API_ENDPOINTS.TIMETABLE.UPDATE(id), { method: 'PUT', body: data }),
+        mutationFn: ({ id, data, propagate }: { id: number; data: TimeBlockUpdate; propagate?: boolean }) => {
+            const url = propagate
+                ? `${API_ENDPOINTS.TIMETABLE.UPDATE(id)}?propagate=true`
+                : API_ENDPOINTS.TIMETABLE.UPDATE(id)
+            return request(url, { method: 'PUT', body: data })
+        },
         onSuccess: (result: TimeBlock) => {
             queryClient.invalidateQueries({ queryKey: keys.day(result.date) })
         },

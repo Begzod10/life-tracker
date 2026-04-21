@@ -722,6 +722,7 @@ export default function TimetablePage() {
     const [currentDay, setCurrentDay]   = useState(() => format(new Date(), 'yyyy-MM-dd'))
     const [isCreateOpen, setIsCreateOpen] = useState(false)
     const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null)
+    const [propagateCategory, setPropagateCategory] = useState(false)
     const [clickedTime, setClickedTime]  = useState<string | null>(null)
     const timelineRef = useRef<HTMLDivElement>(null)
 
@@ -768,12 +769,14 @@ export default function TimetablePage() {
     const handleUpdate = async (data: BlockFormData) => {
         if (!editingBlock) return
         const resolvedTitle = data.title.trim() || (data.task_id ? taskMap[data.task_id] : '') || editingBlock.title
+        const categoryChanged = data.category !== editingBlock.category
         await updateBlock.mutateAsync({ id: editingBlock.id, data: {
             title: resolvedTitle, description: data.description,
             start_time: data.start_time, end_time: data.end_time,
             category: data.category, task_id: data.task_id ?? undefined,
             is_recurring: data.is_recurring ?? false,
-        }})
+        }, propagate: propagateCategory && categoryChanged && !!editingBlock.is_recurring })
+        setPropagateCategory(false)
         setEditingBlock(null)
     }
 
@@ -909,18 +912,31 @@ export default function TimetablePage() {
             </Dialog>
 
             {/* Edit Modal */}
-            <Dialog open={!!editingBlock} onOpenChange={v => { if (!v) setEditingBlock(null) }}>
+            <Dialog open={!!editingBlock} onOpenChange={v => { if (!v) { setEditingBlock(null); setPropagateCategory(false) } }}>
                 <DialogContent className="bg-[#13131f] border border-white/10 text-white max-w-md rounded-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-white font-semibold">Edit Time Block</DialogTitle>
                     </DialogHeader>
                     {editingBlock && (
-                        <BlockForm initial={{ title: editingBlock.title, description: editingBlock.description ?? '',
-                            start_time: editingBlock.start_time, end_time: editingBlock.end_time,
-                            category: editingBlock.category, task_id: editingBlock.task_id, is_recurring: editingBlock.is_recurring }}
-                            personId={personId} onSubmit={handleUpdate}
-                            onCancel={() => setEditingBlock(null)} isLoading={updateBlock.isPending}
-                            existingBlocks={blocks} editingId={editingBlock.id} currentDay={currentDay} />
+                        <>
+                            {editingBlock.is_recurring && (
+                                <label className="flex items-center gap-2 px-1 py-2 text-sm text-amber-400/90 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={propagateCategory}
+                                        onChange={e => setPropagateCategory(e.target.checked)}
+                                        className="w-4 h-4 accent-amber-400 rounded"
+                                    />
+                                    Apply category change to all future recurring blocks
+                                </label>
+                            )}
+                            <BlockForm initial={{ title: editingBlock.title, description: editingBlock.description ?? '',
+                                start_time: editingBlock.start_time, end_time: editingBlock.end_time,
+                                category: editingBlock.category, task_id: editingBlock.task_id, is_recurring: editingBlock.is_recurring }}
+                                personId={personId} onSubmit={handleUpdate}
+                                onCancel={() => { setEditingBlock(null); setPropagateCategory(false) }} isLoading={updateBlock.isPending}
+                                existingBlocks={blocks} editingId={editingBlock.id} currentDay={currentDay} />
+                        </>
                     )}
                 </DialogContent>
             </Dialog>

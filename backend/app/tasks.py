@@ -97,6 +97,54 @@ def copy_recurring_blocks(self):
         db.close()
 
 
+@celery_app.task(name="app.tasks.propagate_recurring_category", bind=True, max_retries=3)
+def propagate_recurring_category(self, block_id: int, new_category: str, person_id: int):
+    """
+    When a recurring block's category is changed, update all future recurring blocks
+    with the same title + start_time + end_time for the same person.
+    Runs as a background task so the API response is immediate.
+    """
+    db = SessionLocal()
+    try:
+        today = date.today()
+
+        source = db.query(models.TimeBlock).filter(
+            models.TimeBlock.id == block_id,
+            models.TimeBlock.person_id == person_id,
+            models.TimeBlock.deleted == False,
+        ).first()
+
+        if not source:
+            logger.warning("propagate_recurring_category: block %d not found", block_id)
+            return {"updated": 0}
+
+        siblings = db.query(models.TimeBlock).filter(
+            models.TimeBlock.person_id == person_id,
+            models.TimeBlock.title == source.title,
+            models.TimeBlock.start_time == source.start_time,
+            models.TimeBlock.end_time == source.end_time,
+            models.TimeBlock.is_recurring == True,
+            models.TimeBlock.deleted == False,
+            models.TimeBlock.date >= today,
+        ).all()
+
+        updated = 0
+        for block in siblings:
+            block.category = new_category
+            updated += 1
+
+        db.commit()
+        logger.info("propagate_recurring_category: updated %d blocks for person %d", updated, person_id)
+        return {"updated": updated}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("propagate_recurring_category failed: %s", exc)
+        raise self.retry(exc=exc, countdown=30)
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.tasks.mark_missed_blocks", bind=True, max_retries=3)
 def mark_missed_blocks(self):
     """

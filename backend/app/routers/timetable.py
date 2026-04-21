@@ -181,10 +181,11 @@ def create_time_block(
 def update_time_block(
     block_id: int,
     block: schemas.TimeBlockUpdate,
+    propagate: bool = Query(False, description="Propagate category change to all future recurring blocks"),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Update a time block."""
+    """Update a time block. Pass ?propagate=true to apply category change to all future recurring siblings."""
     db_block = db.query(models.TimeBlock).filter(
         models.TimeBlock.id == block_id,
         models.TimeBlock.person_id == current_user.id,
@@ -201,10 +202,18 @@ def update_time_block(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="start_time must be before end_time",
         )
+
+    old_category = db_block.category
     for key, value in update_data.items():
         setattr(db_block, key, value)
     db.commit()
     db.refresh(db_block)
+
+    new_category = update_data.get("category")
+    if propagate and new_category and new_category != old_category and db_block.is_recurring:
+        from app.tasks import propagate_recurring_category
+        propagate_recurring_category.delay(block_id, new_category, current_user.id)
+
     return db_block
 
 
