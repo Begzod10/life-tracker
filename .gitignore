@@ -37,3 +37,8 @@ structure/
 celerybeat-schedule
 celerybeat-schedule.*
 celerybeat.pid
+
+# PWA build artifacts (auto-generated, not our manual sw.js)
+frontend/public/workbox-*.js
+frontend/public/workbox-*.js.map
+frontend/public/swe-worker-*.js
