@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { signOut } from 'next-auth/react'
 import { AuthTokens } from '@/lib/utils/auth'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 
@@ -27,17 +28,17 @@ async function refreshAccessToken(): Promise<string> {
         let refreshToken = AuthTokens.getRefreshToken()
 
         // No token in localStorage — may be right after OAuth login before AuthSync ran.
-        // Try pulling tokens from the NextAuth session instead.
+        // Pull the refresh token from the NextAuth session and use it to call /auth/refresh.
+        // Do NOT return session.accessToken directly — it may already be expired.
         if (!refreshToken) {
             const sessionRes = await fetch('/api/auth/session')
             if (sessionRes.ok) {
                 const session = await sessionRes.json()
-                if (session?.accessToken && session?.refreshToken) {
-                    AuthTokens.setTokens(session.accessToken, session.refreshToken)
-                    return session.accessToken as string
+                if (session?.refreshToken) {
+                    refreshToken = session.refreshToken as string
                 }
             }
-            throw new Error('No refresh token')
+            if (!refreshToken) throw new Error('No refresh token')
         }
 
         const response = await fetch(API_ENDPOINTS.AUTH.REFRESH, {
@@ -125,8 +126,11 @@ export const useHttp = (): UseHttpReturn => {
                     return retryData
                 } catch (refreshError: any) {
                     if (refreshError.message === 'SESSION_EXPIRED' || refreshError.message === 'No refresh token') {
-                        // Токены невалидны — редиректим на /auth (cookie уже очищен в clearTokens)
-                        window.location.replace('/auth')
+                        // Clear the NextAuth session so AuthSync can't re-seed stale tokens
+                        // on the next page load, then redirect to the login page.
+                        signOut({ redirect: false }).finally(() => {
+                            window.location.replace('/auth')
+                        })
                     }
                     throw refreshError
                 }
