@@ -388,8 +388,12 @@ async def focus_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from telegram.error import TimedOut as TelegramTimedOut
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except TelegramTimedOut:
+        logger.warning("query.answer() timed out for callback %s — continuing", query.data)
     data = query.data
     db = get_db()
     try:
