@@ -57,7 +57,8 @@ export type TimetableStats = {
 const keys = {
     all: ['timetable'] as const,
     day: (day: string) => ['timetable', 'day', day] as const,
-    stats: (weeks: number) => ['timetable', 'stats', weeks] as const,
+    stats: (weeks: number, fromDate?: string, toDate?: string) =>
+        ['timetable', 'stats', weeks, fromDate ?? '', toDate ?? ''] as const,
 }
 
 export interface DailyConclusion {
@@ -74,11 +75,11 @@ export function useDailyConclusions(limit = 30) {
     })
 }
 
-export function useTimetableStats(weeks = 4) {
+export function useTimetableStats(weeks = 4, fromDate?: string, toDate?: string) {
     const { request } = useHttp()
     return useQuery<TimetableStats>({
-        queryKey: keys.stats(weeks),
-        queryFn: () => request(API_ENDPOINTS.TIMETABLE.STATS(weeks)),
+        queryKey: keys.stats(weeks, fromDate, toDate),
+        queryFn: () => request(API_ENDPOINTS.TIMETABLE.STATS(weeks, fromDate, toDate)),
     })
 }
 

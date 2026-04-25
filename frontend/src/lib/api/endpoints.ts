@@ -177,7 +177,10 @@ export const API_ENDPOINTS = {
     },
 
     TIMETABLE: {
-        STATS: (weeks = 4) => `${API_URL}/timetable/stats?weeks=${weeks}`,
+        STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
+            fromDate && toDate
+                ? `${API_URL}/timetable/stats?weeks=${weeks}&from_date=${fromDate}&to_date=${toDate}`
+                : `${API_URL}/timetable/stats?weeks=${weeks}`,
         LIST: (dateFrom?: string, dateTo?: string) => {
             const params = new URLSearchParams()
             if (dateFrom) params.append('date_from', dateFrom)

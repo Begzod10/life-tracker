@@ -21,6 +21,13 @@ const cat = (c: string) => CATEGORY_COLORS[c] ?? CATEGORY_COLORS.other
 
 const WEEK_OPTIONS = [1, 2, 4, 8, 12]
 
+function toLocalDateString(d: Date) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
 function StatCard({ icon, label, value, sub, color = 'text-white' }: {
     icon: React.ReactNode; label: string; value: string | number; sub?: string; color?: string
 }) {
@@ -38,19 +45,21 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
 
 function LineChart({
     data,
-    weeks,
+    fromDate,
+    toDate,
 }: {
     data: { date: string; completed: number; missed: number; total: number }[]
-    weeks: number
+    fromDate: string
+    toDate: string
 }) {
-    // Build a full day-by-day range from (today - weeks*7) up to yesterday
-    const todayMs = new Date(); todayMs.setHours(0, 0, 0, 0)
-    const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
+    const fmtDate = (d: Date) => toLocalDateString(d)
 
+    // Build full day-by-day range between fromDate and toDate
+    const start = new Date(fromDate + 'T00:00:00')
+    const end = new Date(toDate + 'T00:00:00')
     const dayRange: { date: string; completed: number; missed: number }[] = []
-    for (let i = weeks * 7; i >= 0; i--) {
-        const d = new Date(todayMs); d.setDate(todayMs.getDate() - i)
-        const ds = fmtDate(d)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = fmtDate(new Date(d))
         const found = data.find(x => x.date === ds)
         dayRange.push({ date: ds, completed: found?.completed ?? 0, missed: found?.missed ?? 0 })
     }
@@ -130,7 +139,16 @@ export default function TimetableStatsPage() {
     const personId = params.id as string
     const [weeks, setWeeks] = useState(4)
     const [generating, setGenerating] = useState(false)
-    const { data: stats, isLoading } = useTimetableStats(weeks)
+
+    // Custom date range
+    const [customFrom, setCustomFrom] = useState('')
+    const [customTo, setCustomTo]     = useState('')
+    const [customActive, setCustomActive] = useState(false)
+
+    const activeFrom = customActive && customFrom ? customFrom : undefined
+    const activeTo   = customActive && customTo   ? customTo   : undefined
+
+    const { data: stats, isLoading } = useTimetableStats(weeks, activeFrom, activeTo)
     const { data: conclusions, isLoading: conclusionsLoading } = useDailyConclusions(weeks * 7)
     const { data: budgets, isLoading: budgetsLoading } = useCategoryBudgets()
     const { request } = useHttp()
@@ -184,12 +202,14 @@ export default function TimetableStatsPage() {
     // Build heatmap: daily_summary keyed by date string
     const dayMap = Object.fromEntries((stats?.daily_summary ?? []).map(d => [d.date, d]))
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    // Show N weeks back + N weeks forward (centered on today)
-    const totalDays = weeks * 7 * 2
-    const heatDays: Date[] = Array.from({ length: totalDays }, (_, i) => {
-        const d = new Date(today); d.setDate(today.getDate() - (weeks * 7) + i); return d
-    })
-    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+    const fmt = (d: Date) => toLocalDateString(d)
+    // Use the actual period returned by the backend
+    const heatStart = stats ? new Date(stats.period.from + 'T00:00:00') : new Date(today)
+    const heatEnd   = stats ? new Date(stats.period.to   + 'T00:00:00') : new Date(today)
+    const heatDays: Date[] = []
+    for (let d = new Date(heatStart); d <= heatEnd; d.setDate(d.getDate() + 1)) {
+        heatDays.push(new Date(d))
+    }
 
     const hourLabel = (h: number) => h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
 
@@ -219,17 +239,58 @@ export default function TimetableStatsPage() {
                         </div>
                     </div>
 
-                    {/* Week selector */}
-                    <div className="flex items-center gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
-                        {WEEK_OPTIONS.map(w => (
-                            <button key={w} onClick={() => setWeeks(w)}
+                    {/* Period selector */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
+                            {WEEK_OPTIONS.map(w => (
+                                <button key={w}
+                                    onClick={() => { setWeeks(w); setCustomActive(false) }}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
+                                        ${!customActive && weeks === w ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
+                                    {w}w
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setCustomActive(v => !v)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                                    ${weeks === w ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
-                                {w}w
+                                    ${customActive ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
+                                Custom
                             </button>
-                        ))}
+                        </div>
                     </div>
                 </div>
+
+                {/* Custom date range row */}
+                {customActive && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                        className="flex items-center gap-3 flex-wrap mb-4 p-4 rounded-2xl border border-white/8 bg-white/[0.03]">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-white/35 uppercase tracking-wider">From</label>
+                            <input
+                                type="date"
+                                value={customFrom}
+                                onChange={e => setCustomFrom(e.target.value)}
+                                className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]"
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-white/35 uppercase tracking-wider">To</label>
+                            <input
+                                type="date"
+                                value={customTo}
+                                onChange={e => setCustomTo(e.target.value)}
+                                className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]"
+                            />
+                        </div>
+                        {customFrom && customTo && customFrom > customTo && (
+                            <p className="text-xs text-red-400 mt-4">From date must be before To date</p>
+                        )}
+                        {customActive && (!customFrom || !customTo) && (
+                            <p className="text-xs text-white/30 mt-4">Pick both dates to filter</p>
+                        )}
+                    </motion.div>
+                )}
 
                 {isLoading ? (
                     <div className="flex items-center justify-center py-32">
@@ -271,13 +332,18 @@ export default function TimetableStatsPage() {
                                     </div>
                                 </div>
                             </div>
-                            <LineChart data={stats.daily_summary} weeks={weeks} />
+                            <LineChart
+                                data={stats.daily_summary}
+                                fromDate={stats.period.from}
+                                toDate={stats.period.to}
+                            />
                         </div>
 
                         {/* ── Activity Heatmap ── */}
                         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
                             <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
-                                <Calendar className="w-4 h-4" />Activity — {weeks}w back · {weeks}w ahead
+                                <Calendar className="w-4 h-4" />
+                                Activity — {stats.period.from} → {stats.period.to}
                             </h2>
                             <div className="flex gap-1 flex-wrap">
                                 {heatDays.map((d, i) => {

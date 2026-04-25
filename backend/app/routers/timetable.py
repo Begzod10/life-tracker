@@ -33,13 +33,23 @@ def get_time_blocks(
 @router.get("/stats")
 def get_timetable_stats(
     weeks: int = Query(default=4, ge=1, le=52),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Aggregated timetable statistics for the selected N-week window (past + upcoming)."""
+    """Aggregated timetable statistics. Use from_date/to_date for a custom range,
+    or weeks to get a symmetric window around today."""
     today = date.today()
-    date_from = today - timedelta(weeks=weeks)
-    date_to = today + timedelta(weeks=weeks)
+    if from_date and to_date:
+        try:
+            date_from = date.fromisoformat(from_date)
+            date_to = date.fromisoformat(to_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    else:
+        date_from = today - timedelta(weeks=weeks)
+        date_to = today + timedelta(weeks=weeks)
 
     blocks = db.query(models.TimeBlock).filter(
         models.TimeBlock.person_id == current_user.id,
