@@ -28,6 +28,19 @@ function toLocalDateString(d: Date) {
     return `${y}-${m}-${day}`
 }
 
+function getWeekBounds() {
+    const today = new Date()
+    const day = today.getDay() // 0=Sun … 6=Sat
+    const diffToMonday = day === 0 ? -6 : 1 - day
+    const monday = new Date(today)
+    monday.setDate(today.getDate() + diffToMonday)
+    const saturday = new Date(monday)
+    saturday.setDate(monday.getDate() + 5)
+    return { monday: toLocalDateString(monday), saturday: toLocalDateString(saturday) }
+}
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
 function StatCard({ icon, label, value, sub, color = 'text-white' }: {
     icon: React.ReactNode; label: string; value: string | number; sub?: string; color?: string
 }) {
@@ -140,16 +153,39 @@ export default function TimetableStatsPage() {
     const [weeks, setWeeks] = useState(4)
     const [generating, setGenerating] = useState(false)
 
-    // Custom date range
-    const [customFrom, setCustomFrom] = useState('')
-    const [customTo, setCustomTo]     = useState('')
-    const [customActive, setCustomActive] = useState(false)
+    // Filter mode: 'weeks' | 'month' | 'year' | 'custom'
+    const _today = new Date()
+    type FilterMode = 'weeks' | 'month' | 'year' | 'custom'
+    const [filterMode, setFilterMode] = useState<FilterMode>('weeks')
+    // Month mode state
+    const [filterMonth, setFilterMonth] = useState(_today.getMonth())   // 0-indexed
+    const [filterMonthYear, setFilterMonthYear] = useState(_today.getFullYear())
+    // Year mode state
+    const [filterYear, setFilterYear] = useState(_today.getFullYear())
+    // Custom mode — pre-fill with current week Mon → Sat
+    const { monday: initMonday, saturday: initSaturday } = getWeekBounds()
+    const [customFrom, setCustomFrom] = useState(initMonday)
+    const [customTo, setCustomTo]     = useState(initSaturday)
 
-    const activeFrom = customActive && customFrom ? customFrom : undefined
-    const activeTo   = customActive && customTo   ? customTo   : undefined
+    // Derive from_date / to_date from current mode
+    const { activeFrom, activeTo } = (() => {
+        if (filterMode === 'month') {
+            const first = new Date(filterMonthYear, filterMonth, 1)
+            const last  = new Date(filterMonthYear, filterMonth + 1, 0)
+            return { activeFrom: toLocalDateString(first), activeTo: toLocalDateString(last) }
+        }
+        if (filterMode === 'year') {
+            return { activeFrom: `${filterYear}-01-01`, activeTo: `${filterYear}-12-31` }
+        }
+        if (filterMode === 'custom' && customFrom && customTo && customFrom <= customTo) {
+            return { activeFrom: customFrom, activeTo: customTo }
+        }
+        return { activeFrom: undefined, activeTo: undefined }
+    })()
 
     const { data: stats, isLoading } = useTimetableStats(weeks, activeFrom, activeTo)
-    const { data: conclusions, isLoading: conclusionsLoading } = useDailyConclusions(weeks * 7)
+    const conclusionDays = filterMode === 'weeks' ? weeks * 7 : 90
+    const { data: conclusions, isLoading: conclusionsLoading } = useDailyConclusions(conclusionDays)
     const { data: budgets, isLoading: budgetsLoading } = useCategoryBudgets()
     const { request } = useHttp()
     const queryClient = useQueryClient()
@@ -240,54 +276,85 @@ export default function TimetableStatsPage() {
                     </div>
 
                     {/* Period selector */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* Week presets */}
                         <div className="flex items-center gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
                             {WEEK_OPTIONS.map(w => (
                                 <button key={w}
-                                    onClick={() => { setWeeks(w); setCustomActive(false) }}
+                                    onClick={() => { setWeeks(w); setFilterMode('weeks') }}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                                        ${!customActive && weeks === w ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
+                                        ${filterMode === 'weeks' && weeks === w ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
                                     {w}w
                                 </button>
                             ))}
-                            <button
-                                onClick={() => setCustomActive(v => !v)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                                    ${customActive ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
-                                Custom
-                            </button>
+                        </div>
+                        {/* Month / Year / Custom */}
+                        <div className="flex items-center gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
+                            {(['month', 'year', 'custom'] as FilterMode[]).map(mode => (
+                                <button key={mode}
+                                    onClick={() => setFilterMode(m => m === mode ? 'weeks' : mode)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all
+                                        ${filterMode === mode ? 'bg-indigo-600 text-white shadow-md' : 'text-white/40 hover:text-white'}`}>
+                                    {mode}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Custom date range row */}
-                {customActive && (
+                {/* Sub-filter row */}
+                {filterMode !== 'weeks' && (
                     <motion.div
-                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                        className="flex items-center gap-3 flex-wrap mb-4 p-4 rounded-2xl border border-white/8 bg-white/[0.03]">
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[10px] text-white/35 uppercase tracking-wider">From</label>
-                            <input
-                                type="date"
-                                value={customFrom}
-                                onChange={e => setCustomFrom(e.target.value)}
-                                className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[10px] text-white/35 uppercase tracking-wider">To</label>
-                            <input
-                                type="date"
-                                value={customTo}
-                                onChange={e => setCustomTo(e.target.value)}
-                                className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]"
-                            />
-                        </div>
-                        {customFrom && customTo && customFrom > customTo && (
-                            <p className="text-xs text-red-400 mt-4">From date must be before To date</p>
+                        key={filterMode}
+                        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-3 flex-wrap mb-6 p-4 rounded-2xl border border-white/8 bg-white/[0.03]">
+
+                        {filterMode === 'month' && (
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => {
+                                    if (filterMonth === 0) { setFilterMonth(11); setFilterMonthYear(y => y - 1) }
+                                    else setFilterMonth(m => m - 1)
+                                }} className="w-7 h-7 rounded-lg bg-white/6 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all text-sm">‹</button>
+                                <span className="text-sm font-semibold text-white min-w-[140px] text-center">
+                                    {MONTHS[filterMonth]} {filterMonthYear}
+                                </span>
+                                <button onClick={() => {
+                                    if (filterMonth === 11) { setFilterMonth(0); setFilterMonthYear(y => y + 1) }
+                                    else setFilterMonth(m => m + 1)
+                                }} className="w-7 h-7 rounded-lg bg-white/6 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all text-sm">›</button>
+                                <span className="text-xs text-white/35 ml-2">
+                                    {toLocalDateString(new Date(filterMonthYear, filterMonth, 1))} → {toLocalDateString(new Date(filterMonthYear, filterMonth + 1, 0))}
+                                </span>
+                            </div>
                         )}
-                        {customActive && (!customFrom || !customTo) && (
-                            <p className="text-xs text-white/30 mt-4">Pick both dates to filter</p>
+
+                        {filterMode === 'year' && (
+                            <div className="flex items-center gap-3">
+                                <button onClick={() => setFilterYear(y => y - 1)}
+                                    className="w-7 h-7 rounded-lg bg-white/6 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all text-sm">‹</button>
+                                <span className="text-sm font-semibold text-white min-w-[60px] text-center">{filterYear}</span>
+                                <button onClick={() => setFilterYear(y => y + 1)}
+                                    className="w-7 h-7 rounded-lg bg-white/6 border border-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all text-sm">›</button>
+                                <span className="text-xs text-white/35 ml-2">{filterYear}-01-01 → {filterYear}-12-31</span>
+                            </div>
+                        )}
+
+                        {filterMode === 'custom' && (
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] text-white/35 uppercase tracking-wider">From</label>
+                                    <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]" />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] text-white/35 uppercase tracking-wider">To</label>
+                                    <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                                        className="px-3 py-2 rounded-xl bg-white/6 border border-white/10 text-sm text-white [color-scheme:dark]" />
+                                </div>
+                                {customFrom && customTo && customFrom > customTo && (
+                                    <p className="text-xs text-red-400 self-end mb-2">From must be before To</p>
+                                )}
+                            </div>
                         )}
                     </motion.div>
                 )}
