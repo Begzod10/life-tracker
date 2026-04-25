@@ -87,7 +87,11 @@ export const authOptions: NextAuthOptions = {
         },
 
         async redirect({ url, baseUrl }) {
-            if (url.includes('/auth')) return `${baseUrl}/platform`
+            // Only redirect away from the bare /auth page (no query params).
+            // /auth?error=Callback must NOT be caught here — intercepting it would
+            // silently discard the login failure and send the user to /platform
+            // while unauthenticated, forcing them to log in a second time.
+            if (url === `${baseUrl}/auth`) return `${baseUrl}/platform`
             if (url.startsWith(baseUrl)) return url
             return `${baseUrl}/platform`
         },
