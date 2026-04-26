@@ -176,12 +176,12 @@ class TaskBase(BaseModel):
 
 
 class TaskCreate(TaskBase):
-    goal_id: int = Field(..., description="Goal ID this task belongs to")
+    goal_id: Optional[int] = Field(None, description="Goal ID this task belongs to")
 
 
 class Task(TaskBase):
     id: int = Field(..., description="Task ID")
-    goal_id: int = Field(..., description="Goal ID")
+    goal_id: Optional[int] = Field(None, description="Goal ID")
     completed: bool = Field(default=False, description="Task completion status")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
     value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
@@ -201,6 +201,7 @@ class TaskUpdate(BaseModel):
     completed: Optional[bool] = Field(None, description="Completion status")
     value: Optional[float] = Field(None, description="Value contributed to goal's current_value when completed")
     is_recurring: Optional[bool] = Field(None, description="Toggle recurring mode")
+    goal_id: Optional[int] = Field(None, description="Goal to link this task to (None to unlink)")
 
 
 class RecurringCompletionTask(BaseModel):

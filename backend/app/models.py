@@ -194,7 +194,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=False)
+    goal_id = Column(Integer, ForeignKey("goals.id"), nullable=True)
 
     name = Column(String(200), nullable=False)
     description = Column(Text)

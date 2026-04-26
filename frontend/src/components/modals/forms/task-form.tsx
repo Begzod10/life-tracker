@@ -8,7 +8,8 @@ import {
     SelectInput,
     DatePicker,
     SubmitButton,
-    CancelButton
+    CancelButton,
+    NumberInput,
 } from '../form-components'
 import { useGoalsList, useGoal } from '@/lib/hooks/use-goals'
 import { useSubtasks, useSubtaskCreate, useSubtaskUpdate, useSubtaskDelete } from '@/lib/hooks/use-tasks'
@@ -96,7 +97,11 @@ export function TaskForm({ onSubmit, onCancel, initialData }: TaskFormProps) {
 
         setIsLoading(true)
         try {
-            await onSubmit(formData)
+            const payload = {
+                ...formData,
+                goal_id: formData.goal_id ?? null,
+            }
+            await onSubmit(payload)
         } finally {
             setIsLoading(false)
         }
@@ -158,8 +163,7 @@ export function TaskForm({ onSubmit, onCancel, initialData }: TaskFormProps) {
                 </FormField>
 
                 <FormField label="Duration (minutes)">
-                    <TextInput
-                        type="number"
+                    <NumberInput
                         value={formData.estimated_duration}
                         onChange={(value: number) => updateField('estimated_duration', value)}
                         min={5}
@@ -179,8 +183,7 @@ export function TaskForm({ onSubmit, onCancel, initialData }: TaskFormProps) {
                                 : undefined
                     }
                 >
-                    <TextInput
-                        type="number"
+                    <NumberInput
                         value={formData.value || 0}
                         onChange={(value: number) => updateField('value', value)}
                         min={0}

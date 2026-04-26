@@ -167,7 +167,17 @@ export function NumberInput({
             value={displayValue}
             onChange={(e) => {
                 const val = parseFloat(e.target.value)
-                onChange(Number.isNaN(val) ? '' : val)
+                onChange(Number.isNaN(val) ? 0 : val)
+            }}
+            onFocus={(e) => {
+                if (Number(e.target.value) === 0) {
+                    onChange('')
+                }
+            }}
+            onBlur={(e) => {
+                if (e.target.value === '') {
+                    onChange(0)
+                }
             }}
             placeholder={placeholder}
             min={min}

@@ -139,26 +139,28 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current
     Create a new task and recalculate goal progress.
     Adding a task will update the goal's completion percentage.
     """
-    # Verify the goal exists and belongs to current user
-    goal = db.query(models.Goal).filter(models.Goal.id == task.goal_id, models.Goal.person_id == current_user.id).first()
-    if not goal:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Goal with id {task.goal_id} not found"
-        )
-
-    # Validate task value against goal's target_value
-    if task.value is not None and goal.target_value:
-        existing_values_sum = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
-            models.Task.goal_id == task.goal_id,
-            models.Task.value.isnot(None),
-            or_(models.Task.deleted == False, models.Task.deleted.is_(None))
-        ).scalar()
-        if existing_values_sum + task.value > goal.target_value:
+    goal = None
+    if task.goal_id is not None:
+        # Verify the goal exists and belongs to current user
+        goal = db.query(models.Goal).filter(models.Goal.id == task.goal_id, models.Goal.person_id == current_user.id).first()
+        if not goal:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Total tasks value ({existing_values_sum + task.value}) would exceed goal's target value ({goal.target_value})"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Goal with id {task.goal_id} not found"
             )
+
+        # Validate task value against goal's target_value
+        if task.value is not None and goal.target_value:
+            existing_values_sum = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
+                models.Task.goal_id == task.goal_id,
+                models.Task.value.isnot(None),
+                or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+            ).scalar()
+            if existing_values_sum + task.value > goal.target_value:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Total tasks value ({existing_values_sum + task.value}) would exceed goal's target value ({goal.target_value})"
+                )
 
     # Create the task
     new_task = models.Task(**task.dict())
@@ -166,8 +168,9 @@ def create_task(task: schemas.TaskCreate, db: Session = Depends(get_db), current
     db.commit()
     db.refresh(new_task)
 
-    # Recalculate goal progress (adding a task changes the total)
-    ProgressService.update_goal_percentage(task.goal_id, db, method='hybrid')
+    # Recalculate goal progress only when linked to a goal
+    if task.goal_id is not None:
+        ProgressService.update_goal_percentage(task.goal_id, db, method='hybrid')
 
     return new_task
 
@@ -180,38 +183,48 @@ def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(ge
     """
     db_task = (
         db.query(models.Task)
-        .join(models.Goal)
-        .filter(models.Task.id == task_id, models.Goal.person_id == current_user.id)
+        .outerjoin(models.Goal, models.Task.goal_id == models.Goal.id)
+        .filter(
+            models.Task.id == task_id,
+            or_(models.Goal.person_id == current_user.id, models.Task.goal_id.is_(None))
+        )
         .first()
     )
     if not db_task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-    # Track if completion status changed
+    old_goal_id = db_task.goal_id
     completion_changed = False
     update_data = task.dict(exclude_unset=True)
+
+    # Handle goal change
+    new_goal_id = update_data.get('goal_id', old_goal_id)
+    if new_goal_id is not None and new_goal_id != old_goal_id:
+        new_goal = db.query(models.Goal).filter(
+            models.Goal.id == new_goal_id,
+            models.Goal.person_id == current_user.id
+        ).first()
+        if not new_goal:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Goal with id {new_goal_id} not found")
 
     # Check if completed status is being updated
     if 'completed' in update_data:
         old_status = db_task.completed
         new_status = update_data['completed']
-
         if old_status != new_status:
             completion_changed = True
-
-            # If marking as completed, set completed_at timestamp
             if new_status:
                 update_data['completed_at'] = datetime.utcnow()
             else:
-                # If unmarking completion, clear completed_at
                 update_data['completed_at'] = None
 
     # Validate task value against goal's target_value
-    if 'value' in update_data and update_data['value'] is not None:
-        goal = db.query(models.Goal).filter(models.Goal.id == db_task.goal_id).first()
+    effective_goal_id = new_goal_id if 'goal_id' in update_data else old_goal_id
+    if 'value' in update_data and update_data['value'] is not None and effective_goal_id:
+        goal = db.query(models.Goal).filter(models.Goal.id == effective_goal_id).first()
         if goal and goal.target_value:
             existing_values_sum = db.query(func.coalesce(func.sum(models.Task.value), 0)).filter(
-                models.Task.goal_id == db_task.goal_id,
+                models.Task.goal_id == effective_goal_id,
                 models.Task.id != db_task.id,
                 models.Task.value.isnot(None),
                 or_(models.Task.deleted == False, models.Task.deleted.is_(None))
@@ -222,15 +235,19 @@ def update_task(task_id: int, task: schemas.TaskUpdate, db: Session = Depends(ge
                     detail=f"Total tasks value ({existing_values_sum + update_data['value']}) would exceed goal's target value ({goal.target_value})"
                 )
 
-    # Apply updates to the task
     for key, value in update_data.items():
         setattr(db_task, key, value)
 
     db.commit()
     db.refresh(db_task)
 
-    # Recalculate goal progress if completion status changed
-    if completion_changed:
+    # Recalculate progress for old and new goals when changed
+    if completion_changed or ('goal_id' in update_data and new_goal_id != old_goal_id):
+        if old_goal_id:
+            ProgressService.update_goal_percentage(old_goal_id, db, method='hybrid')
+        if db_task.goal_id and db_task.goal_id != old_goal_id:
+            ProgressService.update_goal_percentage(db_task.goal_id, db, method='hybrid')
+    elif completion_changed and db_task.goal_id:
         ProgressService.update_goal_percentage(db_task.goal_id, db, method='hybrid')
 
     return db_task

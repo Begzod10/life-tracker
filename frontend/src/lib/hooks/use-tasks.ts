@@ -99,6 +99,10 @@ export function useTaskUpdate() {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['task', variables.id] })
             queryClient.invalidateQueries({ queryKey: ['tasks'] })
+            if (variables.data?.goal_id) {
+                queryClient.invalidateQueries({ queryKey: ['tasks', 'goal', String(variables.data.goal_id)] })
+                queryClient.invalidateQueries({ queryKey: ['goal', String(variables.data.goal_id)] })
+            }
         },
     })
 }
