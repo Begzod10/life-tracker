@@ -866,3 +866,57 @@ class TimeBlock(TimeBlockBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ========== DICTIONARY SCHEMAS ==========
+
+class DictionaryWordCreate(BaseModel):
+    word: str = Field(..., min_length=1, max_length=200)
+    definition: str = Field(..., min_length=1)
+    translation: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    examples: Optional[List[str]] = None
+    phonetic: Optional[str] = None
+    difficulty: str = Field(default="B1")
+    tags: Optional[str] = None
+
+
+class DictionaryWordUpdate(BaseModel):
+    word: Optional[str] = None
+    definition: Optional[str] = None
+    translation: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    examples: Optional[List[str]] = None
+    phonetic: Optional[str] = None
+    difficulty: Optional[str] = None
+    tags: Optional[str] = None
+
+
+class DictionaryWordRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    person_id: int
+    word: str
+    definition: str
+    translation: Optional[str] = None
+    part_of_speech: Optional[str] = None
+    examples: Optional[List[str]] = None
+    phonetic: Optional[str] = None
+    difficulty: str
+    tags: Optional[str] = None
+    review_count: int
+    correct_count: int
+    last_reviewed_at: Optional[datetime] = None
+    created_at: datetime
+
+
+# ========== PRACTICE SCHEMAS ==========
+
+class PracticeSessionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    mode: str
+    total_questions: int
+    correct_answers: int
+    started_at: datetime
+    completed_at: Optional[datetime] = None

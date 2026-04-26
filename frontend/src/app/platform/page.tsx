@@ -129,7 +129,7 @@ function PlatformPageContent() {
 
     const { data: user, isLoading: isUserLoading, error } = useUser()
 
-    const DEDICATED_PAGES = ['timetable', 'finances', 'health']
+    const DEDICATED_PAGES = ['timetable', 'finances', 'health', 'learning']
 
     // Redirect dedicated pages to their own routes once user is loaded
     useEffect(() => {

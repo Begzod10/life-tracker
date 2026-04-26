@@ -176,6 +176,28 @@ export const API_ENDPOINTS = {
         CREATE_TASKS: `${API_URL}/ai/create-tasks`,
     },
 
+    DICTIONARY: {
+        LIST: `${API_URL}/dictionary/`,
+        CREATE: `${API_URL}/dictionary/`,
+        UPDATE: (id: number) => `${API_URL}/dictionary/${id}`,
+        DELETE: (id: number) => `${API_URL}/dictionary/${id}`,
+        STATS: `${API_URL}/dictionary/stats`,
+    },
+
+    PRACTICE: {
+        WORDS: (count = 10, difficulty?: string) => {
+            const p = new URLSearchParams({ count: String(count) })
+            if (difficulty) p.append('difficulty', difficulty)
+            return `${API_URL}/practice/words?${p}`
+        },
+        RESULT: (wordId: number, wasCorrect: boolean) =>
+            `${API_URL}/practice/result?word_id=${wordId}&was_correct=${wasCorrect}`,
+        SESSION: (mode: string) => `${API_URL}/practice/session?mode=${mode}`,
+        COMPLETE: (sessionId: number, total: number, correct: number) =>
+            `${API_URL}/practice/session/${sessionId}/complete?total_questions=${total}&correct_answers=${correct}`,
+        HISTORY: (limit = 10) => `${API_URL}/practice/history?limit=${limit}`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate

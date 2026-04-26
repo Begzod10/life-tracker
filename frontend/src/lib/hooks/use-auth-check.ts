@@ -1,4 +1,3 @@
-// src/lib/hooks/use-auth-check.ts
 'use client'
 
 import { useSession } from 'next-auth/react'
@@ -11,19 +10,16 @@ export function useAuthCheck(redirectTo: string = '/auth') {
     const router = useRouter()
 
     useEffect(() => {
-        // Проверяем NextAuth session ИЛИ localStorage токены
-        const hasNextAuthSession = status === 'authenticated'
-        const hasLocalStorageTokens = !!(AuthTokens.getAccessToken() && AuthTokens.getRefreshToken())
+        if (status === 'loading') return
 
-        const isAuthenticated = hasNextAuthSession || hasLocalStorageTokens
-
-        if (status !== 'loading' && !isAuthenticated) {
+        if (status === 'unauthenticated') {
+            AuthTokens.clearTokens()
             router.push(redirectTo)
         }
-    }, [session, status, router, redirectTo])
+    }, [status, router, redirectTo])
 
     return {
-        isAuthenticated: status === 'authenticated' || !!(AuthTokens.getAccessToken()),
+        isAuthenticated: status === 'authenticated',
         isLoading: status === 'loading',
         session,
     }

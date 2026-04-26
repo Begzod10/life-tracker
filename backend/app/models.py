@@ -67,6 +67,16 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan"
     )
+    dictionary_words = relationship(
+        "DictionaryWord",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    practice_sessions = relationship(
+        "PracticeSession",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
@@ -551,3 +561,40 @@ class DailyConclusion(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     person = relationship("Person")
+
+
+class DictionaryWord(Base):
+    __tablename__ = "dictionary_words"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    word = Column(String(200), nullable=False, index=True)
+    definition = Column(Text, nullable=False)
+    translation = Column(Text, nullable=True)
+    part_of_speech = Column(String(50), nullable=True)  # noun, verb, adjective, phrase, idiom
+    examples = Column(Text, nullable=True)              # JSON-encoded list of strings
+    phonetic = Column(String(200), nullable=True)
+    difficulty = Column(String(10), default="B1")       # A1, A2, B1, B2, C1, C2
+    tags = Column(String(500), nullable=True)
+    review_count = Column(Integer, default=0)
+    correct_count = Column(Integer, default=0)
+    last_reviewed_at = Column(DateTime, nullable=True)
+    deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    person = relationship("Person", back_populates="dictionary_words")
+
+
+class PracticeSession(Base):
+    __tablename__ = "practice_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    mode = Column(String(20), nullable=False)           # flashcard, quiz, spelling
+    total_questions = Column(Integer, default=0)
+    correct_answers = Column(Integer, default=0)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    person = relationship("Person", back_populates="practice_sessions")

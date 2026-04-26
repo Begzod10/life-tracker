@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { useSalaryMonth, useSalaryMonthDelete } from '@/lib/hooks/use-salary'
+import { useSalaryMonth, useSalaryMonthDelete, useSalaryMonthUpdate } from '@/lib/hooks/use-salary'
 import { useExpensesBySalaryMonth, useExpenseCreate, useExpenseUpdate, useExpenseDelete } from '@/lib/hooks/use-expenses'
 import { useJob } from '@/lib/hooks/use-jobs'
 import { FormField, TextInput, TextareaInput, SelectInput, NumberInput, DatePicker, SubmitButton, CancelButton } from '@/components/modals/form-components'
@@ -619,6 +619,59 @@ function QuickActionsCard({ data, isReceived, onToggleReceived, onEdit, onDelete
 }
 
 
+function EditSalaryForm({ data, onClose }: { data: SalaryMonthData; onClose: () => void }) {
+    const { mutate: updateSalary, isPending } = useSalaryMonthUpdate()
+
+    const [salaryAmount, setSalaryAmount] = useState(data.salary_amount)
+    const [deductions, setDeductions] = useState(data.deductions)
+    const [receivedDate, setReceivedDate] = useState<Date | null>(
+        data.received_date ? new Date(data.received_date) : null
+    )
+
+    const netAmount = salaryAmount - deductions
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        updateSalary({
+            id: data.id,
+            data: {
+                salary_amount: salaryAmount,
+                deductions,
+                net_amount: netAmount,
+                received_date: receivedDate ? receivedDate.toISOString().split('T')[0] : '',
+                job_id: data.job_id,
+                month: data.month,
+                person_id: data.person_id,
+            }
+        }, { onSuccess: onClose })
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <FormField label="Gross Salary" required>
+                <NumberInput value={salaryAmount} onChange={setSalaryAmount} placeholder="0" min={0} />
+            </FormField>
+            <FormField label="Deductions">
+                <NumberInput value={deductions} onChange={setDeductions} placeholder="0" min={0} />
+            </FormField>
+            <div className="px-3 py-2 rounded bg-white/5 border border-white/10">
+                <p className="text-xs text-white/50 mb-1">Net Amount (auto-calculated)</p>
+                <p className="text-lg font-bold text-green-400">{netAmount.toLocaleString()} {data.currency}</p>
+            </div>
+            <FormField label="Received Date">
+                <DatePicker
+                    value={receivedDate ?? undefined}
+                    onChange={(d) => setReceivedDate(d ?? null)}
+                />
+            </FormField>
+            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                <CancelButton onClick={onClose} />
+                <SubmitButton isLoading={isPending}>Save Changes</SubmitButton>
+            </div>
+        </form>
+    )
+}
+
 function AddExpenseForm({ personId, salaryMonthId, onClose }: {
     personId: number
     salaryMonthId: number
@@ -828,11 +881,28 @@ function SalaryPage() {
     const { data: job, isLoading: isJobLoading } = useJob(data?.job_id)
     const { data: expenses = [] } = useExpensesBySalaryMonth(salaryId)
     const { mutate: deleteSalary, isPending: isDeleting } = useSalaryMonthDelete()
+    const { mutate: updateSalary } = useSalaryMonthUpdate()
 
     const [editModalOpen, setEditModalOpen] = useState(false)
     const [addExpenseModalOpen, setAddExpenseModalOpen] = useState(false)
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-    const [isReceived, setIsReceived] = useState(!!data?.received_date)
+    const isReceived = !!data?.received_date
+
+    const handleToggleReceived = () => {
+        if (!data) return
+        updateSalary({
+            id: data.id,
+            data: {
+                salary_amount: data.salary_amount,
+                deductions: data.deductions,
+                net_amount: data.net_amount,
+                received_date: isReceived ? '' : new Date().toISOString().split('T')[0],
+                job_id: data.job_id,
+                month: data.month,
+                person_id: data.person_id,
+            }
+        })
+    }
 
     const handleDelete = () => {
         deleteSalary(salaryId, {
@@ -875,7 +945,7 @@ function SalaryPage() {
                     <div className="space-y-6">
                         <SalaryStatsCard data={data} />
                         <JobInfoCard job={isJobLoading ? undefined : (job ?? null)} />
-                        <QuickActionsCard data={data} isReceived={isReceived} onToggleReceived={() => setIsReceived(!isReceived)} onEdit={() => setEditModalOpen(true)} onDelete={() => setDeleteConfirmOpen(true)} />
+                        <QuickActionsCard data={data} isReceived={isReceived} onToggleReceived={handleToggleReceived} onEdit={() => setEditModalOpen(true)} onDelete={() => setDeleteConfirmOpen(true)} />
                     </div>
                 </div>
             </div>
@@ -885,11 +955,11 @@ function SalaryPage() {
                 <DialogContent className="bg-[#0a0a0f] border border-white/10">
                     <DialogHeader>
                         <DialogTitle className="text-white">Edit Salary Month</DialogTitle>
-                        <DialogDescription className="text-white/60">Update the salary information for {data?.month}</DialogDescription>
+                        <DialogDescription className="text-white/60">Update salary information for {data?.month}</DialogDescription>
                     </DialogHeader>
-                    <div className="text-white/50 py-8">
-                        Edit form coming soon
-                    </div>
+                    {data && (
+                        <EditSalaryForm data={data} onClose={() => setEditModalOpen(false)} />
+                    )}
                 </DialogContent>
             </Dialog>
 
