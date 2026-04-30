@@ -8,6 +8,11 @@ Run from /var/www/life_tracker/backend with the venv activated:
     python scripts/check_telegram.py
 """
 import asyncio
+import sys
+from pathlib import Path
+
+# Make `app` importable no matter which directory the script is run from
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
 from telegram import Bot
