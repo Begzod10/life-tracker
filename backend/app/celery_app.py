@@ -15,6 +15,11 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    # RedBeat — Redis-backed scheduler (no on-disk shelve file)
+    beat_scheduler="redbeat.RedBeatScheduler",
+    redbeat_redis_url=settings.REDIS_URL,
+    redbeat_key_prefix="redbeat:life_tracker:",
+    redbeat_lock_timeout=900,
 )
 
 # ─── Beat schedule ─────────────────────────────────────────────────────────────
