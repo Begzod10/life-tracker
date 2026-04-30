@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_USERNAME: str = "life_tracker_off_bot"
     TELEGRAM_WEBHOOK_SECRET: Optional[str] = None # Secret token for verifying Telegram webhook requests
 
+    # Optional outbound proxy for reaching api.telegram.org from filtered networks.
+    # Examples: socks5://127.0.0.1:40000, http://user:pass@1.2.3.4:8080
+    TELEGRAM_PROXY_URL: Optional[str] = None
+
     # Webhook URL (e.g. https://yourdomain.com). Leave empty to use polling instead.
     WEBHOOK_BASE_URL: Optional[str] = None
 

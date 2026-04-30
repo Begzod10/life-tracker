@@ -59,8 +59,12 @@ def send_message(
     if reply_markup:
         payload["reply_markup"] = reply_markup
 
+    proxies = None
+    if settings.TELEGRAM_PROXY_URL:
+        proxies = {"http": settings.TELEGRAM_PROXY_URL, "https": settings.TELEGRAM_PROXY_URL}
+
     try:
-        resp = requests.post(url, json=payload, timeout=10)
+        resp = requests.post(url, json=payload, timeout=15, proxies=proxies)
         resp.raise_for_status()
         return True
     except requests.RequestException as exc:

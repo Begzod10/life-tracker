@@ -45,6 +45,8 @@ python-multipart==0.0.22
 PyYAML==6.0.3
 requests==2.32.5
 requests-oauthlib==2.0.0
+PySocks==1.7.1
+socksio==1.0.0
 rsa==4.9.1
 six==1.17.0
 SQLAlchemy==2.0.45

@@ -11,6 +11,7 @@ from datetime import date, timedelta, datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.request import HTTPXRequest
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -535,12 +536,23 @@ class TelegramBotService:
             self._app = None
             return
 
-        self._app = (
+        builder = (
             Application.builder()
             .token(settings.TELEGRAM_BOT_TOKEN)
             .updater(None)          # disable built-in polling updater
-            .build()
         )
+
+        # Route Telegram traffic through a proxy when set (e.g. for filtered networks)
+        proxy_url = settings.TELEGRAM_PROXY_URL
+        if proxy_url:
+            logger.info("Telegram bot using proxy: %s", proxy_url)
+            builder = builder.request(
+                HTTPXRequest(proxy=proxy_url, connect_timeout=30, read_timeout=30)
+            ).get_updates_request(
+                HTTPXRequest(proxy=proxy_url, connect_timeout=30, read_timeout=30)
+            )
+
+        self._app = builder.build()
         self._app.add_handler(CommandHandler("start", start))
         self._app.add_handler(CommandHandler("tasks", tasks_command))
         self._app.add_handler(CommandHandler("today", today_command))
