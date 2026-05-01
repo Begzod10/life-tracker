@@ -3,7 +3,7 @@ Dependency functions for authentication
 Use these to protect routes
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -13,36 +13,27 @@ from app.database import get_db
 from app import models
 from app.core.security import verify_token
 from datetime import datetime
-# Security scheme for Swagger UI
-security = HTTPBearer()
+# auto_error=False — let cookie auth take over when there's no Bearer header.
+security = HTTPBearer(auto_error=False)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 async def get_current_user(
-        credentials: HTTPAuthorizationCredentials = Depends(security),
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+        access_token_cookie: Optional[str] = Cookie(default=None, alias="access_token"),
         db: Session = Depends(get_db)
 ) -> models.Person:
-    """
-    Dependency to get the current authenticated user
-
-    Args:
-        credentials: HTTP Authorization header with Bearer token
-        db: Database session
-
-    Returns:
-        models.Person: The authenticated user
-
-    Raises:
-        HTTPException: If token is invalid or user not found
-    """
+    """Resolve the authenticated user from either the Authorization Bearer
+    header or the access_token cookie (httpOnly, set by /auth endpoints)."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Extract token
-    token = credentials.credentials
+    token = credentials.credentials if credentials else access_token_cookie
+    if not token:
+        raise credentials_exception
 
     # Verify and decode token
     try:

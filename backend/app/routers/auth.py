@@ -1,7 +1,7 @@
 import secrets
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,48 @@ router = APIRouter(
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+ACCESS_COOKIE = "access_token"
+REFRESH_COOKIE = "refresh_token"
+
+
+def _cookie_kwargs() -> dict:
+    """Common cookie attributes. SameSite=Lax works for same-site requests
+    (browser sends cookies on top-level navigations and same-site fetches).
+    Secure is required on HTTPS; in dev over plain HTTP we leave it off."""
+    return {
+        "httponly": True,
+        "secure": settings.COOKIE_SECURE,
+        "samesite": settings.COOKIE_SAMESITE,
+        "domain": settings.COOKIE_DOMAIN or None,
+        "path": "/",
+    }
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Write the auth cookies on the response. Called from every endpoint
+    that issues new tokens so the browser always carries the freshest pair."""
+    base = _cookie_kwargs()
+    response.set_cookie(
+        ACCESS_COOKIE,
+        access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        **base,
+    )
+    response.set_cookie(
+        REFRESH_COOKIE,
+        refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        **base,
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    base = _cookie_kwargs()
+    # delete_cookie does not accept httponly/secure/samesite kwargs, but
+    # browsers match on path+domain only, so we pass those.
+    response.delete_cookie(ACCESS_COOKIE, path="/", domain=base["domain"])
+    response.delete_cookie(REFRESH_COOKIE, path="/", domain=base["domain"])
 
 
 # ========== SCHEMAS ==========
@@ -69,7 +111,7 @@ class AuthResponse(BaseModel):
 
 
 class TokenRefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None
 
 
 class PasswordChange(BaseModel):
@@ -95,7 +137,7 @@ def validate_password_strength(password: str) -> bool:
 # ========== ENDPOINTS ==========
 
 @router.post('/register', response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
+def register(user_data: UserRegister, response: Response, db: Session = Depends(get_db)):
     """Register a new user with email and password"""
 
     # Check if email already exists
@@ -152,6 +194,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         created_at=new_user.created_at.isoformat() if new_user.created_at else None
     )
 
+    set_auth_cookies(response, access_token, refresh_token)
     return AuthResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -164,6 +207,7 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
 @router.post('/login', response_model=AuthResponse)
 def login(
         login_data: UserLogin,
+        response: Response,
         db: Session = Depends(get_db)
 ):
     """Login with email and password"""
@@ -243,6 +287,7 @@ def login(
         created_at=user.created_at.isoformat() if user.created_at else None
     )
 
+    set_auth_cookies(response, access_token, refresh_token)
     return AuthResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -253,7 +298,7 @@ def login(
 
 
 @router.post('/google', response_model=AuthResponse)
-def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
+def google_auth(auth_request: GoogleAuthRequest, response: Response, db: Session = Depends(get_db)):
     """Authenticate with Google OAuth"""
     try:
         # Verify Google token
@@ -324,6 +369,7 @@ def google_auth(auth_request: GoogleAuthRequest, db: Session = Depends(get_db)):
             created_at=user.created_at.isoformat() if user.created_at else None
         )
 
+        set_auth_cookies(response, access_token, refresh_token)
         return AuthResponse(
             access_token=access_token,
             refresh_token=refresh_token,
@@ -403,18 +449,26 @@ def change_password(
 
 @router.post('/refresh', response_model=AuthResponse)
 def refresh_token(
-        body: TokenRefreshRequest,
+        response: Response,
+        body: Optional[TokenRefreshRequest] = None,
+        refresh_cookie: Optional[str] = Cookie(default=None, alias=REFRESH_COOKIE),
         db: Session = Depends(get_db)
 ):
-    """Get a new access token using a refresh token"""
+    """Get a new access token using a refresh token. The token is read from
+    the httpOnly refresh_token cookie; the request body is accepted as a
+    fallback for older clients still posting the token explicitly."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired refresh token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    token = refresh_cookie or (body.refresh_token if body else None)
+    if not token:
+        raise credentials_exception
+
     try:
-        payload = verify_refresh_token(body.refresh_token)
+        payload = verify_refresh_token(token)
     except ValueError:
         raise credentials_exception
 
@@ -457,6 +511,7 @@ def refresh_token(
         created_at=user.created_at.isoformat() if user.created_at else None
     )
 
+    set_auth_cookies(response, new_access_token, new_refresh_token)
     return AuthResponse(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
@@ -468,12 +523,14 @@ def refresh_token(
 
 @router.post('/logout')
 def logout(
+        response: Response,
         current_user: models.Person = Depends(get_current_user),
         db: Session = Depends(get_db)
 ):
     """Logout — invalidates the current token by recording logout timestamp"""
     current_user.last_logout_at = datetime.utcnow()
     db.commit()
+    clear_auth_cookies(response)
     return {"message": "Logged out successfully"}
 
 

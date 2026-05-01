@@ -1,9 +1,6 @@
 import { useState, useCallback } from 'react'
 import { signOut } from 'next-auth/react'
-import { AuthTokens } from '@/lib/utils/auth'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
-
-// src/lib/hooks/use-http.ts
 
 interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -18,43 +15,25 @@ interface UseHttpReturn {
     clearError: () => void
 }
 
-// Singleton для refresh — чтобы при параллельных 401 рефреш вызвался один раз
-let refreshPromise: Promise<string> | null = null
+// Coalesce parallel 401s into a single refresh call so we don't race the
+// backend (which rotates the refresh token on every successful call).
+let refreshPromise: Promise<void> | null = null
 
-async function refreshAccessToken(): Promise<string> {
+async function refreshSession(): Promise<void> {
     if (refreshPromise) return refreshPromise
 
     refreshPromise = (async () => {
-        let refreshToken = AuthTokens.getRefreshToken()
-
-        // No token in localStorage — may be right after OAuth login before AuthSync ran.
-        // Pull the refresh token from the NextAuth session and use it to call /auth/refresh.
-        // Do NOT return session.accessToken directly — it may already be expired.
-        if (!refreshToken) {
-            const sessionRes = await fetch('/api/auth/session')
-            if (sessionRes.ok) {
-                const session = await sessionRes.json()
-                if (session?.refreshToken) {
-                    refreshToken = session.refreshToken as string
-                }
-            }
-            if (!refreshToken) throw new Error('No refresh token')
-        }
-
         const response = await fetch(API_ENDPOINTS.AUTH.REFRESH, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+            // Empty body — the refresh_token cookie carries the token.
+            body: JSON.stringify({}),
         })
 
         if (!response.ok) {
-            AuthTokens.clearTokens()
             throw new Error('SESSION_EXPIRED')
         }
-
-        const data = await response.json()
-        AuthTokens.setTokens(data.access_token, data.refresh_token)
-        return data.access_token as string
     })().finally(() => {
         refreshPromise = null
     })
@@ -62,14 +41,14 @@ async function refreshAccessToken(): Promise<string> {
     return refreshPromise
 }
 
-function buildConfig(options: RequestOptions, token: string | null): RequestInit {
+function buildConfig(options: RequestOptions): RequestInit {
     const { method = 'GET', body = null, headers = {} } = options
 
     const config: RequestInit = {
         method,
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...headers,
         },
     }
@@ -107,14 +86,14 @@ export const useHttp = (): UseHttpReturn => {
         setError(null)
 
         try {
-            const token = AuthTokens.getAccessToken()
-            const response = await fetch(url, buildConfig(options, token))
+            const response = await fetch(url, buildConfig(options))
 
-            // При 401 — рефрешим и повторяем запрос один раз
+            // 401 → try one refresh + retry. The refresh endpoint rotates
+            // the cookies; the retried fetch automatically picks them up.
             if (response.status === 401) {
                 try {
-                    const newToken = await refreshAccessToken()
-                    const retryResponse = await fetch(url, buildConfig(options, newToken))
+                    await refreshSession()
+                    const retryResponse = await fetch(url, buildConfig(options))
                     const retryData = await parseResponse(retryResponse)
 
                     if (!retryResponse.ok) {
@@ -125,9 +104,9 @@ export const useHttp = (): UseHttpReturn => {
                     setLoading(false)
                     return retryData
                 } catch (refreshError: any) {
-                    if (refreshError.message === 'SESSION_EXPIRED' || refreshError.message === 'No refresh token') {
-                        // Clear the NextAuth session so AuthSync can't re-seed stale tokens
-                        // on the next page load, then redirect to the login page.
+                    if (refreshError.message === 'SESSION_EXPIRED') {
+                        // NextAuth still holds a stale session; clear it before
+                        // bouncing the user so AuthProvider can't re-bridge.
                         signOut({ redirect: false }).finally(() => {
                             window.location.replace('/auth')
                         })
@@ -159,7 +138,6 @@ export const useHttp = (): UseHttpReturn => {
     return { request, loading, error, clearError }
 }
 
-// Утилита для создания query параметров
 export const createQueryParams = (params: Record<string, any> = {}): string => {
     const filtered = Object.entries(params)
         .filter(([_, value]) =>

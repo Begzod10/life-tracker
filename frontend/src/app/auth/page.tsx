@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert } from '@/components/ui/alert'
 import { useLogin, useRegister } from '@/lib/hooks/use-auth'
-import { AuthTokens } from '@/lib/utils/auth'
 import {
     Mail, Lock, User, Eye, EyeOff, Loader2, ArrowRight, Sparkles
 } from 'lucide-react'
@@ -70,8 +69,8 @@ export default function AuthPage() {
                     timezone
                 },
                 {
-                    onSuccess: (data) => {
-                        AuthTokens.setTokens(data.access_token, data.refresh_token)
+                    onSuccess: () => {
+                        // Backend set httpOnly auth cookies on the response.
                         router.push('/platform')
                     },
                     onError: (err: any) => {
@@ -87,8 +86,7 @@ export default function AuthPage() {
                     password: formData.password
                 },
                 {
-                    onSuccess: (data) => {
-                        AuthTokens.setTokens(data.access_token, data.refresh_token)
+                    onSuccess: () => {
                         router.push('/platform')
                     },
                     onError: (err: any) => {

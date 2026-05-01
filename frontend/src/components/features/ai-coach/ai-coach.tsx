@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bot, X, Send, Loader2, Sparkles, ChevronDown, ListTodo, CheckCircle2, ChevronRight } from 'lucide-react'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
-import { AuthTokens } from '@/lib/utils/auth'
 import { useGoalsList } from '@/lib/hooks/use-goals'
 import { useUser } from '@/lib/hooks/use-auth'
 import { useQueryClient } from '@tanstack/react-query'
@@ -64,13 +63,10 @@ function CreateTasksPanel({
         if (!selectedGoalId) return
         setIsLoading(true)
         try {
-            const token = AuthTokens.getAccessToken()
             const res = await fetch(API_ENDPOINTS.AI_COACH.CREATE_TASKS, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     goal_id: selectedGoalId,
                     context: instructions || undefined,
@@ -244,17 +240,14 @@ export function AICoach() {
         abortRef.current = new AbortController()
 
         try {
-            const token = AuthTokens.getAccessToken()
             const history = [...messages, userMsg]
                 .filter(m => m.id !== 'welcome' || m.role === 'assistant')
                 .map(m => ({ role: m.role, content: m.content }))
 
             const res = await fetch(API_ENDPOINTS.AI_COACH.CHAT, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messages: history }),
                 signal: abortRef.current.signal,
             })

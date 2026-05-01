@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import { signOut } from 'next-auth/react'
 import { API_ENDPOINTS } from '../api/endpoints'
 import { useHttp } from './use-http'
 import { AuthTokens } from '@/lib/utils/auth'
@@ -23,9 +24,11 @@ export function useLogout() {
     return useMutation({
         mutationFn: () => request(API_ENDPOINTS.AUTH.LOGOUT, { method: 'POST' }),
         onSettled: () => {
+            // Backend cleared its httpOnly cookies; sweep any non-httpOnly
+            // remnants and end the NextAuth session before redirecting.
             AuthTokens.clearTokens()
             queryClient.clear()
-            router.push('/auth')
+            signOut({ redirect: false }).finally(() => router.push('/auth'))
         },
     })
 }

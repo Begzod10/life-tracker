@@ -13,6 +13,8 @@ export function useAuthCheck(redirectTo: string = '/auth') {
         if (status === 'loading') return
 
         if (status === 'unauthenticated') {
+            // Sweep any leftover non-httpOnly auth crumbs before bouncing
+            // to /auth. Backend cookies are managed server-side now.
             AuthTokens.clearTokens()
             router.push(redirectTo)
         }

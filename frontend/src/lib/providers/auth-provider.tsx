@@ -1,40 +1,45 @@
 'use client'
 
 import { SessionProvider, useSession } from 'next-auth/react'
-import { ReactNode, useLayoutEffect, useRef } from 'react'
-import { AuthTokens } from '@/lib/utils/auth'
+import { ReactNode, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
-function AuthSync() {
-    const { data: session } = useSession()
+function CookieBridge() {
+    const { data: session, status } = useSession()
     const queryClient = useQueryClient()
-    // Track whether we've already seeded localStorage in this browser session.
-    // Prevents overwriting freshly-rotated tokens on every window-focus refetch.
-    const seeded = useRef(false)
+    // Install backend cookies at most once per AuthProvider mount.
+    const installed = useRef(false)
 
-    useLayoutEffect(() => {
-        if (!session?.accessToken || !session?.refreshToken) return
+    useEffect(() => {
+        if (status !== 'authenticated' || installed.current) return
+        if (!session) return
 
-        // Only seed from the NextAuth session when localStorage is empty (e.g. fresh login
-        // or cleared storage). After use-http.ts rotates tokens, those stay authoritative.
-        const alreadyHasToken = !!AuthTokens.getRefreshToken()
-        if (!alreadyHasToken && !seeded.current) {
-            AuthTokens.setTokens(session.accessToken, session.refreshToken)
-            seeded.current = true
-        }
-        queryClient.invalidateQueries({ queryKey: ['user'] })
-    }, [session, queryClient])
+        installed.current = true
+
+        // Convert the NextAuth-managed refresh token into backend httpOnly
+        // cookies. After this call, all backend requests rely on cookies
+        // and the NextAuth session is no longer the source of truth.
+        fetch('/api/auth/install-cookies', {
+            method: 'POST',
+            credentials: 'include',
+        })
+            .then((res) => {
+                if (res.ok) {
+                    queryClient.invalidateQueries({ queryKey: ['user'] })
+                }
+            })
+            .catch(() => {
+                // Non-fatal: use-http will trigger /auth/refresh on the next 401.
+            })
+    }, [status, session, queryClient])
 
     return null
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     return (
-        // refetchOnWindowFocus=false: prevents SessionProvider from creating a new session
-        // reference on every focus event, which would re-trigger AuthSync and potentially
-        // overwrite rotated tokens with stale ones from the original login.
         <SessionProvider refetchOnWindowFocus={false}>
-            <AuthSync />
+            <CookieBridge />
             {children}
         </SessionProvider>
     )

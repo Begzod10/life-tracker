@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
 
+    # Auth cookies. Defaults are dev-friendly (HTTP, no domain restriction);
+    # production .env should set COOKIE_SECURE=true and COOKIE_DOMAIN=cybrix.uz.
+    COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+    COOKIE_DOMAIN: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -81,12 +87,11 @@ class Settings(BaseSettings):
     )
 
     def get_cors_origins(self) -> List[str]:
-        """
-        Parse ALLOWED_ORIGINS into a list
-        Handles both "*" and comma-separated values
-        """
+        """Parse ALLOWED_ORIGINS into a list. With allow_credentials=True,
+        wildcard "*" is rejected by browsers; fall back to FRONTEND_URL in
+        that case so dev still works without configuring ALLOWED_ORIGINS."""
         if self.ALLOWED_ORIGINS == "*":
-            return ["*"]
+            return [self.FRONTEND_URL]
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
