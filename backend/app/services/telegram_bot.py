@@ -15,7 +15,7 @@ from telegram.request import HTTPXRequest
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Task, TimeBlock, Person
+from app.models import Task, TimeBlock, Person, Goal, ProgressLogTask
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -29,42 +29,68 @@ def get_db() -> Session:
     return SessionLocal()
 
 
-def get_overdue_tasks(db: Session) -> list:
-    yesterday = date.today() - timedelta(days=1)
+def resolve_person(db: Session, chat_id) -> Person | None:
+    """Map a Telegram chat_id to a linked Person, or None if unlinked."""
+    return db.query(Person).filter(Person.telegram_chat_id == str(chat_id)).first()
+
+
+def _owned_task_query(db: Session, person_id: int):
     return (
         db.query(Task)
+        .join(Goal, Task.goal_id == Goal.id)
+        .filter(Goal.person_id == person_id, Goal.deleted == False)
+    )
+
+
+def _owns_task(db: Session, task_id: int, person_id: int) -> Task | None:
+    return _owned_task_query(db, person_id).filter(Task.id == task_id).first()
+
+
+def _owns_block(db: Session, block_id: int, person_id: int) -> TimeBlock | None:
+    return (
+        db.query(TimeBlock)
+        .filter(TimeBlock.id == block_id, TimeBlock.person_id == person_id)
+        .first()
+    )
+
+
+def get_overdue_tasks(db: Session, person_id: int) -> list:
+    yesterday = date.today() - timedelta(days=1)
+    return (
+        _owned_task_query(db, person_id)
         .filter(Task.deleted == False, Task.completed == False, Task.due_date <= yesterday)
         .order_by(Task.due_date.asc())
         .all()
     )
 
 
-def get_todays_tasks(db: Session) -> list:
+def get_todays_tasks(db: Session, person_id: int) -> list:
     return (
-        db.query(Task)
+        _owned_task_query(db, person_id)
         .filter(Task.deleted == False, Task.completed == False, Task.due_date == date.today())
         .order_by(Task.priority.desc())
         .all()
     )
 
 
-def get_upcoming_tasks(db: Session) -> list:
+def get_upcoming_tasks(db: Session, person_id: int) -> list:
     tomorrow = date.today() + timedelta(days=1)
     future = date.today() + timedelta(days=4)
 
-    # Tasks with a due_date in the next few days
     due_date_tasks = (
-        db.query(Task)
-        .filter(Task.deleted == False, Task.completed == False,
-                Task.due_date >= tomorrow, Task.due_date <= future)
+        _owned_task_query(db, person_id)
+        .filter(
+            Task.deleted == False, Task.completed == False,
+            Task.due_date >= tomorrow, Task.due_date <= future,
+        )
         .all()
     )
 
-    # Tasks linked to upcoming time blocks (no due_date required)
     timetable_task_ids = {
         row.task_id
         for row in db.query(TimeBlock.task_id)
         .filter(
+            TimeBlock.person_id == person_id,
             TimeBlock.deleted == False,
             TimeBlock.task_id != None,
             TimeBlock.date >= tomorrow,
@@ -74,12 +100,11 @@ def get_upcoming_tasks(db: Session) -> list:
         if row.task_id
     }
 
-    # Add timetable-linked tasks not already in due_date list
     existing_ids = {t.id for t in due_date_tasks}
     extra_ids = timetable_task_ids - existing_ids
     if extra_ids:
         extra_tasks = (
-            db.query(Task)
+            _owned_task_query(db, person_id)
             .filter(Task.id.in_(extra_ids), Task.deleted == False, Task.completed == False)
             .all()
         )
@@ -88,10 +113,28 @@ def get_upcoming_tasks(db: Session) -> list:
     return sorted(due_date_tasks, key=lambda t: (t.due_date or date.max))[:5]
 
 
-def complete_task(db: Session, task_id: int) -> bool:
-    task = db.query(Task).filter(Task.id == task_id).first()
+def complete_task(db: Session, task_id: int, person_id: int) -> bool:
+    """
+    Mark a task done for `person_id`. Returns False if the person doesn't own
+    the task. For recurring/daily tasks, writes a ProgressLogTask row for today
+    instead of permanently flipping `completed` (recurring tasks recur every day).
+    """
+    task = _owns_task(db, task_id, person_id)
     if not task:
         return False
+
+    if task.is_recurring or (task.task_type or "").lower() == "daily":
+        today = date.today()
+        existing = (
+            db.query(ProgressLogTask)
+            .filter(ProgressLogTask.task_id == task.id, ProgressLogTask.log_date == today)
+            .first()
+        )
+        if not existing:
+            db.add(ProgressLogTask(task_id=task.id, log_date=today))
+            db.commit()
+        return True
+
     task.completed = True
     task.completed_at = datetime.utcnow()
     db.commit()
@@ -168,9 +211,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = str(update.effective_chat.id)
     db = get_db()
     try:
-        tasks = get_todays_tasks(db)
+        person = resolve_person(db, chat_id)
+        if not person:
+            await update.message.reply_text("❌ Account not linked. Use /start to connect.")
+            return
+        tasks = get_todays_tasks(db, person.id)
         if not tasks:
             await update.message.reply_text("✅ No tasks for today!")
             return
@@ -239,9 +287,14 @@ async def upcoming_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = str(update.effective_chat.id)
     db = get_db()
     try:
-        tasks = get_overdue_tasks(db)
+        person = resolve_person(db, chat_id)
+        if not person:
+            await update.message.reply_text("❌ Account not linked. Use /start to connect.")
+            return
+        tasks = get_overdue_tasks(db, person.id)
         if not tasks:
             await update.message.reply_text("✅ No overdue tasks!")
             return
@@ -396,14 +449,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except TelegramTimedOut:
         logger.warning("query.answer() timed out for callback %s — continuing", query.data)
     data = query.data
+    chat_id = str(update.effective_chat.id)
     db = get_db()
     try:
+        person = resolve_person(db, chat_id)
+        if not person:
+            await query.edit_message_text(
+                "❌ Account not linked. Use /start to connect.",
+                parse_mode="Markdown",
+            )
+            return
+
         if data.startswith("done_"):
             task_id = int(data.split("_")[1])
-            complete_task(db, task_id)
+            if not complete_task(db, task_id, person.id):
+                await query.edit_message_text("⚠️ Task not found or not yours.")
+                return
             await query.edit_message_text("✅ Great job! Task marked as done!")
 
-            next_overdue = get_overdue_tasks(db)
+            next_overdue = get_overdue_tasks(db, person.id)
             if next_overdue:
                 task = next_overdue[0]
                 await context.bot.send_message(
@@ -413,8 +477,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="Markdown",
                 )
             else:
-                todays = get_todays_tasks(db)
-                upcoming = get_upcoming_tasks(db)
+                todays = get_todays_tasks(db, person.id)
+                upcoming = get_upcoming_tasks(db, person.id)
                 all_tasks = todays + upcoming
                 if all_tasks:
                     text = "🎯 *Next tasks:*\n\n" + "\n".join(f"• {format_task(t)}" for t in all_tasks[:5])
@@ -426,12 +490,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         elif data.startswith("skip_"):
             task_id = int(data.split("_")[1])
-            task = db.query(Task).filter(Task.id == task_id).first()
-            name = task.name if task else "task"
-            await query.edit_message_text(f"👌 OK, don't forget:\n*{name}*", parse_mode="Markdown")
+            task = _owns_task(db, task_id, person.id)
+            if not task:
+                await query.edit_message_text("⚠️ Task not found or not yours.")
+                return
+            await query.edit_message_text(
+                f"👌 OK, don't forget:\n*{task.name}*", parse_mode="Markdown"
+            )
 
-            todays = get_todays_tasks(db)
-            upcoming = get_upcoming_tasks(db)
+            todays = get_todays_tasks(db, person.id)
+            upcoming = get_upcoming_tasks(db, person.id)
             all_tasks = todays + upcoming
             if all_tasks:
                 text = "🗓 *Your tasks:*\n\n" + "\n".join(f"• {format_task(t)}" for t in all_tasks[:5])
@@ -443,28 +511,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         elif data.startswith("block_done_"):
             block_id = int(data.split("_")[2])
-            block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
-            if block:
-                block.is_completed = True
-                db.commit()
-                name = block.title
-            else:
-                name = "block"
-            await query.edit_message_text(f"✅ Marked as done: *{name}*", parse_mode="Markdown")
+            block = _owns_block(db, block_id, person.id)
+            if not block:
+                await query.edit_message_text("⚠️ Block not found or not yours.")
+                return
+            block.is_completed = True
+            db.commit()
+            await query.edit_message_text(
+                f"✅ Marked as done: *{block.title}*", parse_mode="Markdown"
+            )
 
         elif data.startswith("block_focus_"):
             await query.edit_message_text("💪 Keep going! You've got this.", parse_mode="Markdown")
 
         elif data.startswith("block_skip_"):
             block_id = int(data.split("_")[2])
-            block = db.query(TimeBlock).filter(TimeBlock.id == block_id).first()
-            if block:
-                block.is_missed = True
-                db.commit()
-                name = block.title
-            else:
-                name = "block"
-            await query.edit_message_text(f"❌ Marked as missed: *{name}*", parse_mode="Markdown")
+            block = _owns_block(db, block_id, person.id)
+            if not block:
+                await query.edit_message_text("⚠️ Block not found or not yours.")
+                return
+            block.is_missed = True
+            db.commit()
+            await query.edit_message_text(
+                f"❌ Marked as missed: *{block.title}*", parse_mode="Markdown"
+            )
 
         elif data.startswith("carryover_"):
             # carryover_{original_block_id}_{YYYYMMDD}_{HHMM}
@@ -473,7 +543,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             date_str = parts[2]       # e.g. 20260418
             time_str = parts[3]       # e.g. 0800
 
-            orig = db.query(TimeBlock).filter(TimeBlock.id == orig_block_id).first()
+            orig = _owns_block(db, orig_block_id, person.id)
             if orig:
                 target_date = date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8]))
                 start_h = int(time_str[:2])
@@ -508,7 +578,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="Markdown",
                 )
             else:
-                await query.edit_message_text("Block not found.", parse_mode="Markdown")
+                await query.edit_message_text(
+                    "⚠️ Block not found or not yours.", parse_mode="Markdown"
+                )
 
     finally:
         db.close()
