@@ -20,10 +20,12 @@ PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 def copy_recurring_blocks(self):
     """
     Copy all recurring time blocks to the same weekday in the next week.
-    Runs every Sunday at 23:00 UTC so blocks are ready before Monday starts.
+    Runs every Saturday at 00:00 UTC so the upcoming week is ready in advance.
 
     Skips a block if an identical one (same person, date, start_time, title)
-    already exists to prevent duplicates on retries.
+    already exists to prevent duplicates on retries. Also skips carry-over
+    blocks (titles starting with "↩") — those are one-off by definition and
+    must never propagate as recurring even if their flag was set incorrectly.
     """
     db = SessionLocal()
     try:
@@ -47,6 +49,11 @@ def copy_recurring_blocks(self):
         skipped = 0
 
         for block in recurring:
+            # Carry-overs must never propagate forward — they are one-off by design
+            if block.title and block.title.lstrip().startswith("↩"):
+                skipped += 1
+                continue
+
             next_date = block.date + timedelta(weeks=1)
 
             # Idempotency check — skip if an identical block already exists
