@@ -188,6 +188,7 @@ export const API_ENDPOINTS = {
             const qs = p.toString()
             return qs ? `${API_URL}/dictionary/stats?${qs}` : `${API_URL}/dictionary/stats`
         },
+        AI_WORD_DETAILS: `${API_URL}/dictionary/ai/word-details`,
         FOLDERS: `${API_URL}/dictionary/folders/`,
         FOLDER: (id: number) => `${API_URL}/dictionary/folders/${id}`,
         MODULES: `${API_URL}/dictionary/modules/`,

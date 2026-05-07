@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, Plus, Search, Trash2, Edit2, X, ChevronDown,
     Folder as FolderIcon, BookOpen, Layers, AlertCircle, Target, BookMarked,
+    Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -17,6 +18,7 @@ import {
     useFolders, useFolderCreate, useFolderUpdate, useFolderDelete,
     useModules, useModuleCreate, useModuleUpdate, useModuleDelete,
     useDictionaryWords, useWordCreate, useWordUpdate, useWordDelete, useDictStats,
+    useAiWordDetails,
     type DictionaryWord, type WordCreate, type DictionaryFolder, type DictionaryModule,
     type DictStats,
 } from '@/lib/hooks/use-dictionary'
@@ -233,17 +235,55 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
 }) {
     const [form, setForm] = useState(initial)
     const set = (field: keyof WordFormData) => (v: string) => setForm(p => ({ ...p, [field]: v }))
+    const { mutate: aiFill, isPending: isAiLoading, error: aiError, reset: resetAi } = useAiWordDetails()
+
+    const handleAiFill = () => {
+        const w = form.word.trim()
+        if (!w) return
+        resetAi()
+        aiFill(w, {
+            onSuccess: (data) => setForm(p => ({
+                ...p,
+                definition: data.definition || p.definition,
+                translation: data.translation || p.translation,
+                phonetic: data.phonetic || p.phonetic,
+                part_of_speech: data.part_of_speech || p.part_of_speech,
+                difficulty: data.difficulty || p.difficulty,
+                examples: data.examples?.length ? data.examples.join('\n') : p.examples,
+            })),
+        })
+    }
 
     return (
         <form onSubmit={e => { e.preventDefault(); onSubmit(form) }} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <FormField label="Word" required>
-                    <TextInput value={form.word} onChange={set('word')} placeholder="e.g. Perseverance" />
+                    <div className="flex gap-2">
+                        <div className="flex-1">
+                            <TextInput value={form.word} onChange={set('word')} placeholder="e.g. Perseverance" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleAiFill}
+                            disabled={!form.word.trim() || isAiLoading}
+                            title="Auto-fill with AI"
+                            className="shrink-0 px-3 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 text-sm"
+                        >
+                            <Sparkles className={`w-4 h-4 ${isAiLoading ? 'animate-pulse' : ''}`} />
+                            {isAiLoading ? '...' : 'AI'}
+                        </button>
+                    </div>
                 </FormField>
                 <FormField label="Phonetic">
                     <TextInput value={form.phonetic} onChange={set('phonetic')} placeholder="/ˌpɜː.sɪˈvɪər.əns/" />
                 </FormField>
             </div>
+
+            {aiError && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-300">
+                    AI fill failed: {aiError.message}
+                </div>
+            )}
 
             <FormField label="Definition" required>
                 <TextareaInput value={form.definition} onChange={set('definition')} placeholder="Continued effort despite difficulties..." />

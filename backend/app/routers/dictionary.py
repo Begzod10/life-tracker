@@ -1,14 +1,116 @@
+import logging
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-import json
 
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
+
+
+# ─── AI auto-fill ────────────────────────────────────────────────────────────
+
+class AiWordRequest(BaseModel):
+    word: str = Field(..., min_length=1, max_length=200)
+
+
+def _ai_word_prompt(word: str) -> str:
+    return (
+        f"You are an English-as-a-foreign-language dictionary helper.\n"
+        f"For the word or phrase: \"{word.strip()}\"\n\n"
+        f"Return ONLY a single JSON object with these keys (no markdown, no commentary):\n"
+        f"{{\n"
+        f"  \"definition\": string,           // a clear 1-2 sentence learner-friendly definition\n"
+        f"  \"translation\": string,          // \"<Uzbek (Latin script)> / <Russian>\"  — example: \"Qat'iyat / Настойчивость\"\n"
+        f"  \"phonetic\": string,             // IPA in slashes, e.g. \"/ˌpɜː.sɪˈvɪər.əns/\"\n"
+        f"  \"part_of_speech\": string,       // one of: noun, verb, adjective, adverb, phrase, idiom\n"
+        f"  \"difficulty\": string,           // one of: A1, A2, B1, B2, C1, C2\n"
+        f"  \"examples\": [string, string]    // exactly 2 short, natural example sentences\n"
+        f"}}\n\n"
+        f"If the input isn't a real English word/phrase, still return your best guess; do not refuse."
+    )
+
+
+@router.post("/ai/word-details")
+def ai_word_details(
+    payload: AiWordRequest,
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Generate dictionary fields for a word using the configured LLM."""
+    from app.config import settings
+    from app.tasks import _generate_text
+
+    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        raise HTTPException(
+            status_code=503,
+            detail="AI provider not configured. Set OPENAI_API_KEY or GROQ_API_KEY.",
+        )
+
+    prompt = _ai_word_prompt(payload.word)
+
+    try:
+        raw = _generate_text(prompt, max_tokens=400, temperature=0.4)
+    except Exception as e:
+        logger.exception("ai_word_details: generation failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI request failed: {type(e).__name__}: {e}",
+        )
+
+    if not raw:
+        raise HTTPException(status_code=502, detail="AI provider returned no text.")
+
+    # Strip markdown code fences if the model added them despite instructions.
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        # Remove an optional language tag on the first line ("json\n...")
+        if "\n" in cleaned:
+            first_line, rest = cleaned.split("\n", 1)
+            if first_line.strip().lower() in {"json", ""}:
+                cleaned = rest
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        logger.warning("ai_word_details: non-JSON response: %r", raw[:300])
+        raise HTTPException(
+            status_code=502,
+            detail="AI response was not valid JSON. Try again or fill manually.",
+        )
+
+    allowed_pos = {"noun", "verb", "adjective", "adverb", "phrase", "idiom"}
+    allowed_diff = {"A1", "A2", "B1", "B2", "C1", "C2"}
+
+    pos = (data.get("part_of_speech") or "").strip().lower()
+    if pos not in allowed_pos:
+        pos = "noun"
+
+    diff = (data.get("difficulty") or "").strip().upper()
+    if diff not in allowed_diff:
+        diff = "B1"
+
+    examples = data.get("examples") or []
+    if not isinstance(examples, list):
+        examples = []
+    examples = [str(e).strip() for e in examples if str(e).strip()][:5]
+
+    return {
+        "word": payload.word.strip(),
+        "definition": str(data.get("definition") or "").strip(),
+        "translation": str(data.get("translation") or "").strip(),
+        "phonetic": str(data.get("phonetic") or "").strip(),
+        "part_of_speech": pos,
+        "difficulty": diff,
+        "examples": examples,
+    }
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

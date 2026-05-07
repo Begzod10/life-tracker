@@ -227,6 +227,27 @@ export function useDictStats(args: { folderId?: number; moduleId?: number } = {}
     })
 }
 
+export type AiWordDetails = {
+    word: string
+    definition: string
+    translation: string
+    phonetic: string
+    part_of_speech: string
+    difficulty: string
+    examples: string[]
+}
+
+export function useAiWordDetails() {
+    const { request } = useHttp()
+    return useMutation<AiWordDetails, Error, string>({
+        mutationFn: (word: string) =>
+            request(API_ENDPOINTS.DICTIONARY.AI_WORD_DETAILS, {
+                method: 'POST',
+                body: { word },
+            }),
+    })
+}
+
 export function useWordCreate() {
     const { request } = useHttp()
     const qc = useQueryClient()
