@@ -67,12 +67,23 @@ export type WordCreate = {
     tags?: string
 }
 
+export type ReviewCandidate = {
+    id: number
+    module_id: number | null
+    word: string
+    difficulty: string
+    review_count: number
+    accuracy: number | null
+}
+
 export type DictStats = {
     total: number
     reviewed: number
     accuracy: number
     by_difficulty: Record<string, number>
     by_part_of_speech: Record<string, number>
+    needs_review_total: number
+    needs_review: ReviewCandidate[]
 }
 
 const KEYS = {
@@ -207,11 +218,12 @@ export function useDictionaryWords(args: {
     })
 }
 
-export function useDictStats() {
+export function useDictStats(args: { folderId?: number; moduleId?: number } = {}) {
+    const { folderId, moduleId } = args
     const { request } = useHttp()
     return useQuery<DictStats>({
-        queryKey: KEYS.stats,
-        queryFn: () => request(API_ENDPOINTS.DICTIONARY.STATS),
+        queryKey: [...KEYS.stats, folderId ?? '', moduleId ?? ''],
+        queryFn: () => request(API_ENDPOINTS.DICTIONARY.STATS({ folderId, moduleId })),
     })
 }
 

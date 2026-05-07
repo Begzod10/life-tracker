@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, Plus, Search, Trash2, Edit2, X, ChevronDown,
-    Folder as FolderIcon, BookOpen, Layers,
+    Folder as FolderIcon, BookOpen, Layers, AlertCircle, Target, BookMarked,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,8 +16,9 @@ import {
 import {
     useFolders, useFolderCreate, useFolderUpdate, useFolderDelete,
     useModules, useModuleCreate, useModuleUpdate, useModuleDelete,
-    useDictionaryWords, useWordCreate, useWordUpdate, useWordDelete,
+    useDictionaryWords, useWordCreate, useWordUpdate, useWordDelete, useDictStats,
     type DictionaryWord, type WordCreate, type DictionaryFolder, type DictionaryModule,
+    type DictStats,
 } from '@/lib/hooks/use-dictionary'
 import { FormField, TextInput, TextareaInput, SelectInput } from '@/components/modals/form-components'
 
@@ -48,6 +49,146 @@ const FOLDER_COLORS = [
     { value: '#ef4444', name: 'red' },
     { value: '#6b7280', name: 'gray' },
 ]
+
+// ─── Stats panel ─────────────────────────────────────────────────────────────
+
+const DIFF_BAR_COLOR: Record<string, string> = {
+    A1: 'bg-green-400',
+    A2: 'bg-emerald-400',
+    B1: 'bg-blue-400',
+    B2: 'bg-indigo-400',
+    C1: 'bg-purple-400',
+    C2: 'bg-rose-400',
+}
+
+function StatsPanel({
+    stats,
+    isLoading,
+    scopeLabel,
+}: {
+    stats?: DictStats
+    isLoading: boolean
+    scopeLabel: string
+}) {
+    if (isLoading) {
+        return <div className="h-32 bg-white/3 rounded-2xl animate-pulse mb-6" />
+    }
+    if (!stats || stats.total === 0) return null
+
+    const reviewedPct = stats.total > 0 ? Math.round((stats.reviewed / stats.total) * 100) : 0
+    const diffEntries = DIFFICULTIES
+        .map(d => ({ level: d, count: stats.by_difficulty[d] ?? 0 }))
+        .filter(e => e.count > 0)
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/10 rounded-2xl p-5 space-y-5"
+        >
+            <div className="flex items-baseline justify-between">
+                <h3 className="text-xs uppercase tracking-wider text-white/40 font-medium">{scopeLabel}</h3>
+                {stats.needs_review_total > 0 && (
+                    <span className="text-xs text-amber-300/80 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {stats.needs_review_total} need{stats.needs_review_total === 1 ? 's' : ''} review
+                    </span>
+                )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+                <Stat icon={BookMarked} label="Words" value={stats.total} accent="text-white" />
+                <Stat
+                    icon={Target}
+                    label="Reviewed"
+                    value={`${stats.reviewed}/${stats.total}`}
+                    sub={`${reviewedPct}%`}
+                    accent="text-blue-300"
+                />
+                <Stat
+                    icon={Target}
+                    label="Accuracy"
+                    value={stats.reviewed > 0 ? `${stats.accuracy}%` : '—'}
+                    accent={
+                        stats.accuracy >= 80 ? 'text-green-400'
+                            : stats.accuracy >= 60 ? 'text-amber-300'
+                                : stats.reviewed > 0 ? 'text-rose-400'
+                                    : 'text-white/40'
+                    }
+                />
+            </div>
+
+            {diffEntries.length > 0 && (
+                <div>
+                    <p className="text-xs text-white/40 mb-2">By level</p>
+                    <div className="flex h-2 rounded-full overflow-hidden bg-white/5">
+                        {diffEntries.map(e => (
+                            <div
+                                key={e.level}
+                                className={DIFF_BAR_COLOR[e.level] ?? 'bg-white/30'}
+                                style={{ width: `${(e.count / stats.total) * 100}%` }}
+                                title={`${e.level}: ${e.count}`}
+                            />
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
+                        {diffEntries.map(e => (
+                            <span key={e.level} className="text-white/60">
+                                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${DIFF_BAR_COLOR[e.level] ?? 'bg-white/30'}`} />
+                                {e.level} <span className="text-white/40">{e.count}</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {stats.needs_review.length > 0 && (
+                <div className="pt-4 border-t border-white/5">
+                    <p className="text-xs text-white/40 mb-2">Needs review</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {stats.needs_review.map(w => (
+                            <span
+                                key={w.id}
+                                className="inline-flex items-center gap-1.5 text-xs bg-white/5 border border-white/10 rounded-md px-2 py-1"
+                            >
+                                <span className={`text-[10px] font-mono px-1 rounded ${DIFF_COLOR[w.difficulty] ?? 'text-white/40'}`}>
+                                    {w.difficulty}
+                                </span>
+                                <span className="text-white/80">{w.word}</span>
+                                <span className="text-white/30">
+                                    {w.review_count === 0 ? 'new' : `${w.accuracy}%`}
+                                </span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </motion.div>
+    )
+}
+
+function Stat({
+    icon: Icon, label, value, sub, accent,
+}: {
+    icon: React.FC<{ className?: string }>
+    label: string
+    value: string | number
+    sub?: string
+    accent: string
+}) {
+    return (
+        <div>
+            <div className="flex items-center gap-1.5 text-white/40 text-xs mb-1">
+                <Icon className="w-3 h-3" />
+                {label}
+            </div>
+            <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl font-bold tabular-nums ${accent}`}>{value}</span>
+                {sub && <span className="text-xs text-white/40">{sub}</span>}
+            </div>
+        </div>
+    )
+}
 
 // ─── Word form ───────────────────────────────────────────────────────────────
 
@@ -353,6 +494,7 @@ function ModuleForm({
 
 function FoldersView({ onOpen }: { onOpen: (folderId: number) => void }) {
     const { data: folders = [], isLoading } = useFolders()
+    const { data: stats, isLoading: isStatsLoading } = useDictStats()
     const { mutate: createFolder, isPending: isCreating, error: createError, reset: resetCreate } = useFolderCreate()
     const { mutate: updateFolder, isPending: isUpdating, error: updateError, reset: resetUpdate } = useFolderUpdate()
     const { mutate: deleteFolder, isPending: isDeleting } = useFolderDelete()
@@ -362,6 +504,7 @@ function FoldersView({ onOpen }: { onOpen: (folderId: number) => void }) {
 
     return (
         <>
+            <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel="All your words" />
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-white/80">Folders</h2>
                 <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
@@ -482,6 +625,7 @@ function ModulesView({
     onOpenModule: (moduleId: number) => void
 }) {
     const { data: modules = [], isLoading } = useModules(folder.id)
+    const { data: stats, isLoading: isStatsLoading } = useDictStats({ folderId: folder.id })
     const { mutate: createModule, isPending: isCreating, error: createError, reset: resetCreate } = useModuleCreate()
     const { mutate: updateModule, isPending: isUpdating, error: updateError, reset: resetUpdate } = useModuleUpdate()
     const { mutate: deleteModule, isPending: isDeleting } = useModuleDelete()
@@ -491,6 +635,7 @@ function ModulesView({
 
     return (
         <>
+            <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel={`Folder · ${folder.name}`} />
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-lg font-semibold text-white/80">Modules</h2>
@@ -614,10 +759,12 @@ function WordsView({ module: m }: { module: DictionaryModule }) {
         search: search || undefined,
         difficulty: filterDiff || undefined,
     })
+    const { data: stats, isLoading: isStatsLoading } = useDictStats({ moduleId: m.id })
     const { mutate: create, isPending: isCreating, error: createError, reset: resetCreate } = useWordCreate()
 
     return (
         <>
+            <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel={`Module · ${m.name}`} />
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-lg font-semibold text-white/80">{m.name}</h2>

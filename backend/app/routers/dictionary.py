@@ -57,13 +57,24 @@ def _own_folder_or_404(db: Session, user_id: int, folder_id: int) -> models.Dict
 
 @router.get("/stats")
 def get_stats(
+    folder_id: Optional[int] = Query(None),
+    module_id: Optional[int] = Query(None),
+    needs_review_limit: int = Query(default=5, ge=0, le=50),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    words = db.query(models.DictionaryWord).filter(
+    q = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.person_id == current_user.id,
         models.DictionaryWord.deleted == False,
-    ).all()
+    )
+    if module_id is not None:
+        q = q.filter(models.DictionaryWord.module_id == module_id)
+    elif folder_id is not None:
+        q = q.join(
+            models.DictionaryModule, models.DictionaryWord.module_id == models.DictionaryModule.id
+        ).filter(models.DictionaryModule.folder_id == folder_id)
+
+    words = q.all()
 
     total = len(words)
     reviewed = sum(1 for w in words if w.review_count > 0)
@@ -78,12 +89,40 @@ def get_stats(
         pos = w.part_of_speech or "other"
         by_pos[pos] = by_pos.get(pos, 0) + 1
 
+    # Needs review: prioritize never-reviewed first, then lowest accuracy.
+    def review_priority(w: models.DictionaryWord) -> tuple:
+        if w.review_count == 0:
+            return (0, 0.0, w.created_at)
+        acc = w.correct_count / w.review_count
+        return (1, acc, w.last_reviewed_at or w.created_at)
+
+    needs_review_words = sorted(words, key=review_priority)[:needs_review_limit]
+    needs_review_total = sum(
+        1 for w in words
+        if w.review_count == 0 or (w.review_count > 0 and w.correct_count / w.review_count < 0.7)
+    )
+
+    needs_review = [
+        {
+            "id": w.id,
+            "module_id": w.module_id,
+            "word": w.word,
+            "difficulty": w.difficulty,
+            "review_count": w.review_count,
+            "accuracy": (round(w.correct_count / w.review_count * 100, 1)
+                         if w.review_count > 0 else None),
+        }
+        for w in needs_review_words
+    ]
+
     return {
         "total": total,
         "reviewed": reviewed,
         "accuracy": accuracy,
         "by_difficulty": by_difficulty,
         "by_part_of_speech": by_pos,
+        "needs_review_total": needs_review_total,
+        "needs_review": needs_review,
     }
 
 

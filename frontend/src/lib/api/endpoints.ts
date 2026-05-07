@@ -181,7 +181,13 @@ export const API_ENDPOINTS = {
         CREATE: `${API_URL}/dictionary/`,
         UPDATE: (id: number) => `${API_URL}/dictionary/${id}`,
         DELETE: (id: number) => `${API_URL}/dictionary/${id}`,
-        STATS: `${API_URL}/dictionary/stats`,
+        STATS: (args: { folderId?: number; moduleId?: number } = {}) => {
+            const p = new URLSearchParams()
+            if (args.folderId) p.set('folder_id', String(args.folderId))
+            if (args.moduleId) p.set('module_id', String(args.moduleId))
+            const qs = p.toString()
+            return qs ? `${API_URL}/dictionary/stats?${qs}` : `${API_URL}/dictionary/stats`
+        },
         FOLDERS: `${API_URL}/dictionary/folders/`,
         FOLDER: (id: number) => `${API_URL}/dictionary/folders/${id}`,
         MODULES: `${API_URL}/dictionary/modules/`,
