@@ -628,6 +628,8 @@ class DictionaryWord(Base):
     review_count = Column(Integer, default=0)
     correct_count = Column(Integer, default=0)
     last_reviewed_at = Column(DateTime, nullable=True)
+    next_review_at = Column(DateTime, nullable=True, index=True)
+    interval_days = Column(Integer, nullable=False, default=0)
     deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

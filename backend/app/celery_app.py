@@ -89,4 +89,10 @@ celery_app.conf.beat_schedule = {
             minute=0,
         ),
     },
+
+    # Daily 04:00 UTC = 09:00 Tashkent — word of the day from due-review pool
+    "send-word-of-the-day": {
+        "task": "app.tasks.send_word_of_the_day",
+        "schedule": crontab(hour=4, minute=0),
+    },
 }

@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap } from 'lucide-react'
+import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useDictStats } from '@/lib/hooks/use-dictionary'
 import { usePracticeHistory } from '@/lib/hooks/use-practice'
@@ -49,7 +49,7 @@ export default function LearningPage() {
                 </div>
 
                 {/* Main sections */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {/* Dictionary */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                         <Card
@@ -112,6 +112,25 @@ export default function LearningPage() {
                                     </div>
                                 </div>
                             )}
+                        </Card>
+                    </motion.div>
+
+                    {/* Reading mode */}
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                        <Card
+                            onClick={() => router.push(`/platform/${params.id}/learning/reading`)}
+                            className="p-6 bg-white/2.5 border border-white/5 hover:border-emerald-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-2.5 rounded-lg bg-emerald-500/10">
+                                    <FileText className="w-6 h-6 text-emerald-400" />
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" />
+                            </div>
+                            <h2 className="text-lg font-semibold text-white mb-1">Reading</h2>
+                            <p className="text-sm text-white/50">
+                                Paste any text — AI mines vocabulary at your level.
+                            </p>
                         </Card>
                     </motion.div>
                 </div>

@@ -1356,3 +1356,89 @@ def check_and_trigger_milestones(db, goal: "models.Goal") -> None:
             send_message(msg, chat_id=chat_id)
         except Exception:
             pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Word of the Day (09:00 Tashkent / 04:00 UTC)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@celery_app.task(name="app.tasks.send_word_of_the_day", bind=True, max_retries=2)
+def send_word_of_the_day(self):
+    """For each active user with a Telegram chat configured, pick one word
+    from their due-review pool and send a quick prompt."""
+    from app.config import settings
+
+    if not is_configured():
+        return {"skipped": "telegram_not_configured"}
+
+    import json as _json
+    import random as _random
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        persons = db.query(models.Person).filter(models.Person.is_active == True).all()
+        for person in persons:
+            chat_id = person.telegram_chat_id or settings.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+
+            # Prefer due/never-reviewed words; fall back to any word.
+            candidates = (
+                db.query(models.DictionaryWord)
+                .filter(
+                    models.DictionaryWord.person_id == person.id,
+                    models.DictionaryWord.deleted == False,
+                    or_(
+                        models.DictionaryWord.next_review_at.is_(None),
+                        models.DictionaryWord.next_review_at <= datetime.utcnow(),
+                    ),
+                )
+                .all()
+            )
+            if not candidates:
+                candidates = (
+                    db.query(models.DictionaryWord)
+                    .filter(
+                        models.DictionaryWord.person_id == person.id,
+                        models.DictionaryWord.deleted == False,
+                    )
+                    .all()
+                )
+            if not candidates:
+                continue
+
+            word = _random.choice(candidates)
+            examples = []
+            if word.examples:
+                try:
+                    examples = _json.loads(word.examples)
+                except Exception:
+                    examples = []
+
+            lines = [f"🌅 <b>Word of the day:</b> <code>{word.word}</code>"]
+            if word.phonetic:
+                lines.append(f"<i>{word.phonetic}</i>")
+            lines.append("")
+            lines.append(word.definition)
+            if word.translation:
+                lines.append(f"\n🇺🇿 / 🇷🇺 {word.translation}")
+            if examples:
+                lines.append("")
+                lines.append(f"<i>e.g.</i> {examples[0]}")
+
+            try:
+                if send_message("\n".join(lines), chat_id=chat_id):
+                    sent += 1
+            except Exception as e:
+                logger.warning("send_word_of_the_day: telegram send failed for person %d: %s", person.id, e)
+
+        logger.info("send_word_of_the_day: sent to %d users", sent)
+        return {"sent": sent}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("send_word_of_the_day failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60 * 5)
+    finally:
+        db.close()

@@ -18,7 +18,7 @@ import {
     useFolders, useFolderCreate, useFolderUpdate, useFolderDelete,
     useModules, useModuleCreate, useModuleUpdate, useModuleDelete,
     useDictionaryWords, useWordCreate, useWordUpdate, useWordDelete, useDictStats,
-    useAiWordDetails,
+    useAiWordDetails, useAiGenerateModule,
     type DictionaryWord, type WordCreate, type DictionaryFolder, type DictionaryModule,
     type DictStats,
 } from '@/lib/hooks/use-dictionary'
@@ -667,6 +667,8 @@ function ModulesView({
     const { data: modules = [], isLoading } = useModules(folder.id)
     const { data: stats, isLoading: isStatsLoading } = useDictStats({ folderId: folder.id })
     const { mutate: createModule, isPending: isCreating, error: createError, reset: resetCreate } = useModuleCreate()
+    const { mutate: aiGenerateModule, isPending: isAiGenerating, error: aiGenerateError, reset: resetAiGenerate } = useAiGenerateModule()
+    const [aiOpen, setAiOpen] = useState(false)
     const { mutate: updateModule, isPending: isUpdating, error: updateError, reset: resetUpdate } = useModuleUpdate()
     const { mutate: deleteModule, isPending: isDeleting } = useModuleDelete()
     const [addOpen, setAddOpen] = useState(false)
@@ -681,9 +683,15 @@ function ModulesView({
                     <h2 className="text-lg font-semibold text-white/80">Modules</h2>
                     <p className="text-xs text-white/40 mt-0.5">in {folder.name}</p>
                 </div>
-                <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                    <Plus className="w-4 h-4" /> New Module
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={() => setAiOpen(true)} variant="outline"
+                        className="gap-2 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
+                        <Sparkles className="w-4 h-4" /> Generate with AI
+                    </Button>
+                    <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                        <Plus className="w-4 h-4" /> New Module
+                    </Button>
+                </div>
             </div>
 
             {isLoading ? (
@@ -783,7 +791,96 @@ function ModulesView({
                     </div>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <Dialog open={aiOpen} onOpenChange={(open) => { setAiOpen(open); if (!open) resetAiGenerate() }}>
+                <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-w-md">
+                    <DialogHeader><DialogTitle className="text-white">Generate Module with AI</DialogTitle></DialogHeader>
+                    {aiGenerateError && (
+                        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-300">
+                            {aiGenerateError.message}
+                        </div>
+                    )}
+                    <AiModuleForm
+                        folderId={folder.id}
+                        onCancel={() => { resetAiGenerate(); setAiOpen(false) }}
+                        onSubmit={(payload) => aiGenerateModule(payload, {
+                            onSuccess: () => { resetAiGenerate(); setAiOpen(false) },
+                        })}
+                        isPending={isAiGenerating}
+                    />
+                </DialogContent>
+            </Dialog>
         </>
+    )
+}
+
+function AiModuleForm({ folderId, onSubmit, onCancel, isPending }: {
+    folderId: number
+    onSubmit: (data: { folder_id: number; topic: string; level: string; count: number; module_name?: string }) => void
+    onCancel: () => void
+    isPending: boolean
+}) {
+    const [topic, setTopic] = useState('')
+    const [moduleName, setModuleName] = useState('')
+    const [level, setLevel] = useState('B1')
+    const [count, setCount] = useState(15)
+
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault()
+                onSubmit({
+                    folder_id: folderId,
+                    topic: topic.trim(),
+                    level,
+                    count,
+                    module_name: moduleName.trim() || undefined,
+                })
+            }}
+            className="space-y-4"
+        >
+            <FormField label="Topic" required>
+                <TextInput value={topic} onChange={(v: string) => setTopic(v)}
+                    placeholder="e.g. Travel, IELTS academic verbs, Business meetings" />
+            </FormField>
+
+            <FormField label="Module name (optional)">
+                <TextInput value={moduleName} onChange={(v: string) => setModuleName(v)}
+                    placeholder="Defaults to the topic" />
+            </FormField>
+
+            <div className="grid grid-cols-2 gap-4">
+                <FormField label="Level">
+                    <SelectInput
+                        value={level}
+                        onChange={setLevel}
+                        options={DIFFICULTIES.map(d => ({ value: d, label: d }))}
+                    />
+                </FormField>
+                <FormField label="Number of words">
+                    <SelectInput
+                        value={String(count)}
+                        onChange={(v) => setCount(Number(v))}
+                        options={[5, 10, 15, 20, 25, 30].map(n => ({ value: String(n), label: String(n) }))}
+                    />
+                </FormField>
+            </div>
+
+            <p className="text-xs text-white/40">
+                AI will create a new module in this folder and fill it with {count} words at level {level}.
+                This usually takes 5-15 seconds.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="ghost" onClick={onCancel} className="text-white/60">Cancel</Button>
+                <Button type="submit"
+                    disabled={isPending || !topic.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+                    <Sparkles className={`w-4 h-4 ${isPending ? 'animate-pulse' : ''}`} />
+                    {isPending ? 'Generating…' : 'Generate'}
+                </Button>
+            </div>
+        </form>
     )
 }
 

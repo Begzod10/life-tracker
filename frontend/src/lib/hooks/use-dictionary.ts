@@ -248,6 +248,39 @@ export function useAiWordDetails() {
     })
 }
 
+export type AiGenerateModulePayload = {
+    folder_id: number
+    topic: string
+    level: string
+    count: number
+    module_name?: string
+}
+
+export function useAiGenerateModule() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation<DictionaryModule, Error, AiGenerateModulePayload>({
+        mutationFn: (data) =>
+            request(API_ENDPOINTS.DICTIONARY.AI_GENERATE_MODULE, { method: 'POST', body: data }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: KEYS.modules })
+            qc.invalidateQueries({ queryKey: KEYS.folders })
+            qc.invalidateQueries({ queryKey: KEYS.words })
+            qc.invalidateQueries({ queryKey: KEYS.stats })
+        },
+    })
+}
+
+export type AiExtractCandidate = AiWordDetails
+
+export function useAiExtractVocab() {
+    const { request } = useHttp()
+    return useMutation<{ candidates: AiExtractCandidate[] }, Error, { text: string; level: string; max_words: number }>({
+        mutationFn: (data) =>
+            request(API_ENDPOINTS.DICTIONARY.AI_EXTRACT_VOCAB, { method: 'POST', body: data }),
+    })
+}
+
 export function useWordCreate() {
     const { request } = useHttp()
     const qc = useQueryClient()

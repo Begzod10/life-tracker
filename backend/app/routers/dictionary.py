@@ -38,6 +38,218 @@ def _ai_word_prompt(word: str) -> str:
     )
 
 
+class AiGenerateModuleRequest(BaseModel):
+    folder_id: int
+    topic: str = Field(..., min_length=2, max_length=200)
+    level: str = Field(default="B1", pattern="^(A1|A2|B1|B2|C1|C2)$")
+    count: int = Field(default=15, ge=3, le=40)
+    module_name: Optional[str] = None
+
+
+class AiExtractRequest(BaseModel):
+    text: str = Field(..., min_length=10, max_length=8000)
+    level: str = Field(default="B1", pattern="^(A1|A2|B1|B2|C1|C2)$")
+    max_words: int = Field(default=15, ge=1, le=40)
+
+
+def _ai_module_prompt(topic: str, level: str, count: int) -> str:
+    return (
+        f"You are designing a vocabulary module for an English learner at CEFR level {level}.\n"
+        f"Topic: \"{topic.strip()}\"\n"
+        f"Pick exactly {count} useful, distinct words/phrases at or near level {level}.\n\n"
+        f"Return ONLY a JSON array (no markdown, no commentary). Each item must be:\n"
+        f"{{\n"
+        f"  \"word\": string,\n"
+        f"  \"definition\": string,\n"
+        f"  \"translation\": string,            // \"<Uzbek (Latin)> / <Russian>\"\n"
+        f"  \"phonetic\": string,               // IPA in slashes\n"
+        f"  \"part_of_speech\": string,         // noun|verb|adjective|adverb|phrase|idiom\n"
+        f"  \"difficulty\": string,             // A1|A2|B1|B2|C1|C2\n"
+        f"  \"examples\": [string, string]\n"
+        f"}}\n"
+        f"Avoid duplicates. Keep entries concise."
+    )
+
+
+def _ai_extract_prompt(text: str, level: str, max_words: int) -> str:
+    return (
+        f"You help English learners mine vocabulary from real texts.\n"
+        f"Reader level: CEFR {level}.\n"
+        f"From the text below, pick up to {max_words} words or short phrases that are likely "
+        f"useful and at or above the reader's level (don't pick basic words they already know).\n"
+        f"Prefer words that recur in academic, IELTS, news, or work contexts.\n\n"
+        f"Return ONLY a JSON array (no markdown). Each item:\n"
+        f"{{\n"
+        f"  \"word\": string,                   // exact form to study (lemma if obvious)\n"
+        f"  \"definition\": string,\n"
+        f"  \"translation\": string,            // \"<Uzbek (Latin)> / <Russian>\"\n"
+        f"  \"phonetic\": string,\n"
+        f"  \"part_of_speech\": string,\n"
+        f"  \"difficulty\": string,             // A1..C2\n"
+        f"  \"examples\": [string, string]      // first example MUST be the sentence the word appears in (or close)\n"
+        f"}}\n\n"
+        f"TEXT:\n\"\"\"\n{text.strip()}\n\"\"\""
+    )
+
+
+def _parse_ai_json(raw: str):
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if "\n" in cleaned:
+            first_line, rest = cleaned.split("\n", 1)
+            if first_line.strip().lower() in {"json", ""}:
+                cleaned = rest
+    return json.loads(cleaned)
+
+
+def _normalize_ai_word(item: dict) -> Optional[dict]:
+    if not isinstance(item, dict):
+        return None
+    word = str(item.get("word") or "").strip()
+    definition = str(item.get("definition") or "").strip()
+    if not word or not definition:
+        return None
+
+    pos = (item.get("part_of_speech") or "").strip().lower()
+    if pos not in {"noun", "verb", "adjective", "adverb", "phrase", "idiom"}:
+        pos = "noun"
+
+    diff = (item.get("difficulty") or "").strip().upper()
+    if diff not in {"A1", "A2", "B1", "B2", "C1", "C2"}:
+        diff = "B1"
+
+    examples = item.get("examples") or []
+    if not isinstance(examples, list):
+        examples = []
+    examples = [str(e).strip() for e in examples if str(e).strip()][:5]
+
+    return {
+        "word": word,
+        "definition": definition,
+        "translation": str(item.get("translation") or "").strip(),
+        "phonetic": str(item.get("phonetic") or "").strip(),
+        "part_of_speech": pos,
+        "difficulty": diff,
+        "examples": examples,
+    }
+
+
+@router.post("/ai/generate-module", status_code=201)
+def ai_generate_module(
+    payload: AiGenerateModuleRequest,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Generate a complete module with vocabulary from a topic + level."""
+    from app.config import settings
+    from app.tasks import _generate_text
+
+    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        raise HTTPException(status_code=503, detail="AI provider not configured.")
+
+    folder = _own_folder_or_404(db, current_user.id, payload.folder_id)
+
+    prompt = _ai_module_prompt(payload.topic, payload.level, payload.count)
+    try:
+        raw = _generate_text(prompt, max_tokens=2400, temperature=0.5)
+    except Exception as e:
+        logger.exception("ai_generate_module: generation failed")
+        raise HTTPException(status_code=502, detail=f"AI request failed: {type(e).__name__}: {e}")
+
+    if not raw:
+        raise HTTPException(status_code=502, detail="AI provider returned no text.")
+
+    try:
+        items = _parse_ai_json(raw)
+    except json.JSONDecodeError:
+        logger.warning("ai_generate_module: non-JSON response: %r", raw[:300])
+        raise HTTPException(status_code=502, detail="AI response was not valid JSON.")
+
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=502, detail="AI response did not contain a word list.")
+
+    module_name = (payload.module_name or payload.topic).strip()[:120]
+    module = models.DictionaryModule(
+        person_id=current_user.id,
+        folder_id=folder.id,
+        name=module_name,
+        description=f"Auto-generated · {payload.level} · {payload.topic}",
+    )
+    db.add(module)
+    db.flush()
+
+    created = 0
+    for item in items:
+        norm = _normalize_ai_word(item)
+        if not norm:
+            continue
+        word = models.DictionaryWord(
+            person_id=current_user.id,
+            module_id=module.id,
+            word=norm["word"],
+            definition=norm["definition"],
+            translation=norm["translation"] or None,
+            phonetic=norm["phonetic"] or None,
+            part_of_speech=norm["part_of_speech"],
+            difficulty=norm["difficulty"],
+            examples=json.dumps(norm["examples"]) if norm["examples"] else None,
+        )
+        db.add(word)
+        created += 1
+
+    if created == 0:
+        db.rollback()
+        raise HTTPException(status_code=502, detail="AI returned no usable words.")
+
+    db.commit()
+    db.refresh(module)
+    return {
+        "id": module.id,
+        "folder_id": module.folder_id,
+        "name": module.name,
+        "description": module.description,
+        "word_count": created,
+        "created_at": module.created_at,
+    }
+
+
+@router.post("/ai/extract-vocab")
+def ai_extract_vocab(
+    payload: AiExtractRequest,
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Extract candidate vocabulary words from a passage. No DB writes — caller
+    decides which to save."""
+    from app.config import settings
+    from app.tasks import _generate_text
+
+    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        raise HTTPException(status_code=503, detail="AI provider not configured.")
+
+    prompt = _ai_extract_prompt(payload.text, payload.level, payload.max_words)
+    try:
+        raw = _generate_text(prompt, max_tokens=2400, temperature=0.4)
+    except Exception as e:
+        logger.exception("ai_extract_vocab: generation failed")
+        raise HTTPException(status_code=502, detail=f"AI request failed: {type(e).__name__}: {e}")
+
+    if not raw:
+        raise HTTPException(status_code=502, detail="AI provider returned no text.")
+
+    try:
+        items = _parse_ai_json(raw)
+    except json.JSONDecodeError:
+        logger.warning("ai_extract_vocab: non-JSON response: %r", raw[:300])
+        raise HTTPException(status_code=502, detail="AI response was not valid JSON.")
+
+    if not isinstance(items, list):
+        raise HTTPException(status_code=502, detail="AI response did not contain a list.")
+
+    candidates = [n for n in (_normalize_ai_word(it) for it in items) if n]
+    return {"candidates": candidates}
+
+
 @router.post("/ai/word-details")
 def ai_word_details(
     payload: AiWordRequest,

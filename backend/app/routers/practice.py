@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import datetime
+from typing import List, Optional
+from datetime import datetime, timedelta
 import json
 import random
 
@@ -12,12 +13,53 @@ from app.dependencies import get_current_user
 router = APIRouter(prefix="/practice", tags=["practice"])
 
 
+# ─── Spaced repetition (simplified SM-2) ─────────────────────────────────────
+
+# Day intervals applied to a "streak" of consecutive correct answers.
+# After a wrong answer the streak drops back to 0 (next review = 1 day).
+# Beyond the table, the interval doubles each correct answer.
+SR_LADDER_DAYS = [1, 2, 4, 7, 14, 30, 60]
+
+
+def _next_interval_days(prev_interval: int, was_correct: bool) -> int:
+    if not was_correct:
+        return 1
+    if prev_interval <= 0:
+        return SR_LADDER_DAYS[0]
+    if prev_interval in SR_LADDER_DAYS:
+        i = SR_LADDER_DAYS.index(prev_interval)
+        return SR_LADDER_DAYS[i + 1] if i + 1 < len(SR_LADDER_DAYS) else prev_interval * 2
+    # Custom interval: keep doubling (Anki-style growth)
+    return prev_interval * 2
+
+
+def _serialize_practice_word(word: models.DictionaryWord, all_words: list) -> dict:
+    distractors = [w for w in all_words if w.id != word.id]
+    distractor_sample = random.sample(distractors, min(3, len(distractors)))
+    options = [word.word] + [d.word for d in distractor_sample]
+    random.shuffle(options)
+    return {
+        "id": word.id,
+        "word": word.word,
+        "definition": word.definition,
+        "translation": word.translation,
+        "phonetic": word.phonetic,
+        "examples": json.loads(word.examples) if word.examples else [],
+        "difficulty": word.difficulty,
+        "options": options,
+    }
+
+
+# ─── Word selection ──────────────────────────────────────────────────────────
+
 @router.get("/words")
 def get_practice_words(
     count: int = Query(default=10, ge=1, le=50),
     difficulty: Optional[str] = Query(None),
     module_id: Optional[int] = Query(None),
     folder_id: Optional[int] = Query(None),
+    due_only: bool = Query(default=False),
+    weak_only: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
@@ -33,33 +75,47 @@ def get_practice_words(
         ).filter(models.DictionaryModule.folder_id == folder_id)
     if difficulty:
         q = q.filter(models.DictionaryWord.difficulty == difficulty)
+    if due_only:
+        q = q.filter(or_(
+            models.DictionaryWord.next_review_at.is_(None),
+            models.DictionaryWord.next_review_at <= datetime.utcnow(),
+        ))
 
     all_words = q.all()
+
+    if weak_only:
+        def is_weak(w):
+            if w.review_count == 0:
+                return True
+            return (w.correct_count / w.review_count) < 0.7
+        all_words = [w for w in all_words if is_weak(w)]
+
     if len(all_words) < 2:
-        raise HTTPException(status_code=400, detail="Add at least 2 words to start practicing")
+        raise HTTPException(status_code=400, detail="Not enough words available for practice (need at least 2).")
+
+    if due_only or weak_only:
+        # Pool was already narrowed; take up to count, prioritising oldest/never-reviewed first.
+        all_words.sort(key=lambda w: (
+            0 if w.review_count == 0 else 1,
+            w.last_reviewed_at or w.created_at,
+        ))
+        selected = all_words[:count]
+        # Need a wider pool for distractors so options aren't too repetitive.
+        pool = list({w.id: w for w in all_words}.values())
+        if len(pool) < 4:
+            extra = db.query(models.DictionaryWord).filter(
+                models.DictionaryWord.person_id == current_user.id,
+                models.DictionaryWord.deleted == False,
+                models.DictionaryWord.id.notin_([w.id for w in pool]),
+            ).limit(20).all()
+            pool += extra
+        return [_serialize_practice_word(w, pool) for w in selected]
 
     selected = random.sample(all_words, min(count, len(all_words)))
+    return [_serialize_practice_word(w, all_words) for w in selected]
 
-    result = []
-    for word in selected:
-        distractors = [w for w in all_words if w.id != word.id]
-        distractor_sample = random.sample(distractors, min(3, len(distractors)))
-        options = [word.word] + [d.word for d in distractor_sample]
-        random.shuffle(options)
 
-        result.append({
-            "id": word.id,
-            "word": word.word,
-            "definition": word.definition,
-            "translation": word.translation,
-            "phonetic": word.phonetic,
-            "examples": json.loads(word.examples) if word.examples else [],
-            "difficulty": word.difficulty,
-            "options": options,
-        })
-
-    return result
-
+# ─── Result submission with SM-2 scheduling ──────────────────────────────────
 
 @router.post("/result")
 def submit_result(
@@ -78,10 +134,50 @@ def submit_result(
     word.review_count += 1
     if was_correct:
         word.correct_count += 1
-    word.last_reviewed_at = datetime.utcnow()
-    db.commit()
-    return {"ok": True}
+    now = datetime.utcnow()
+    word.last_reviewed_at = now
 
+    next_days = _next_interval_days(word.interval_days or 0, was_correct)
+    word.interval_days = next_days
+    word.next_review_at = now + timedelta(days=next_days)
+
+    db.commit()
+    return {
+        "ok": True,
+        "interval_days": word.interval_days,
+        "next_review_at": word.next_review_at.isoformat(),
+    }
+
+
+# ─── Due-counts helper for UI badges ─────────────────────────────────────────
+
+@router.get("/due-counts")
+def get_due_counts(
+    folder_id: Optional[int] = Query(None),
+    module_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    q = db.query(models.DictionaryWord).filter(
+        models.DictionaryWord.person_id == current_user.id,
+        models.DictionaryWord.deleted == False,
+    )
+    if module_id is not None:
+        q = q.filter(models.DictionaryWord.module_id == module_id)
+    elif folder_id is not None:
+        q = q.join(
+            models.DictionaryModule, models.DictionaryWord.module_id == models.DictionaryModule.id
+        ).filter(models.DictionaryModule.folder_id == folder_id)
+
+    due = q.filter(or_(
+        models.DictionaryWord.next_review_at.is_(None),
+        models.DictionaryWord.next_review_at <= datetime.utcnow(),
+    )).count()
+
+    return {"due": due}
+
+
+# ─── Session bookkeeping (unchanged) ─────────────────────────────────────────
 
 @router.post("/session")
 def create_session(

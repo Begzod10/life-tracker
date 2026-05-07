@@ -189,6 +189,8 @@ export const API_ENDPOINTS = {
             return qs ? `${API_URL}/dictionary/stats?${qs}` : `${API_URL}/dictionary/stats`
         },
         AI_WORD_DETAILS: `${API_URL}/dictionary/ai/word-details`,
+        AI_GENERATE_MODULE: `${API_URL}/dictionary/ai/generate-module`,
+        AI_EXTRACT_VOCAB: `${API_URL}/dictionary/ai/extract-vocab`,
         FOLDERS: `${API_URL}/dictionary/folders/`,
         FOLDER: (id: number) => `${API_URL}/dictionary/folders/${id}`,
         MODULES: `${API_URL}/dictionary/modules/`,
@@ -196,12 +198,27 @@ export const API_ENDPOINTS = {
     },
 
     PRACTICE: {
-        WORDS: (count = 10, difficulty?: string, moduleId?: number, folderId?: number) => {
+        WORDS: (
+            count = 10,
+            difficulty?: string,
+            moduleId?: number,
+            folderId?: number,
+            extra?: { dueOnly?: boolean; weakOnly?: boolean },
+        ) => {
             const p = new URLSearchParams({ count: String(count) })
             if (difficulty) p.append('difficulty', difficulty)
             if (moduleId) p.append('module_id', String(moduleId))
             if (folderId) p.append('folder_id', String(folderId))
+            if (extra?.dueOnly) p.append('due_only', 'true')
+            if (extra?.weakOnly) p.append('weak_only', 'true')
             return `${API_URL}/practice/words?${p}`
+        },
+        DUE_COUNTS: (args: { folderId?: number; moduleId?: number } = {}) => {
+            const p = new URLSearchParams()
+            if (args.folderId) p.set('folder_id', String(args.folderId))
+            if (args.moduleId) p.set('module_id', String(args.moduleId))
+            const qs = p.toString()
+            return qs ? `${API_URL}/practice/due-counts?${qs}` : `${API_URL}/practice/due-counts`
         },
         RESULT: (wordId: number, wasCorrect: boolean) =>
             `${API_URL}/practice/result?word_id=${wordId}&was_correct=${wasCorrect}`,

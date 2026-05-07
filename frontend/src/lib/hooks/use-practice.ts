@@ -29,14 +29,24 @@ export function usePracticeWords(args: {
     difficulty?: string
     moduleId?: number
     folderId?: number
+    dueOnly?: boolean
+    weakOnly?: boolean
 } = {}) {
-    const { count = 10, difficulty, moduleId, folderId } = args
+    const { count = 10, difficulty, moduleId, folderId, dueOnly, weakOnly } = args
     const { request } = useHttp()
     return useQuery<PracticeWord[]>({
-        queryKey: ['practice', 'words', count, difficulty ?? '', moduleId ?? '', folderId ?? ''],
-        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(count, difficulty, moduleId, folderId)),
+        queryKey: ['practice', 'words', count, difficulty ?? '', moduleId ?? '', folderId ?? '', dueOnly ?? false, weakOnly ?? false],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(count, difficulty, moduleId, folderId, { dueOnly, weakOnly })),
         enabled: false,
         retry: false,
+    })
+}
+
+export function useDueCounts(args: { folderId?: number; moduleId?: number } = {}) {
+    const { request } = useHttp()
+    return useQuery<{ due: number }>({
+        queryKey: ['practice', 'due-counts', args.folderId ?? '', args.moduleId ?? ''],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.DUE_COUNTS(args)),
     })
 }
 

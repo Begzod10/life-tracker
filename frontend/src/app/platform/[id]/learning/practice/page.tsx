@@ -3,13 +3,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
-import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap } from 'lucide-react'
+import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, type PracticeWord } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 
-type Mode = 'flashcard' | 'quiz' | 'spelling'
+type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening'
 type Phase = 'pick' | 'session' | 'results'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -389,7 +389,77 @@ function Spelling({ word, onAnswer }: {
     )
 }
 
-// ── Quiz/Spelling session wrapper (legacy correct-counter model) ────────────
+// ── Listening ────────────────────────────────────────────────────────────────
+
+function Listening({ word, onAnswer }: {
+    word: PracticeWord
+    onAnswer: (correct: boolean) => void
+}) {
+    const [input, setInput] = useState('')
+    const [submitted, setSubmitted] = useState(false)
+    const [revealed, setRevealed] = useState(false)
+
+    useEffect(() => {
+        speak(word.word)
+        // re-speak on every new word; cleanup not needed since speak() cancels prior utterance
+    }, [word.id, word.word])
+
+    const submit = () => {
+        if (!input.trim() || submitted) return
+        setSubmitted(true)
+        const correct = input.trim().toLowerCase() === word.word.toLowerCase()
+        setTimeout(() => onAnswer(correct), 900)
+    }
+
+    return (
+        <div className="w-full max-w-md space-y-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-4">
+                <p className="text-white/50 text-xs">Listen and type the word</p>
+                <button
+                    type="button"
+                    onClick={() => speak(word.word)}
+                    className="mx-auto w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300 hover:bg-blue-500/25 transition-all flex items-center justify-center"
+                    aria-label="Replay audio"
+                >
+                    <Volume2 className="w-7 h-7" />
+                </button>
+                {revealed
+                    ? <p className="text-white/60 text-sm">{word.definition}</p>
+                    : <button type="button" onClick={() => setRevealed(true)} className="text-xs text-white/40 hover:text-white/70 underline underline-offset-2">Need a hint?</button>
+                }
+                {revealed && word.translation && <p className="text-blue-300/60 text-xs">{word.translation}</p>}
+            </div>
+
+            <div className="space-y-3">
+                <input
+                    autoFocus
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    disabled={submitted}
+                    placeholder="Type what you heard…"
+                    className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
+                        submitted
+                            ? input.trim().toLowerCase() === word.word.toLowerCase()
+                                ? 'border-green-500/50 bg-green-500/5'
+                                : 'border-red-500/50 bg-red-500/5'
+                            : 'border-white/10 focus:border-white/25'
+                    }`}
+                />
+                {submitted && input.trim().toLowerCase() !== word.word.toLowerCase() && (
+                    <p className="text-center text-sm text-white/50">Correct: <span className="text-green-400 font-medium">{word.word}</span></p>
+                )}
+                {!submitted && (
+                    <Button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={!input.trim()}>
+                        Check
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ── Quiz/Spelling/Listening session wrapper (legacy correct-counter model) ──
 
 function LegacySession({ words, mode, onDone }: {
     words: PracticeWord[]
@@ -440,6 +510,7 @@ function LegacySession({ words, mode, onDone }: {
                 >
                     {mode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
                     {mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
+                    {mode === 'listening' && <Listening word={word} onAnswer={advance} />}
                 </motion.div>
             </AnimatePresence>
         </div>
@@ -574,6 +645,7 @@ const MODE_META: Record<Mode, { label: string; desc: string; icon: React.FC<{ cl
     flashcard: { label: 'Flashcard', desc: 'Swipe right if you know, left to review', icon: BookOpen },
     quiz: { label: 'Multiple Choice', desc: 'Pick the correct word for the definition', icon: Brain },
     spelling: { label: 'Spelling', desc: 'Type the word from its definition', icon: Keyboard },
+    listening: { label: 'Listening', desc: 'Hear the word, type what you hear', icon: Headphones },
 }
 
 export default function PracticePage() {
@@ -591,10 +663,14 @@ export default function PracticePage() {
 
     const [scopeFolderId, setScopeFolderId] = useState<number | undefined>(undefined)
     const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(undefined)
+    const [dueOnly, setDueOnly] = useState(false)
+    const [weakOnly, setWeakOnly] = useState(false)
     const { refetch: fetchWords, isFetching } = usePracticeWords({
         count: wordCount,
         moduleId: scopeModuleId,
         folderId: scopeModuleId ? undefined : scopeFolderId,
+        dueOnly,
+        weakOnly,
     })
     const { mutate: createSession } = useCreateSession()
     const { mutate: completeSession } = useCompleteSession()
@@ -702,6 +778,42 @@ export default function PracticePage() {
                                 moduleId={scopeModuleId}
                                 onChange={(f, m) => { setScopeFolderId(f); setScopeModuleId(m) }}
                             />
+
+                            {/* Filter toggles: due-today + weak-words */}
+                            <Card className="p-4 bg-white/2.5 border border-white/5">
+                                <p className="text-sm text-white/60 mb-3">Pick from</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => { setDueOnly(false); setWeakOnly(false) }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${
+                                            !dueOnly && !weakOnly
+                                                ? 'border-blue-500/50 bg-blue-500/10 text-blue-300'
+                                                : 'border-white/10 text-white/50 hover:bg-white/5'
+                                        }`}
+                                    >All words</button>
+                                    <button
+                                        onClick={() => { setDueOnly(true); setWeakOnly(false) }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs border transition-all flex items-center gap-1.5 ${
+                                            dueOnly
+                                                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                                                : 'border-white/10 text-white/50 hover:bg-white/5'
+                                        }`}
+                                    ><Clock className="w-3 h-3" /> Due for review</button>
+                                    <button
+                                        onClick={() => { setWeakOnly(true); setDueOnly(false) }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs border transition-all flex items-center gap-1.5 ${
+                                            weakOnly
+                                                ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                                                : 'border-white/10 text-white/50 hover:bg-white/5'
+                                        }`}
+                                    ><AlertCircle className="w-3 h-3" /> Weak words</button>
+                                </div>
+                                <p className="text-xs text-white/30 mt-2">
+                                    {dueOnly && 'Only words whose review interval has elapsed (or never reviewed).'}
+                                    {weakOnly && 'Only words with accuracy below 70% or never reviewed.'}
+                                    {!dueOnly && !weakOnly && 'Random selection from your full dictionary scope.'}
+                                </p>
+                            </Card>
 
                             {/* Word count */}
                             <Card className="p-4 bg-white/2.5 border border-white/5">
