@@ -203,15 +203,16 @@ export default function TimetableStatsPage() {
     const [rescheduleFrom, setRescheduleFrom] = useState('')
     const [rescheduleTo, setRescheduleTo] = useState('')
 
+    const [generateError, setGenerateError] = useState<string | null>(null)
     const generateConclusion = useCallback(async () => {
         setGenerating(true)
+        setGenerateError(null)
         try {
             await request(API_ENDPOINTS.TIMETABLE.GENERATE_CONCLUSION, { method: 'POST' })
-            setTimeout(() => {
-                queryClient.invalidateQueries({ queryKey: ['timetable', 'conclusions'] })
-                setGenerating(false)
-            }, 4000)
-        } catch {
+            queryClient.invalidateQueries({ queryKey: ['timetable', 'conclusions'] })
+        } catch (e) {
+            setGenerateError(e instanceof Error ? e.message : 'Failed to generate conclusion')
+        } finally {
             setGenerating(false)
         }
     }, [request, queryClient])
@@ -535,6 +536,12 @@ export default function TimetableStatsPage() {
                                     {generating ? 'Generating…' : 'Generate for today'}
                                 </button>
                             </div>
+
+                            {generateError && (
+                                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-300">
+                                    {generateError}
+                                </div>
+                            )}
 
                             {conclusionsLoading ? (
                                 <div className="flex items-center justify-center py-8">

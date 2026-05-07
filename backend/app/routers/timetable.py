@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from collections import defaultdict
 
 from app import models, schemas
@@ -305,13 +305,43 @@ def get_conclusions(
 
 @router.post("/conclusions/generate")
 def trigger_conclusion(
+    force: bool = Query(default=True),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Manually trigger AI conclusion generation for today."""
-    from app.tasks import generate_daily_conclusion
-    task = generate_daily_conclusion.delay()
-    return {"message": "Conclusion generation queued", "task_id": task.id}
+    """Generate today's AI conclusion synchronously for the current user.
+
+    `force=True` (default) replaces any existing conclusion for today so the
+    user can refresh it on demand.
+    """
+    from app.config import settings
+    from app.tasks import generate_conclusion_for_person
+
+    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        raise HTTPException(
+            status_code=503,
+            detail="AI provider not configured. Set OPENAI_API_KEY or GROQ_API_KEY.",
+        )
+
+    TASHKENT = timedelta(hours=5)
+    today = (datetime.utcnow() + TASHKENT).date()
+
+    result = generate_conclusion_for_person(db, current_user, today, force=force)
+    if result["status"] == "skipped_empty":
+        raise HTTPException(
+            status_code=400,
+            detail="No timetable blocks or tasks for today — nothing to summarise.",
+        )
+    if result["status"] == "skipped_no_text":
+        raise HTTPException(
+            status_code=502,
+            detail="AI provider did not return any text. Try again later.",
+        )
+    return {
+        "status": result["status"],
+        "conclusion": result["conclusion"],
+        "date": str(today),
+    }
 
 
 

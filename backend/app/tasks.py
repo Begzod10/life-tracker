@@ -705,7 +705,30 @@ def send_daily_summary(self):
         db.close()
 
 
-def _call_groq(prompt: str) -> str:
+def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
+    """Call OpenAI Chat Completions API and return the generated text."""
+    import httpx
+    from app.config import settings
+
+    if not settings.OPENAI_API_KEY:
+        return ""
+
+    resp = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+        json={
+            "model": settings.OPENAI_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+def _call_groq(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
     """Call Groq API and return the generated text."""
     import httpx
     from app.config import settings
@@ -719,13 +742,142 @@ def _call_groq(prompt: str) -> str:
         json={
             "model": "llama-3.1-8b-instant",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300,
-            "temperature": 0.7,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
         },
         timeout=30,
     )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+def _generate_text(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
+    """Generate text using OpenAI, falling back to Groq if OpenAI is unavailable."""
+    from app.config import settings
+
+    if settings.OPENAI_API_KEY:
+        try:
+            text = _call_openai(prompt, max_tokens=max_tokens, temperature=temperature)
+            if text:
+                return text
+        except Exception as e:
+            logger.warning("_generate_text: OpenAI failed, falling back to Groq: %s", e)
+
+    if settings.GROQ_API_KEY:
+        return _call_groq(prompt, max_tokens=max_tokens, temperature=temperature)
+
+    return ""
+
+
+def generate_conclusion_for_person(db, person, target_date, *, force: bool = False, send_telegram: bool = True) -> dict:
+    """
+    Generate (or regenerate) a daily conclusion for a single person.
+    Returns {"status": "generated" | "skipped_existing" | "skipped_empty" | "skipped_no_text", "conclusion": str | None}.
+    Caller manages the session.
+    """
+    from app.config import settings
+
+    not_deleted_task = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
+
+    existing = db.query(models.DailyConclusion).filter(
+        models.DailyConclusion.person_id == person.id,
+        models.DailyConclusion.date == target_date,
+    ).first()
+    if existing and not force:
+        return {"status": "skipped_existing", "conclusion": existing.conclusion}
+
+    blocks = (
+        db.query(models.TimeBlock)
+        .filter(
+            models.TimeBlock.person_id == person.id,
+            models.TimeBlock.date == target_date,
+            models.TimeBlock.deleted == False,
+        )
+        .order_by(models.TimeBlock.start_time.asc())
+        .all()
+    )
+    all_tasks = (
+        db.query(models.Task)
+        .join(models.Goal, models.Task.goal_id == models.Goal.id)
+        .filter(
+            models.Goal.person_id == person.id,
+            models.Goal.deleted == False,
+            not_deleted_task,
+            or_(
+                models.Task.due_date == target_date,
+                models.Task.is_recurring == True,
+                models.Task.task_type == "daily",
+            ),
+        )
+        .all()
+    )
+
+    if not blocks and not all_tasks:
+        return {"status": "skipped_empty", "conclusion": None}
+
+    lines = [f"Date: {target_date.strftime('%A, %B %d %Y')}", ""]
+
+    if blocks:
+        done_b = sum(1 for b in blocks if b.is_completed)
+        lines.append(f"Timetable blocks ({done_b}/{len(blocks)} completed):")
+        for b in blocks:
+            status = "✅ done" if b.is_completed else "❌ not finished"
+            lines.append(f"  - {b.title} ({b.start_time}–{b.end_time}): {status}")
+        lines.append("")
+
+    if all_tasks:
+        recurring_done = set(
+            row.task_id for row in db.query(models.ProgressLogTask).filter(
+                models.ProgressLogTask.log_date == target_date,
+                models.ProgressLogTask.task_id.in_([t.id for t in all_tasks]),
+            ).all()
+        )
+        def task_done(t) -> bool:
+            return t.id in recurring_done if t.is_recurring else t.completed
+
+        done_t = sum(1 for t in all_tasks if task_done(t))
+        lines.append(f"Tasks ({done_t}/{len(all_tasks)} completed):")
+        for t in all_tasks:
+            status = "✅ done" if task_done(t) else "❌ not done"
+            lines.append(f"  - {t.name}: {status}")
+        lines.append("")
+
+    prompt = (
+        f"You are a personal productivity coach. Here is the user's day:\n\n"
+        f"{chr(10).join(lines)}\n"
+        f"Write a brief 2-3 sentence conclusion about this day. "
+        f"Be honest about what was missed but stay motivating. "
+        f"Mention one specific thing they did well and one improvement for tomorrow. "
+        f"Be concise and personal."
+    )
+
+    conclusion_text = _generate_text(prompt)
+    if not conclusion_text:
+        return {"status": "skipped_no_text", "conclusion": None}
+
+    if existing:
+        existing.conclusion = conclusion_text
+    else:
+        existing = models.DailyConclusion(
+            person_id=person.id,
+            date=target_date,
+            conclusion=conclusion_text,
+        )
+        db.add(existing)
+    db.commit()
+
+    if send_telegram:
+        chat_id = person.telegram_chat_id or settings.TELEGRAM_CHAT_ID
+        if chat_id:
+            try:
+                send_message(
+                    f"🤖 <b>AI Daily Conclusion</b>\n\n{conclusion_text}",
+                    chat_id=chat_id,
+                )
+            except Exception as e:
+                logger.warning("Failed to send conclusion to Telegram: %s", e)
+
+    return {"status": "generated", "conclusion": conclusion_text}
 
 
 @celery_app.task(name="app.tasks.generate_daily_conclusion", bind=True, max_retries=2)
@@ -736,8 +888,8 @@ def generate_daily_conclusion(self):
     """
     from app.config import settings
 
-    if not settings.GROQ_API_KEY:
-        logger.info("generate_daily_conclusion: GROQ_API_KEY not set, skipping")
+    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        logger.info("generate_daily_conclusion: no AI provider configured, skipping")
         return {"skipped": True}
 
     db = SessionLocal()
@@ -745,112 +897,14 @@ def generate_daily_conclusion(self):
     try:
         TASHKENT = timedelta(hours=5)
         today = (datetime.utcnow() + TASHKENT).date()
-        not_deleted_task = or_(models.Task.deleted == False, models.Task.deleted.is_(None))
 
         persons = db.query(models.Person).filter(models.Person.is_active == True).all()
 
         for person in persons:
-            # Skip if already generated today
-            existing = db.query(models.DailyConclusion).filter(
-                models.DailyConclusion.person_id == person.id,
-                models.DailyConclusion.date == today,
-            ).first()
-            if existing:
-                continue
-
-            # Collect today's blocks
-            blocks = (
-                db.query(models.TimeBlock)
-                .filter(
-                    models.TimeBlock.person_id == person.id,
-                    models.TimeBlock.date == today,
-                    models.TimeBlock.deleted == False,
-                )
-                .order_by(models.TimeBlock.start_time.asc())
-                .all()
-            )
-
-            # Collect today's tasks
-            all_tasks = (
-                db.query(models.Task)
-                .join(models.Goal, models.Task.goal_id == models.Goal.id)
-                .filter(
-                    models.Goal.person_id == person.id,
-                    models.Goal.deleted == False,
-                    not_deleted_task,
-                    or_(
-                        models.Task.due_date == today,
-                        models.Task.is_recurring == True,
-                        models.Task.task_type == "daily",
-                    ),
-                )
-                .all()
-            )
-
-            if not blocks and not all_tasks:
-                continue
-
-            # Build prompt
-            lines = [f"Date: {today.strftime('%A, %B %d %Y')}", ""]
-
-            if blocks:
-                done_b = sum(1 for b in blocks if b.is_completed)
-                lines.append(f"Timetable blocks ({done_b}/{len(blocks)} completed):")
-                for b in blocks:
-                    status = "✅ done" if b.is_completed else "❌ not finished"
-                    lines.append(f"  - {b.title} ({b.start_time}–{b.end_time}): {status}")
-                lines.append("")
-
-            if all_tasks:
-                recurring_done = set(
-                    row.task_id for row in db.query(models.ProgressLogTask).filter(
-                        models.ProgressLogTask.log_date == today,
-                        models.ProgressLogTask.task_id.in_([t.id for t in all_tasks]),
-                    ).all()
-                )
-                def task_done(t) -> bool:
-                    return t.id in recurring_done if t.is_recurring else t.completed
-
-                done_t = sum(1 for t in all_tasks if task_done(t))
-                lines.append(f"Tasks ({done_t}/{len(all_tasks)} completed):")
-                for t in all_tasks:
-                    status = "✅ done" if task_done(t) else "❌ not done"
-                    lines.append(f"  - {t.name}: {status}")
-                lines.append("")
-
-            day_data = "\n".join(lines)
-            prompt = (
-                f"You are a personal productivity coach. Here is the user's day:\n\n"
-                f"{day_data}\n"
-                f"Write a brief 2-3 sentence conclusion about this day. "
-                f"Be honest about what was missed but stay motivating. "
-                f"Mention one specific thing they did well and one improvement for tomorrow. "
-                f"Be concise and personal."
-            )
-
             try:
-                conclusion_text = _call_groq(prompt)
-                if not conclusion_text:
-                    continue
-
-                conclusion = models.DailyConclusion(
-                    person_id=person.id,
-                    date=today,
-                    conclusion=conclusion_text,
-                )
-                db.add(conclusion)
-                db.commit()
-                generated += 1
-
-                # Send to Telegram if configured
-                chat_id = person.telegram_chat_id
-                if not chat_id:
-                    chat_id = settings.TELEGRAM_CHAT_ID
-                if chat_id:
-                    send_message(
-                        f"🤖 <b>AI Daily Conclusion</b>\n\n{conclusion_text}",
-                        chat_id=chat_id,
-                    )
+                result = generate_conclusion_for_person(db, person, today, force=False)
+                if result["status"] == "generated":
+                    generated += 1
             except Exception as e:
                 logger.exception("generate_daily_conclusion: failed for person %d: %s", person.id, e)
                 db.rollback()
@@ -965,9 +1019,9 @@ def send_weekly_review(self):
                     lines.append(f"  • {g.name}: {g.percentage:.0f}% [{bar}]")
                 lines.append("")
 
-            # AI tip via Groq
+            # AI tip via OpenAI (with Groq fallback)
             from app.config import settings as cfg2
-            if cfg2.GROQ_API_KEY and (total_b > 0 or all_tasks):
+            if (cfg2.OPENAI_API_KEY or cfg2.GROQ_API_KEY) and (total_b > 0 or all_tasks):
                 prompt = (
                     f"User's week: {done_b}/{total_b} timetable blocks done, "
                     f"{done_t}/{len(all_tasks)} tasks completed, "
@@ -975,7 +1029,7 @@ def send_weekly_review(self):
                     f"Give ONE specific, actionable improvement tip for next week in 1-2 sentences. Be direct."
                 )
                 try:
-                    tip = _call_groq(prompt)
+                    tip = _generate_text(prompt)
                     if tip:
                         lines += ["💡 <b>AI tip for next week:</b>", tip, ""]
                 except Exception:
