@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
+    # Optional outbound proxy for reaching api.openai.com from filtered networks.
+    # Format: socks5://user:pass@host:port  or  http://user:pass@host:port
+    OPENAI_PROXY_URL: Optional[str] = None
 
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/9"

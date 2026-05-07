@@ -713,18 +713,25 @@ def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7
     if not settings.OPENAI_API_KEY:
         return ""
 
-    resp = httpx.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-        json={
-            "model": settings.OPENAI_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
+    client_kwargs = {"timeout": 30}
+    if settings.OPENAI_PROXY_URL:
+        client_kwargs["proxy"] = settings.OPENAI_PROXY_URL
+        logger.info("OpenAI request routed through proxy")
+
+    with httpx.Client(**client_kwargs) as client:
+        resp = client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+            json={
+                "model": settings.OPENAI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
+    if resp.status_code >= 400:
+        logger.warning("OpenAI %s: %s", resp.status_code, resp.text[:300])
+        resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 
