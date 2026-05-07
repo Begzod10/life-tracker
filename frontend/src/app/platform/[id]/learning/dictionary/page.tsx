@@ -292,7 +292,7 @@ function FolderForm({
     return (
         <form onSubmit={e => { e.preventDefault(); onSubmit(form) }} className="space-y-4">
             <FormField label="Folder name" required>
-                <TextInput value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. IELTS Vocabulary" />
+                <TextInput value={form.name} onChange={(v: string) => setForm(p => ({ ...p, name: v }))} placeholder="e.g. IELTS Vocabulary" />
             </FormField>
             <FormField label="Color">
                 <div className="flex gap-2 flex-wrap">
@@ -333,10 +333,10 @@ function ModuleForm({
     return (
         <form onSubmit={e => { e.preventDefault(); onSubmit(form) }} className="space-y-4">
             <FormField label="Module name" required>
-                <TextInput value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Unit 1 — Travel" />
+                <TextInput value={form.name} onChange={(v: string) => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Unit 1 — Travel" />
             </FormField>
             <FormField label="Description">
-                <TextareaInput value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))}
+                <TextareaInput value={form.description} onChange={(v: string) => setForm(p => ({ ...p, description: v }))}
                     placeholder="Optional notes about this module" />
             </FormField>
             <div className="flex justify-end gap-3 pt-2">
