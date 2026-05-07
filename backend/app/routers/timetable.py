@@ -326,7 +326,18 @@ def trigger_conclusion(
     TASHKENT = timedelta(hours=5)
     today = (datetime.utcnow() + TASHKENT).date()
 
-    result = generate_conclusion_for_person(db, current_user, today, force=force)
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        result = generate_conclusion_for_person(db, current_user, today, force=force)
+    except Exception as e:
+        log.exception("trigger_conclusion failed for person %s", current_user.id)
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail=f"Conclusion generation failed: {type(e).__name__}: {e}",
+        )
+
     if result["status"] == "skipped_empty":
         raise HTTPException(
             status_code=400,
