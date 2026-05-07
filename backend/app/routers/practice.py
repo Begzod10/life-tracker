@@ -16,6 +16,8 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 def get_practice_words(
     count: int = Query(default=10, ge=1, le=50),
     difficulty: Optional[str] = Query(None),
+    module_id: Optional[int] = Query(None),
+    folder_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
@@ -23,6 +25,12 @@ def get_practice_words(
         models.DictionaryWord.person_id == current_user.id,
         models.DictionaryWord.deleted == False,
     )
+    if module_id is not None:
+        q = q.filter(models.DictionaryWord.module_id == module_id)
+    if folder_id is not None:
+        q = q.join(
+            models.DictionaryModule, models.DictionaryWord.module_id == models.DictionaryModule.id
+        ).filter(models.DictionaryModule.folder_id == folder_id)
     if difficulty:
         q = q.filter(models.DictionaryWord.difficulty == difficulty)
 

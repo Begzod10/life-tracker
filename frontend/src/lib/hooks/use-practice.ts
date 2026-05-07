@@ -24,12 +24,19 @@ export type PracticeSession = {
     completed_at?: string
 }
 
-export function usePracticeWords(count = 10, difficulty?: string) {
+export function usePracticeWords(args: {
+    count?: number
+    difficulty?: string
+    moduleId?: number
+    folderId?: number
+} = {}) {
+    const { count = 10, difficulty, moduleId, folderId } = args
     const { request } = useHttp()
     return useQuery<PracticeWord[]>({
-        queryKey: ['practice', 'words', count, difficulty ?? ''],
-        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(count, difficulty)),
+        queryKey: ['practice', 'words', count, difficulty ?? '', moduleId ?? '', folderId ?? ''],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(count, difficulty, moduleId, folderId)),
         enabled: false,
+        retry: false,
     })
 }
 

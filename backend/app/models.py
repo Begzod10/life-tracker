@@ -72,6 +72,16 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan"
     )
+    dictionary_folders = relationship(
+        "DictionaryFolder",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    dictionary_modules = relationship(
+        "DictionaryModule",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
     practice_sessions = relationship(
         "PracticeSession",
         back_populates="person",
@@ -563,11 +573,50 @@ class DailyConclusion(Base):
     person = relationship("Person")
 
 
+class DictionaryFolder(Base):
+    __tablename__ = "dictionary_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    name = Column(String(120), nullable=False)
+    color = Column(String(20), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    person = relationship("Person", back_populates="dictionary_folders")
+    modules = relationship(
+        "DictionaryModule",
+        back_populates="folder",
+        cascade="all, delete-orphan",
+    )
+
+
+class DictionaryModule(Base):
+    __tablename__ = "dictionary_modules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    folder_id = Column(Integer, ForeignKey("dictionary_folders.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    name = Column(String(120), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    person = relationship("Person", back_populates="dictionary_modules")
+    folder = relationship("DictionaryFolder", back_populates="modules")
+    words = relationship(
+        "DictionaryWord",
+        back_populates="module",
+        cascade="all, delete-orphan",
+    )
+
+
 class DictionaryWord(Base):
     __tablename__ = "dictionary_words"
 
     id = Column(Integer, primary_key=True, index=True)
     person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    module_id = Column(Integer, ForeignKey("dictionary_modules.id", ondelete="CASCADE"), nullable=True, index=True)
     word = Column(String(200), nullable=False, index=True)
     definition = Column(Text, nullable=False)
     translation = Column(Text, nullable=True)
@@ -584,6 +633,7 @@ class DictionaryWord(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     person = relationship("Person", back_populates="dictionary_words")
+    module = relationship("DictionaryModule", back_populates="words")
 
 
 class PracticeSession(Base):

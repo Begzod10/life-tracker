@@ -182,12 +182,18 @@ export const API_ENDPOINTS = {
         UPDATE: (id: number) => `${API_URL}/dictionary/${id}`,
         DELETE: (id: number) => `${API_URL}/dictionary/${id}`,
         STATS: `${API_URL}/dictionary/stats`,
+        FOLDERS: `${API_URL}/dictionary/folders/`,
+        FOLDER: (id: number) => `${API_URL}/dictionary/folders/${id}`,
+        MODULES: `${API_URL}/dictionary/modules/`,
+        MODULE: (id: number) => `${API_URL}/dictionary/modules/${id}`,
     },
 
     PRACTICE: {
-        WORDS: (count = 10, difficulty?: string) => {
+        WORDS: (count = 10, difficulty?: string, moduleId?: number, folderId?: number) => {
             const p = new URLSearchParams({ count: String(count) })
             if (difficulty) p.append('difficulty', difficulty)
+            if (moduleId) p.append('module_id', String(moduleId))
+            if (folderId) p.append('folder_id', String(folderId))
             return `${API_URL}/practice/words?${p}`
         },
         RESULT: (wordId: number, wasCorrect: boolean) =>

@@ -97,7 +97,7 @@ export const useHttp = (): UseHttpReturn => {
                     const retryData = await parseResponse(retryResponse)
 
                     if (!retryResponse.ok) {
-                        const errorMessage = retryData?.error || retryData?.message || `HTTP error ${retryResponse.status}`
+                        const errorMessage = retryData?.detail || retryData?.error || retryData?.message || `HTTP error ${retryResponse.status}`
                         throw new Error(errorMessage)
                     }
 
@@ -118,7 +118,7 @@ export const useHttp = (): UseHttpReturn => {
             const data = await parseResponse(response)
 
             if (!response.ok) {
-                const errorMessage = data?.error || data?.message || `HTTP error ${response.status}`
+                const errorMessage = data?.detail || data?.error || data?.message || `HTTP error ${response.status}`
                 throw new Error(errorMessage)
             }
 
