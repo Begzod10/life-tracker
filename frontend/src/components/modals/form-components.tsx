@@ -87,16 +87,18 @@ export function SelectInput({
     value,
     onChange,
     options,
-    placeholder = "Select..."
+    placeholder = "Select...",
+    triggerClassName,
 }: {
     value: string | number
     onChange: (value: string) => void
     options: { value: string | number; label: string }[]
     placeholder?: string
+    triggerClassName?: string
 }) {
     return (
         <Select value={String(value)} onValueChange={onChange}>
-            <SelectTrigger className="bg-[#0f0f1a] border-[#2a2b36] text-white">
+            <SelectTrigger className={triggerClassName ?? "bg-[#0f0f1a] border-[#2a2b36] text-white"}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent className="bg-[#1a1b26] border-[#2a2b36]">

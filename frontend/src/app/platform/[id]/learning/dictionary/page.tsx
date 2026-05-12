@@ -208,7 +208,7 @@ type WordFormData = {
 const emptyWordForm = (): WordFormData => ({
     word: '', definition: '', translation: '',
     part_of_speech: 'noun', phonetic: '',
-    examples: '', difficulty: 'B1', tags: '',
+    examples: '', difficulty: '', tags: '',
 })
 
 function toWordPayload(f: WordFormData, moduleId: number): WordCreate {
@@ -272,8 +272,19 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
     const aiBadge = '✨ AI'
     const desc = (k: keyof WordFormData) => aiFilled.has(k) ? aiBadge : undefined
 
+    const missingDifficulty = !form.difficulty
+    const difficultyTriggerClass = form.difficulty
+        ? `${DIFF_COLOR[form.difficulty] ?? 'bg-[#0f0f1a] border-[#2a2b36] text-white'} font-semibold`
+        : 'bg-[#0f0f1a] border-amber-500/40 text-amber-300/70'
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (missingDifficulty) return
+        onSubmit(form)
+    }
+
     return (
-        <form onSubmit={e => { e.preventDefault(); onSubmit(form) }} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <FormField label="Word" required>
                     <div className="flex gap-2">
@@ -322,9 +333,18 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
                 <FormField label="Part of Speech" description={desc('part_of_speech')}>
                     <SelectInput value={form.part_of_speech} onChange={set('part_of_speech')} options={POS_OPTIONS} />
                 </FormField>
-                <FormField label="Difficulty" description={desc('difficulty')}>
-                    <SelectInput value={form.difficulty} onChange={set('difficulty')}
-                        options={DIFFICULTIES.map(d => ({ value: d, label: d }))} />
+                <FormField
+                    label="Difficulty"
+                    required
+                    description={desc('difficulty') ?? (missingDifficulty ? 'Pick a level or click AI' : undefined)}
+                >
+                    <SelectInput
+                        value={form.difficulty}
+                        onChange={set('difficulty')}
+                        placeholder="AI or pick manually"
+                        triggerClassName={difficultyTriggerClass}
+                        options={DIFFICULTIES.map(d => ({ value: d, label: d }))}
+                    />
                 </FormField>
             </div>
 
@@ -342,7 +362,7 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
 
             <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="ghost" onClick={onCancel} className="text-white/60">Cancel</Button>
-                <Button type="submit" disabled={isPending || !form.word || !form.definition}
+                <Button type="submit" disabled={isPending || !form.word || !form.definition || missingDifficulty}
                     className="bg-blue-600 hover:bg-blue-700 text-white">
                     {isPending ? 'Saving…' : 'Save'}
                 </Button>
