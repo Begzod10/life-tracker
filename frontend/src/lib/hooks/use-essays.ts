@@ -28,6 +28,23 @@ export type EssayVocabUpgrade = {
     why: string
 }
 
+export type EssayStructureCoverageBody = {
+    label: string | null
+    claim_covered: boolean
+    what_kind_covered: boolean
+    so_what_covered: boolean
+    what_if_covered: boolean
+    notes: string
+}
+
+export type EssayStructureCoverage = {
+    overall_score: number
+    thesis_present: boolean
+    conclusion_present: boolean
+    bodies: EssayStructureCoverageBody[]
+    summary: string
+}
+
 export type EssayDeepReview = {
     level_estimate?: string
     overall: string
@@ -39,6 +56,7 @@ export type EssayDeepReview = {
     }
     sentences: EssayDeepSentence[]
     vocabulary_upgrades: EssayVocabUpgrade[]
+    structure_coverage: EssayStructureCoverage | null
 }
 
 export type EssayListItem = {
@@ -75,11 +93,21 @@ export type Essay = {
     submitted_at: string | null
 }
 
+export type EssayExistingTopicRef = {
+    id: number
+    title: string | null
+    prompt: string
+    level: EssayLevel
+    status: 'draft' | 'submitted'
+}
+
 export type EssayPromptResponse = {
     prompt: string
+    title?: string | null
     suggested_word_count: number
     target_words: string[]
     level: EssayLevel
+    existing_essay: EssayExistingTopicRef | null
 }
 
 export type EssayCreatePayload = {
@@ -274,5 +302,51 @@ export function useEssayStats(days = 60) {
     return useQuery<EssayStats>({
         queryKey: ['essays', 'stats', days],
         queryFn: () => request(API_ENDPOINTS.ESSAYS.STATS(days)),
+    })
+}
+
+// ─── Plan (outline) ──────────────────────────────────────────────────────────
+
+export type EssayPlanBody = {
+    label?: string | null
+    claim?: string | null
+    what_kind?: string | null
+    so_what?: string | null
+    what_if?: string | null
+}
+
+export type EssayPlan = {
+    essay_id: number
+    thesis: string | null
+    body_plans: EssayPlanBody[]
+    conclusion_plan: string | null
+    created_at: string | null
+    updated_at: string | null
+}
+
+export type EssayPlanWrite = {
+    thesis?: string | null
+    body_plans: EssayPlanBody[]
+    conclusion_plan?: string | null
+}
+
+export function useEssayPlan(essayId?: number) {
+    const { request } = useHttp()
+    return useQuery<EssayPlan>({
+        queryKey: essayId ? ['essays', 'plan', essayId] : ['essays', 'plan', 'none'],
+        queryFn: () => request(API_ENDPOINTS.ESSAYS.PLAN(essayId as number)),
+        enabled: essayId !== undefined && essayId > 0,
+    })
+}
+
+export function useEssayPlanUpdate() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation<EssayPlan, Error, { id: number; data: EssayPlanWrite }>({
+        mutationFn: ({ id, data }) =>
+            request(API_ENDPOINTS.ESSAYS.PLAN(id), { method: 'PUT', body: data }),
+        onSuccess: (plan, vars) => {
+            qc.setQueryData(['essays', 'plan', vars.id], plan)
+        },
     })
 }

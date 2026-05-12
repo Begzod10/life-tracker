@@ -250,6 +250,7 @@ export const API_ENDPOINTS = {
             return qs ? `${API_URL}/essays/errors/list?${qs}` : `${API_URL}/essays/errors/list`
         },
         STATS: (days = 60) => `${API_URL}/essays/stats/overview?days=${days}`,
+        PLAN: (id: number) => `${API_URL}/essays/${id}/plan`,
     },
 
     TIMETABLE: {

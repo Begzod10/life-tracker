@@ -979,11 +979,21 @@ class EssayPromptRequest(BaseModel):
     use_weak_words: bool = True
 
 
+class EssayExistingTopicRef(BaseModel):
+    id: int
+    title: Optional[str] = None
+    prompt: str
+    level: str
+    status: str
+
+
 class EssayPromptResponse(BaseModel):
     prompt: str
+    title: Optional[str] = None
     suggested_word_count: int
     target_words: List[str]
     level: str
+    existing_essay: Optional[EssayExistingTopicRef] = None
 
 
 class EssayCreate(BaseModel):
@@ -1039,3 +1049,26 @@ class EssayListItem(BaseModel):
     deep_score: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class EssayPlanBody(BaseModel):
+    label: Optional[str] = None
+    claim: Optional[str] = None
+    what_kind: Optional[str] = None
+    so_what: Optional[str] = None
+    what_if: Optional[str] = None
+
+
+class EssayPlanWrite(BaseModel):
+    thesis: Optional[str] = None
+    body_plans: List[EssayPlanBody] = Field(default_factory=list)
+    conclusion_plan: Optional[str] = None
+
+
+class EssayPlanRead(BaseModel):
+    essay_id: int
+    thesis: Optional[str] = None
+    body_plans: List[EssayPlanBody] = Field(default_factory=list)
+    conclusion_plan: Optional[str] = None
+    updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None

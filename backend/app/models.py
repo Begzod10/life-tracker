@@ -102,6 +102,11 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan"
     )
+    essay_plans = relationship(
+        "EssayPlan",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
@@ -693,6 +698,12 @@ class Essay(Base):
     person = relationship("Person", back_populates="essays")
     attempts = relationship("EssayAttempt", back_populates="essay", cascade="all, delete-orphan")
     errors = relationship("EssayError", back_populates="essay", cascade="all, delete-orphan")
+    plan = relationship(
+        "EssayPlan",
+        back_populates="essay",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class EssayAttempt(Base):
@@ -733,3 +744,31 @@ class EssayError(Base):
 
     essay = relationship("Essay", back_populates="errors")
     person = relationship("Person", back_populates="essay_errors")
+
+
+class EssayPlan(Base):
+    """Optional outline that scaffolds an essay before writing.
+
+    body_plans is a JSON-encoded list of dicts: each body paragraph has slots like
+    {label, claim, what_kind, so_what, what_if} — the four scaffolding questions
+    the learner uses to structure an argument.
+    """
+    __tablename__ = "essay_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    essay_id = Column(
+        Integer,
+        ForeignKey("essays.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    thesis = Column(Text, nullable=True)
+    body_plans = Column(Text, nullable=True)
+    conclusion_plan = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    essay = relationship("Essay", back_populates="plan")
+    person = relationship("Person", back_populates="essay_plans")

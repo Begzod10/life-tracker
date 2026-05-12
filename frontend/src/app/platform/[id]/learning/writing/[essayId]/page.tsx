@@ -2,16 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, Save, Sparkles, ZapIcon, CheckCircle2, AlertTriangle, Target as TargetIcon,
-    Clock, Trophy, Lightbulb,
+    Clock, Trophy, Lightbulb, ChevronDown, ChevronRight, Plus, Trash2, Layers,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
     useEssay, useEssayUpdate, useEssayQuickCheck, useEssayDeepReview, useEssayAttempts,
+    useEssayPlan, useEssayPlanUpdate,
     type Essay, type EssayDeepSentence, type EssayAttempt,
+    type EssayPlanBody, type EssayStructureCoverage, type EssayStructureCoverageBody,
 } from '@/lib/hooks/use-essays'
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -214,6 +216,8 @@ export default function EssayEditorPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Editor */}
                     <div className="lg:col-span-2 space-y-4">
+                        <PlannerPanel essayId={essay.id} />
+
                         <input
                             type="text"
                             placeholder="Title (optional)"
@@ -368,6 +372,10 @@ function DeepReviewPanel({ essay }: { essay: Essay }) {
                 </div>
             </Card>
 
+            {review.structure_coverage && (
+                <StructureCoverageCard coverage={review.structure_coverage} />
+            )}
+
             {review.sentences && review.sentences.length > 0 && (
                 <Card className="p-5 bg-white/2.5 border border-white/10">
                     <h4 className="text-sm uppercase tracking-wider text-white/60 mb-3">Sentence fixes</h4>
@@ -466,5 +474,393 @@ function AttemptHistory({ attempts }: { attempts: EssayAttempt[] }) {
                 </span>
             </p>
         </Card>
+    )
+}
+
+// ─── Planner ─────────────────────────────────────────────────────────────────
+
+const EMPTY_BODY: EssayPlanBody = { label: '', claim: '', what_kind: '', so_what: '', what_if: '' }
+
+function bodyHasContent(b: EssayPlanBody): boolean {
+    return Boolean(
+        (b.label || '').trim() ||
+        (b.claim || '').trim() ||
+        (b.what_kind || '').trim() ||
+        (b.so_what || '').trim() ||
+        (b.what_if || '').trim(),
+    )
+}
+
+function planIsEmpty(thesis: string, bodies: EssayPlanBody[], conclusion: string): boolean {
+    return !thesis.trim() && !conclusion.trim() && !bodies.some(bodyHasContent)
+}
+
+function PlannerPanel({ essayId }: { essayId: number }) {
+    const { data: plan, isLoading } = useEssayPlan(essayId)
+    const { mutate: savePlan, isPending: saving } = useEssayPlanUpdate()
+
+    const [thesis, setThesis] = useState('')
+    const [conclusion, setConclusion] = useState('')
+    const [bodies, setBodies] = useState<EssayPlanBody[]>([{ ...EMPTY_BODY, label: 'Body 1' }, { ...EMPTY_BODY, label: 'Body 2' }])
+    const [hydrated, setHydrated] = useState(false)
+    const [open, setOpen] = useState(false)
+    const [dirty, setDirty] = useState(false)
+    const [saved, setSaved] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!plan || hydrated) return
+        setThesis(plan.thesis || '')
+        setConclusion(plan.conclusion_plan || '')
+        if (plan.body_plans && plan.body_plans.length > 0) {
+            setBodies(plan.body_plans.map(b => ({
+                label: b.label ?? '',
+                claim: b.claim ?? '',
+                what_kind: b.what_kind ?? '',
+                so_what: b.so_what ?? '',
+                what_if: b.what_if ?? '',
+            })))
+        }
+        const hasContent = Boolean(
+            (plan.thesis || '').trim() ||
+            (plan.conclusion_plan || '').trim() ||
+            (plan.body_plans || []).some(bodyHasContent),
+        )
+        // Default open the first time we visit an essay with no plan yet, so the
+        // learner sees the scaffold; collapse it once they've filled it in.
+        setOpen(!hasContent)
+        setHydrated(true)
+    }, [plan, hydrated])
+
+    const completion = useMemo(() => {
+        let filled = 0
+        let total = 0
+        if (thesis !== undefined) { total += 1; if (thesis.trim()) filled += 1 }
+        for (const b of bodies) {
+            total += 4
+            if ((b.claim || '').trim()) filled += 1
+            if ((b.what_kind || '').trim()) filled += 1
+            if ((b.so_what || '').trim()) filled += 1
+            if ((b.what_if || '').trim()) filled += 1
+        }
+        total += 1
+        if (conclusion.trim()) filled += 1
+        return { filled, total, pct: total ? Math.round((filled / total) * 100) : 0 }
+    }, [thesis, bodies, conclusion])
+
+    const empty = planIsEmpty(thesis, bodies, conclusion)
+
+    const updateBody = (idx: number, patch: Partial<EssayPlanBody>) => {
+        setBodies(prev => prev.map((b, i) => i === idx ? { ...b, ...patch } : b))
+        setDirty(true)
+        setSaved(null)
+    }
+
+    const addBody = () => {
+        setBodies(prev => [...prev, { ...EMPTY_BODY, label: `Body ${prev.length + 1}` }])
+        setDirty(true)
+        setSaved(null)
+    }
+
+    const removeBody = (idx: number) => {
+        setBodies(prev => prev.filter((_, i) => i !== idx))
+        setDirty(true)
+        setSaved(null)
+    }
+
+    const handleSave = () => {
+        savePlan(
+            {
+                id: essayId,
+                data: {
+                    thesis: thesis.trim() || null,
+                    conclusion_plan: conclusion.trim() || null,
+                    body_plans: bodies.map(b => ({
+                        label: (b.label || '').trim() || null,
+                        claim: (b.claim || '').trim() || null,
+                        what_kind: (b.what_kind || '').trim() || null,
+                        so_what: (b.so_what || '').trim() || null,
+                        what_if: (b.what_if || '').trim() || null,
+                    })),
+                },
+            },
+            {
+                onSuccess: () => {
+                    setDirty(false)
+                    setSaved(new Date().toLocaleTimeString())
+                },
+            },
+        )
+    }
+
+    return (
+        <Card className="p-0 bg-white/2.5 border border-violet-500/20 overflow-hidden">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-violet-500/5 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    {open ? (
+                        <ChevronDown className="w-4 h-4 text-violet-300" />
+                    ) : (
+                        <ChevronRight className="w-4 h-4 text-violet-300" />
+                    )}
+                    <Layers className="w-4 h-4 text-violet-300" />
+                    <span className="text-sm font-semibold text-white">Plan your structure</span>
+                    {!empty && (
+                        <span className="text-[10px] text-white/40 ml-1">
+                            {completion.filled}/{completion.total} slots
+                        </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    {empty && (
+                        <span className="text-[10px] uppercase tracking-wider text-violet-300/80">
+                            Recommended
+                        </span>
+                    )}
+                    {!empty && (
+                        <div className="w-20 h-1 rounded-full bg-white/5 overflow-hidden">
+                            <div
+                                className="h-full bg-violet-400"
+                                style={{ width: `${completion.pct}%` }}
+                            />
+                        </div>
+                    )}
+                </div>
+            </button>
+
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="px-4 pb-4 space-y-4 border-t border-violet-500/10">
+                            <p className="text-xs text-white/50 mt-3 leading-relaxed">
+                                Before writing, jot down your thesis and the four scaffolding moves
+                                for each body paragraph. Deep review will check whether the finished
+                                essay actually delivers each slot.
+                            </p>
+
+                            <div>
+                                <label className="text-[11px] uppercase tracking-wider text-violet-300 mb-1 block">
+                                    Thesis / position
+                                </label>
+                                <textarea
+                                    value={thesis}
+                                    onChange={(e) => { setThesis(e.target.value); setDirty(true); setSaved(null) }}
+                                    placeholder="State your overall argument or position…"
+                                    rows={2}
+                                    className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-violet-500/40 rounded p-2 text-sm text-white placeholder:text-white/30 resize-y outline-none transition-colors"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                {bodies.map((b, i) => (
+                                    <BodyPlanCard
+                                        key={i}
+                                        index={i}
+                                        body={b}
+                                        canRemove={bodies.length > 1}
+                                        onChange={(patch) => updateBody(i, patch)}
+                                        onRemove={() => removeBody(i)}
+                                    />
+                                ))}
+                                <button
+                                    onClick={addBody}
+                                    className="w-full text-xs text-violet-300 hover:text-violet-200 py-2 border border-dashed border-violet-500/30 rounded hover:bg-violet-500/5 transition-colors flex items-center justify-center gap-1"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                    Add another body paragraph
+                                </button>
+                            </div>
+
+                            <div>
+                                <label className="text-[11px] uppercase tracking-wider text-violet-300 mb-1 block">
+                                    Conclusion plan (optional)
+                                </label>
+                                <textarea
+                                    value={conclusion}
+                                    onChange={(e) => { setConclusion(e.target.value); setDirty(true); setSaved(null) }}
+                                    placeholder="How will you wrap up — restate, recommend, predict…"
+                                    rows={2}
+                                    className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-violet-500/40 rounded p-2 text-sm text-white placeholder:text-white/30 resize-y outline-none transition-colors"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                                <p className="text-[10px] text-white/40">
+                                    {isLoading
+                                        ? 'Loading plan…'
+                                        : saved
+                                            ? `Saved at ${saved}`
+                                            : dirty
+                                                ? 'Unsaved changes'
+                                                : 'Plan up to date'}
+                                </p>
+                                <Button
+                                    onClick={handleSave}
+                                    disabled={saving || !dirty}
+                                    className="h-8 px-3 text-xs bg-violet-500/15 text-violet-200 border border-violet-500/30 hover:bg-violet-500/25"
+                                >
+                                    <Save className="w-3 h-3 mr-1.5" />
+                                    {saving ? 'Saving…' : dirty ? 'Save plan' : 'Saved'}
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </Card>
+    )
+}
+
+function BodyPlanCard({ index, body, canRemove, onChange, onRemove }: {
+    index: number
+    body: EssayPlanBody
+    canRemove: boolean
+    onChange: (patch: Partial<EssayPlanBody>) => void
+    onRemove: () => void
+}) {
+    return (
+        <div className="rounded-md border border-violet-500/15 bg-violet-500/5 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <input
+                    type="text"
+                    value={body.label || ''}
+                    onChange={(e) => onChange({ label: e.target.value })}
+                    placeholder={`Body ${index + 1}`}
+                    className="bg-transparent text-sm font-semibold text-violet-200 placeholder:text-violet-300/50 outline-none flex-1 min-w-0"
+                />
+                {canRemove && (
+                    <button
+                        onClick={onRemove}
+                        className="text-white/30 hover:text-rose-400 transition-colors p-1"
+                        title="Remove body paragraph"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <SlotInput
+                    label="Claim (why?)"
+                    placeholder="e.g. Academic learning"
+                    value={body.claim || ''}
+                    onChange={(v) => onChange({ claim: v })}
+                />
+                <SlotInput
+                    label="What kind?"
+                    placeholder="e.g. critical thinking, foundation"
+                    value={body.what_kind || ''}
+                    onChange={(v) => onChange({ what_kind: v })}
+                />
+                <SlotInput
+                    label="So what?"
+                    placeholder="e.g. ability to handle complex tasks"
+                    value={body.so_what || ''}
+                    onChange={(v) => onChange({ so_what: v })}
+                />
+                <SlotInput
+                    label="What if not?"
+                    placeholder="e.g. lack of ideas, weaker analysis"
+                    value={body.what_if || ''}
+                    onChange={(v) => onChange({ what_if: v })}
+                />
+            </div>
+        </div>
+    )
+}
+
+function SlotInput({ label, placeholder, value, onChange }: {
+    label: string
+    placeholder: string
+    value: string
+    onChange: (v: string) => void
+}) {
+    return (
+        <div>
+            <label className="text-[10px] uppercase tracking-wider text-violet-300/80 mb-1 block">
+                {label}
+            </label>
+            <input
+                type="text"
+                value={value}
+                placeholder={placeholder}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-violet-500/40 rounded px-2 py-1.5 text-xs text-white placeholder:text-white/30 outline-none transition-colors"
+            />
+        </div>
+    )
+}
+
+function StructureCoverageCard({ coverage }: { coverage: EssayStructureCoverage }) {
+    return (
+        <Card className="p-5 bg-white/2.5 border border-violet-500/20">
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-violet-300" />
+                    Plan coverage
+                </h4>
+                <div className="text-right">
+                    <p className="text-2xl font-bold text-violet-300">
+                        {coverage.overall_score}<span className="text-white/30 text-sm">/25</span>
+                    </p>
+                </div>
+            </div>
+
+            {coverage.summary && (
+                <p className="text-sm text-white/80 leading-relaxed mb-3">{coverage.summary}</p>
+            )}
+
+            <div className="flex items-center gap-3 text-xs text-white/60 mb-3">
+                <CoverageDot ok={coverage.thesis_present} label="thesis" />
+                <CoverageDot ok={coverage.conclusion_present} label="conclusion" />
+            </div>
+
+            {coverage.bodies && coverage.bodies.length > 0 && (
+                <div className="space-y-2">
+                    {coverage.bodies.map((b, i) => (
+                        <BodyCoverageRow key={i} body={b} fallbackIndex={i} />
+                    ))}
+                </div>
+            )}
+        </Card>
+    )
+}
+
+function BodyCoverageRow({ body, fallbackIndex }: { body: EssayStructureCoverageBody; fallbackIndex: number }) {
+    return (
+        <div className="rounded-md border border-violet-500/10 bg-violet-500/5 p-2.5">
+            <p className="text-xs font-semibold text-violet-200 mb-1.5">
+                {body.label || `Body ${fallbackIndex + 1}`}
+            </p>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+                <CoverageDot ok={body.claim_covered} label="claim" />
+                <CoverageDot ok={body.what_kind_covered} label="what kind" />
+                <CoverageDot ok={body.so_what_covered} label="so what" />
+                <CoverageDot ok={body.what_if_covered} label="what if" />
+            </div>
+            {body.notes && (
+                <p className="text-xs text-white/60 mt-2">{body.notes}</p>
+            )}
+        </div>
+    )
+}
+
+function CoverageDot({ ok, label }: { ok: boolean; label: string }) {
+    return (
+        <span className={
+            ok
+                ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300'
+                : 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-300'
+        }>
+            {ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+            {label}
+        </span>
     )
 }

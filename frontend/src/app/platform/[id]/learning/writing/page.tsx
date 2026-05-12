@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, PenLine, Sparkles, Plus, Trash2, Clock, Target as TargetIcon, TrendingUp } from 'lucide-react'
+import { ArrowLeft, PenLine, Sparkles, Plus, Trash2, Clock, Target as TargetIcon, TrendingUp, AlertCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FormField, SelectInput, TextInput, TextareaInput } from '@/components/modals/form-components'
 import {
     useEssays, useEssayCreate, useEssayDelete, useEssayPrompt,
     type EssayLevel,
+    type EssayExistingTopicRef,
 } from '@/lib/hooks/use-essays'
 
 const LEVELS: EssayLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
@@ -29,6 +30,7 @@ export default function WritingListPage() {
     const [useWeak, setUseWeak] = useState(true)
     const [customPrompt, setCustomPrompt] = useState('')
     const [generatedPrompt, setGeneratedPrompt] = useState<{ prompt: string; target_words: string[]; suggested_word_count: number } | null>(null)
+    const [existingMatch, setExistingMatch] = useState<EssayExistingTopicRef | null>(null)
     const [error, setError] = useState<string | null>(null)
 
     const { data: essays = [], isLoading } = useEssays()
@@ -41,14 +43,18 @@ export default function WritingListPage() {
 
     const handleGenerate = () => {
         setError(null)
+        setExistingMatch(null)
         gen(
             { level, topic_hint: hint || undefined, use_weak_words: useWeak },
             {
-                onSuccess: (data) => setGeneratedPrompt({
-                    prompt: data.prompt,
-                    target_words: data.target_words,
-                    suggested_word_count: data.suggested_word_count,
-                }),
+                onSuccess: (data) => {
+                    setGeneratedPrompt({
+                        prompt: data.prompt,
+                        target_words: data.target_words,
+                        suggested_word_count: data.suggested_word_count,
+                    })
+                    setExistingMatch(data.existing_essay ?? null)
+                },
                 onError: (e) => setError(e.message),
             },
         )
@@ -64,6 +70,10 @@ export default function WritingListPage() {
                 onError: (e) => setError(e.message),
             },
         )
+    }
+
+    const handleOpenExisting = (essayId: number) => {
+        router.push(`/platform/${params.id}/learning/writing/${essayId}`)
     }
 
     return (
@@ -95,7 +105,7 @@ export default function WritingListPage() {
                             Progress
                         </Button>
                         <Button
-                            onClick={() => { setShowNew(true); setGeneratedPrompt(null); setError(null); }}
+                            onClick={() => { setShowNew(true); setGeneratedPrompt(null); setExistingMatch(null); setError(null); }}
                             className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
                         >
                             <Plus className="w-4 h-4 mr-2" />
@@ -149,7 +159,7 @@ export default function WritingListPage() {
                                 </Button>
                                 <Button
                                     variant="ghost"
-                                    onClick={() => { setShowNew(false); setGeneratedPrompt(null); setCustomPrompt(''); }}
+                                    onClick={() => { setShowNew(false); setGeneratedPrompt(null); setExistingMatch(null); setCustomPrompt(''); }}
                                     className="text-white/60 hover:text-white"
                                 >
                                     Cancel
@@ -160,6 +170,43 @@ export default function WritingListPage() {
                                 <div className="mt-4 p-3 rounded-md bg-rose-500/10 border border-rose-500/30 text-sm text-rose-300">
                                     {error}
                                 </div>
+                            )}
+
+                            {existingMatch && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-4 p-3 rounded-md bg-amber-500/10 border border-amber-500/30"
+                                >
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-amber-200">
+                                                You already have an essay on a similar topic
+                                                <span className="text-white/40"> ({existingMatch.level} · {existingMatch.status})</span>
+                                            </p>
+                                            <p className="text-sm text-white/80 mt-1 line-clamp-2">
+                                                {existingMatch.title || existingMatch.prompt}
+                                            </p>
+                                            <div className="mt-2 flex gap-2">
+                                                <Button
+                                                    onClick={() => handleOpenExisting(existingMatch.id)}
+                                                    className="h-8 px-3 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40"
+                                                >
+                                                    Open existing essay
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={handleGenerate}
+                                                    disabled={generating}
+                                                    className="h-8 px-3 text-xs text-white/60 hover:text-white"
+                                                >
+                                                    Try a different topic
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
                             )}
 
                             {generatedPrompt && (
@@ -187,7 +234,7 @@ export default function WritingListPage() {
                                         >
                                             {creating ? 'Starting…' : 'Start writing'}
                                         </Button>
-                                        <Button variant="ghost" onClick={() => setGeneratedPrompt(null)} className="text-white/60 hover:text-white">
+                                        <Button variant="ghost" onClick={() => { setGeneratedPrompt(null); setExistingMatch(null) }} className="text-white/60 hover:text-white">
                                             Generate another
                                         </Button>
                                     </div>
