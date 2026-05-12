@@ -21,17 +21,32 @@ class AiWordRequest(BaseModel):
     word: str = Field(..., min_length=1, max_length=200)
 
 
+CEFR_DIFFICULTY_RUBRIC = (
+    "CEFR difficulty rubric — assess the WORD itself, not the topic. Use:\n"
+    "  • A1 — survival vocabulary, top ~500 most frequent English words (cat, eat, house).\n"
+    "  • A2 — everyday concrete words, top ~1500 (kitchen, weather, friendly).\n"
+    "  • B1 — common abstract or topical words, top ~3000 (improve, advantage, environment).\n"
+    "  • B2 — upper-intermediate, lower-frequency or academic words (substantial, undermine, sustainable).\n"
+    "  • C1 — advanced / formal / less-frequent (perseverance, intricate, scrutinize).\n"
+    "  • C2 — rare, literary, technical, or highly idiomatic (idiosyncrasy, ubiquitous, recalcitrant).\n"
+    "Use frequency (Oxford 3000/5000, COCA bands), register (formal vs neutral), and morphological "
+    "complexity. Do not bias the answer toward B1. Single-word entries are graded on their lemma; "
+    "phrasal verbs and idioms are typically B2 or higher."
+)
+
+
 def _ai_word_prompt(word: str) -> str:
     return (
         f"You are an English-as-a-foreign-language dictionary helper.\n"
         f"For the word or phrase: \"{word.strip()}\"\n\n"
+        f"{CEFR_DIFFICULTY_RUBRIC}\n\n"
         f"Return ONLY a single JSON object with these keys (no markdown, no commentary):\n"
         f"{{\n"
         f"  \"definition\": string,           // a clear 1-2 sentence learner-friendly definition\n"
         f"  \"translation\": string,          // \"<Uzbek (Latin script)> / <Russian>\"  — example: \"Qat'iyat / Настойчивость\"\n"
         f"  \"phonetic\": string,             // IPA in slashes, e.g. \"/ˌpɜː.sɪˈvɪər.əns/\"\n"
         f"  \"part_of_speech\": string,       // one of: noun, verb, adjective, adverb, phrase, idiom\n"
-        f"  \"difficulty\": string,           // one of: A1, A2, B1, B2, C1, C2\n"
+        f"  \"difficulty\": string,           // CEFR level using the rubric above: A1, A2, B1, B2, C1, or C2\n"
         f"  \"examples\": [string, string]    // exactly 2 short, natural example sentences\n"
         f"}}\n\n"
         f"If the input isn't a real English word/phrase, still return your best guess; do not refuse."
@@ -56,7 +71,9 @@ def _ai_module_prompt(topic: str, level: str, count: int) -> str:
     return (
         f"You are designing a vocabulary module for an English learner at CEFR level {level}.\n"
         f"Topic: \"{topic.strip()}\"\n"
-        f"Pick exactly {count} useful, distinct words/phrases at or near level {level}.\n\n"
+        f"Pick exactly {count} useful, distinct words/phrases at or near level {level} "
+        f"(prefer the target level, but a mix one band above or below is fine for natural coverage).\n\n"
+        f"{CEFR_DIFFICULTY_RUBRIC}\n\n"
         f"Return ONLY a JSON array (no markdown, no commentary). Each item must be:\n"
         f"{{\n"
         f"  \"word\": string,\n"
@@ -64,10 +81,10 @@ def _ai_module_prompt(topic: str, level: str, count: int) -> str:
         f"  \"translation\": string,            // \"<Uzbek (Latin)> / <Russian>\"\n"
         f"  \"phonetic\": string,               // IPA in slashes\n"
         f"  \"part_of_speech\": string,         // noun|verb|adjective|adverb|phrase|idiom\n"
-        f"  \"difficulty\": string,             // A1|A2|B1|B2|C1|C2\n"
+        f"  \"difficulty\": string,             // CEFR level for THIS word per the rubric — do NOT just echo {level} for every entry\n"
         f"  \"examples\": [string, string]\n"
         f"}}\n"
-        f"Avoid duplicates. Keep entries concise."
+        f"Avoid duplicates. Keep entries concise. Each word's difficulty must reflect its own register and frequency."
     )
 
 
@@ -78,6 +95,7 @@ def _ai_extract_prompt(text: str, level: str, max_words: int) -> str:
         f"From the text below, pick up to {max_words} words or short phrases that are likely "
         f"useful and at or above the reader's level (don't pick basic words they already know).\n"
         f"Prefer words that recur in academic, IELTS, news, or work contexts.\n\n"
+        f"{CEFR_DIFFICULTY_RUBRIC}\n\n"
         f"Return ONLY a JSON array (no markdown). Each item:\n"
         f"{{\n"
         f"  \"word\": string,                   // exact form to study (lemma if obvious)\n"
@@ -85,7 +103,7 @@ def _ai_extract_prompt(text: str, level: str, max_words: int) -> str:
         f"  \"translation\": string,            // \"<Uzbek (Latin)> / <Russian>\"\n"
         f"  \"phonetic\": string,\n"
         f"  \"part_of_speech\": string,\n"
-        f"  \"difficulty\": string,             // A1..C2\n"
+        f"  \"difficulty\": string,             // CEFR level for THIS word using the rubric — assess each word individually\n"
         f"  \"examples\": [string, string]      // first example MUST be the sentence the word appears in (or close)\n"
         f"}}\n\n"
         f"TEXT:\n\"\"\"\n{text.strip()}\n\"\"\""

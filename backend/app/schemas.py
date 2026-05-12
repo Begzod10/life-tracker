@@ -2,7 +2,7 @@ from pydantic import BaseModel, model_validator
 import datetime as _dt
 from datetime import date, datetime
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 
 
 # ========== PERSON SCHEMAS ==========#
@@ -387,6 +387,13 @@ class SalaryMonthBase(BaseModel):
     net_amount: float = Field(..., description="Net take-home pay", gt=0)
     received_date: Optional[date] = Field(None, description="Date salary was received")
 
+    @field_validator("received_date", mode="before")
+    @classmethod
+    def _blank_received_date_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
 
 class SalaryMonthCreate(SalaryMonthBase):
     """Create a new salary month record"""
@@ -412,6 +419,13 @@ class SalaryMonthUpdate(BaseModel):
     deductions: Optional[float] = Field(None, ge=0)
     net_amount: Optional[float] = Field(None, gt=0)
     received_date: Optional[date] = Field(None)
+
+    @field_validator("received_date", mode="before")
+    @classmethod
+    def _blank_received_date_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class SalaryMonth(SalaryMonthBase):
@@ -575,6 +589,13 @@ class IncomeSourceUpdate(BaseModel):
     frequency: Optional[str] = Field(None)
     received_date: Optional[date] = Field(None)
     description: Optional[str] = Field(None)
+
+    @field_validator("received_date", mode="before")
+    @classmethod
+    def _blank_received_date_to_none(cls, v):
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class IncomeSource(IncomeSourceBase):

@@ -234,7 +234,17 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
     onCancel: () => void
 }) {
     const [form, setForm] = useState(initial)
-    const set = (field: keyof WordFormData) => (v: string) => setForm(p => ({ ...p, [field]: v }))
+    const [aiFilled, setAiFilled] = useState<Set<keyof WordFormData>>(new Set())
+    const set = (field: keyof WordFormData) => (v: string) => {
+        setForm(p => ({ ...p, [field]: v }))
+        // Once the user edits a field, it's no longer "AI-set".
+        setAiFilled(prev => {
+            if (!prev.has(field)) return prev
+            const next = new Set(prev)
+            next.delete(field)
+            return next
+        })
+    }
     const { mutate: aiFill, isPending: isAiLoading, error: aiError, reset: resetAi } = useAiWordDetails()
 
     const handleAiFill = () => {
@@ -242,17 +252,25 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
         if (!w) return
         resetAi()
         aiFill(w, {
-            onSuccess: (data) => setForm(p => ({
-                ...p,
-                definition: data.definition || p.definition,
-                translation: data.translation || p.translation,
-                phonetic: data.phonetic || p.phonetic,
-                part_of_speech: data.part_of_speech || p.part_of_speech,
-                difficulty: data.difficulty || p.difficulty,
-                examples: data.examples?.length ? data.examples.join('\n') : p.examples,
-            })),
+            onSuccess: (data) => {
+                const filled = new Set<keyof WordFormData>()
+                setForm(p => {
+                    const next = { ...p }
+                    if (data.definition) { next.definition = data.definition; filled.add('definition') }
+                    if (data.translation) { next.translation = data.translation; filled.add('translation') }
+                    if (data.phonetic) { next.phonetic = data.phonetic; filled.add('phonetic') }
+                    if (data.part_of_speech) { next.part_of_speech = data.part_of_speech; filled.add('part_of_speech') }
+                    if (data.difficulty) { next.difficulty = data.difficulty; filled.add('difficulty') }
+                    if (data.examples?.length) { next.examples = data.examples.join('\n'); filled.add('examples') }
+                    return next
+                })
+                setAiFilled(filled)
+            },
         })
     }
+
+    const aiBadge = '✨ AI'
+    const desc = (k: keyof WordFormData) => aiFilled.has(k) ? aiBadge : undefined
 
     return (
         <form onSubmit={e => { e.preventDefault(); onSubmit(form) }} className="space-y-4">
@@ -274,7 +292,7 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
                         </button>
                     </div>
                 </FormField>
-                <FormField label="Phonetic">
+                <FormField label="Phonetic" description={desc('phonetic')}>
                     <TextInput value={form.phonetic} onChange={set('phonetic')} placeholder="/ˌpɜː.sɪˈvɪər.əns/" />
                 </FormField>
             </div>
@@ -285,25 +303,32 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
                 </div>
             )}
 
-            <FormField label="Definition" required>
+            {aiFilled.size > 0 && (
+                <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-2.5 text-xs text-indigo-300 flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI filled {aiFilled.size} field{aiFilled.size === 1 ? '' : 's'}. Edit anything to override.
+                </div>
+            )}
+
+            <FormField label="Definition" required description={desc('definition')}>
                 <TextareaInput value={form.definition} onChange={set('definition')} placeholder="Continued effort despite difficulties..." />
             </FormField>
 
-            <FormField label="Translation (Uzbek / Russian)">
+            <FormField label="Translation (Uzbek / Russian)" description={desc('translation')}>
                 <TextInput value={form.translation} onChange={set('translation')} placeholder="e.g. Qat'iyat / Настойчивость" />
             </FormField>
 
             <div className="grid grid-cols-2 gap-4">
-                <FormField label="Part of Speech">
+                <FormField label="Part of Speech" description={desc('part_of_speech')}>
                     <SelectInput value={form.part_of_speech} onChange={set('part_of_speech')} options={POS_OPTIONS} />
                 </FormField>
-                <FormField label="Difficulty">
+                <FormField label="Difficulty" description={desc('difficulty')}>
                     <SelectInput value={form.difficulty} onChange={set('difficulty')}
                         options={DIFFICULTIES.map(d => ({ value: d, label: d }))} />
                 </FormField>
             </div>
 
-            <FormField label="Examples (one per line)">
+            <FormField label="Examples (one per line)" description={desc('examples')}>
                 <TextareaInput
                     value={form.examples}
                     onChange={set('examples')}
