@@ -884,7 +884,28 @@ def _serialize_error(err: models.EssayError) -> dict:
         "suggestion": err.suggestion,
         "level": err.level,
         "created_at": err.created_at,
+        "review_count": err.review_count,
+        "correct_count": err.correct_count,
+        "interval_days": err.interval_days,
+        "last_reviewed_at": err.last_reviewed_at,
+        "next_review_at": err.next_review_at,
+        "archived": err.archived,
     }
+
+
+# ─── Error drill scheduling (matches DictionaryWord ladder) ──────────────────
+DRILL_SR_LADDER_DAYS = [1, 2, 4, 7, 14, 30, 60]
+
+
+def _next_drill_interval_days(prev_interval: int, was_correct: bool) -> int:
+    if not was_correct:
+        return 1
+    if prev_interval <= 0:
+        return DRILL_SR_LADDER_DAYS[0]
+    if prev_interval in DRILL_SR_LADDER_DAYS:
+        i = DRILL_SR_LADDER_DAYS.index(prev_interval)
+        return DRILL_SR_LADDER_DAYS[i + 1] if i + 1 < len(DRILL_SR_LADDER_DAYS) else prev_interval * 2
+    return prev_interval * 2
 
 
 @router.get("/{essay_id}/attempts")
@@ -924,6 +945,130 @@ def list_errors(
         q = q.filter(models.EssayError.essay_id == essay_id)
     rows = q.order_by(desc(models.EssayError.created_at)).limit(limit).all()
     return [_serialize_error(r) for r in rows]
+
+
+@router.get("/errors/drills/due")
+def list_drill_due(
+    kind: Optional[str] = Query(None),
+    level: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return drill cards that are due (or never-seen), ordered weakest-first."""
+    now = datetime.utcnow()
+    q = db.query(models.EssayError).filter(
+        models.EssayError.person_id == current_user.id,
+        models.EssayError.archived == False,
+        or_(
+            models.EssayError.next_review_at.is_(None),
+            models.EssayError.next_review_at <= now,
+        ),
+    )
+    if kind:
+        q = q.filter(models.EssayError.kind == kind)
+    if level:
+        q = q.filter(models.EssayError.level == level)
+    # Prefer never-seen first, then earliest due, then oldest.
+    rows = q.order_by(
+        models.EssayError.next_review_at.is_(None).desc(),
+        models.EssayError.next_review_at.asc().nulls_first(),
+        models.EssayError.created_at.asc(),
+    ).limit(limit).all()
+    return [_serialize_error(r) for r in rows]
+
+
+@router.get("/errors/drills/summary")
+def drill_summary(
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    from sqlalchemy import func as sqlfunc
+
+    now = datetime.utcnow()
+    user_id = current_user.id
+
+    base = db.query(models.EssayError).filter(
+        models.EssayError.person_id == user_id,
+        models.EssayError.archived == False,
+    )
+
+    total = base.with_entities(sqlfunc.count(models.EssayError.id)).scalar() or 0
+    due = base.filter(
+        or_(
+            models.EssayError.next_review_at.is_(None),
+            models.EssayError.next_review_at <= now,
+        ),
+    ).with_entities(sqlfunc.count(models.EssayError.id)).scalar() or 0
+    learned = base.filter(
+        models.EssayError.review_count > 0,
+        models.EssayError.interval_days >= 7,
+    ).with_entities(sqlfunc.count(models.EssayError.id)).scalar() or 0
+
+    by_kind_rows = (
+        base.with_entities(models.EssayError.kind, sqlfunc.count(models.EssayError.id))
+        .group_by(models.EssayError.kind)
+        .all()
+    )
+    by_kind = {k: c for k, c in by_kind_rows}
+
+    return {"total": total, "due": due, "learned": learned, "by_kind": by_kind}
+
+
+@router.post("/errors/{error_id}/review")
+def review_drill(
+    error_id: int,
+    payload: schemas.EssayErrorReview,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    from datetime import timedelta
+
+    err = (
+        db.query(models.EssayError)
+        .filter(
+            models.EssayError.id == error_id,
+            models.EssayError.person_id == current_user.id,
+        )
+        .first()
+    )
+    if err is None:
+        raise HTTPException(status_code=404, detail="Drill card not found.")
+
+    was_correct = bool(payload.correct)
+    now = datetime.utcnow()
+    next_days = _next_drill_interval_days(err.interval_days or 0, was_correct)
+    err.interval_days = next_days
+    err.last_reviewed_at = now
+    err.next_review_at = now + timedelta(days=next_days)
+    err.review_count = (err.review_count or 0) + 1
+    if was_correct:
+        err.correct_count = (err.correct_count or 0) + 1
+
+    db.commit()
+    db.refresh(err)
+    return _serialize_error(err)
+
+
+@router.post("/errors/{error_id}/archive")
+def archive_drill(
+    error_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    err = (
+        db.query(models.EssayError)
+        .filter(
+            models.EssayError.id == error_id,
+            models.EssayError.person_id == current_user.id,
+        )
+        .first()
+    )
+    if err is None:
+        raise HTTPException(status_code=404, detail="Drill card not found.")
+    err.archived = True
+    db.commit()
+    return {"ok": True, "id": err.id}
 
 
 @router.get("/stats/overview")

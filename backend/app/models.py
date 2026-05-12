@@ -728,6 +728,7 @@ class EssayError(Base):
     """One row per discrete issue or vocab upgrade flagged by deep review.
 
     Indexed by person + kind so users can see "all my grammar mistakes" across essays.
+    Each row doubles as a spaced-repetition card for the Drills section.
     """
     __tablename__ = "essay_errors"
 
@@ -740,6 +741,13 @@ class EssayError(Base):
     explanation = Column(Text, nullable=True)
     suggestion = Column(Text, nullable=True)
     level = Column(String(10), nullable=True)
+    # SRS scheduling — mirrors DictionaryWord so drills feel consistent.
+    review_count = Column(Integer, nullable=False, default=0)
+    correct_count = Column(Integer, nullable=False, default=0)
+    interval_days = Column(Integer, nullable=False, default=0)
+    last_reviewed_at = Column(DateTime, nullable=True)
+    next_review_at = Column(DateTime, nullable=True, index=True)
+    archived = Column(Boolean, nullable=False, default=False)  # user-dismissed from drills
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     essay = relationship("Essay", back_populates="errors")

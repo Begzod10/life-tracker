@@ -248,6 +248,19 @@ export type EssayError = {
     suggestion: string | null
     level: string | null
     created_at: string
+    review_count: number
+    correct_count: number
+    interval_days: number
+    last_reviewed_at: string | null
+    next_review_at: string | null
+    archived: boolean
+}
+
+export type EssayDrillSummary = {
+    total: number
+    due: number
+    learned: number
+    by_kind: Record<string, number>
 }
 
 export type EssayTimelinePoint = {
@@ -347,6 +360,51 @@ export function useEssayPlanUpdate() {
             request(API_ENDPOINTS.ESSAYS.PLAN(id), { method: 'PUT', body: data }),
         onSuccess: (plan, vars) => {
             qc.setQueryData(['essays', 'plan', vars.id], plan)
+        },
+    })
+}
+
+// ─── Error drills ────────────────────────────────────────────────────────────
+
+export function useEssayDrillsDue(filters: { kind?: string; level?: string; limit?: number } = {}) {
+    const { request } = useHttp()
+    return useQuery<EssayError[]>({
+        queryKey: ['essays', 'drills', 'due', filters],
+        queryFn: () => request(API_ENDPOINTS.ESSAYS.DRILLS_DUE(filters)),
+    })
+}
+
+export function useEssayDrillsSummary() {
+    const { request } = useHttp()
+    return useQuery<EssayDrillSummary>({
+        queryKey: ['essays', 'drills', 'summary'],
+        queryFn: () => request(API_ENDPOINTS.ESSAYS.DRILLS_SUMMARY),
+    })
+}
+
+export function useEssayDrillReview() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation<EssayError, Error, { id: number; correct: boolean }>({
+        mutationFn: ({ id, correct }) =>
+            request(API_ENDPOINTS.ESSAYS.DRILL_REVIEW(id), {
+                method: 'POST',
+                body: { correct },
+            }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['essays', 'drills'] })
+        },
+    })
+}
+
+export function useEssayDrillArchive() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation<{ ok: boolean; id: number }, Error, number>({
+        mutationFn: (id) =>
+            request(API_ENDPOINTS.ESSAYS.DRILL_ARCHIVE(id), { method: 'POST', body: {} }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['essays', 'drills'] })
         },
     })
 }

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FormField, SelectInput, TextInput, TextareaInput } from '@/components/modals/form-components'
 import {
-    useEssays, useEssayCreate, useEssayDelete, useEssayPrompt,
+    useEssays, useEssayCreate, useEssayDelete, useEssayPrompt, useEssayDrillsSummary,
     type EssayLevel,
     type EssayExistingTopicRef,
 } from '@/lib/hooks/use-essays'
@@ -34,6 +34,7 @@ export default function WritingListPage() {
     const [error, setError] = useState<string | null>(null)
 
     const { data: essays = [], isLoading } = useEssays()
+    const { data: drillSummary } = useEssayDrillsSummary()
     const { mutate: gen, isPending: generating } = useEssayPrompt()
     const { mutate: createEssay, isPending: creating } = useEssayCreate()
     const { mutate: del } = useEssayDelete()
@@ -96,6 +97,19 @@ export default function WritingListPage() {
                         <p className="text-white/50 mt-1">Write essays, get AI feedback at your CEFR level.</p>
                     </div>
                     <div className="flex gap-2">
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.push(`/platform/${params.id}/learning/writing/drills`)}
+                            className="relative text-white/70 hover:text-white border border-white/10"
+                        >
+                            <TargetIcon className="w-4 h-4 mr-2" />
+                            Drills
+                            {drillSummary && drillSummary.due > 0 && (
+                                <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-bold border border-rose-500/30">
+                                    {drillSummary.due > 99 ? '99+' : drillSummary.due}
+                                </span>
+                            )}
+                        </Button>
                         <Button
                             variant="ghost"
                             onClick={() => router.push(`/platform/${params.id}/learning/writing/progress`)}

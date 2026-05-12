@@ -28,12 +28,116 @@ const ISSUE_COLOR: Record<string, string> = {
     style: 'border-sky-500/30 bg-sky-500/5',
     cohesion: 'border-violet-500/30 bg-violet-500/5',
     clarity: 'border-emerald-500/30 bg-emerald-500/5',
+    upgrade: 'border-amber-500/30 bg-amber-500/5',
 }
+
+const HIGHLIGHT_COLOR: Record<string, string> = {
+    grammar: 'bg-rose-500/20 text-rose-100 border-b-2 border-rose-400/60',
+    vocab: 'bg-amber-500/20 text-amber-100 border-b-2 border-amber-400/60',
+    style: 'bg-sky-500/20 text-sky-100 border-b-2 border-sky-400/60',
+    cohesion: 'bg-violet-500/20 text-violet-100 border-b-2 border-violet-400/60',
+    clarity: 'bg-emerald-500/20 text-emerald-100 border-b-2 border-emerald-400/60',
+    upgrade: 'bg-amber-500/15 text-amber-100 border-b-2 border-dashed border-amber-400/60',
+    task_response: 'bg-rose-500/20 text-rose-100 border-b-2 border-rose-400/60',
+}
+
+type HighlightItem = {
+    key: string                // stable id, e.g. "s-0" or "v-2"
+    kind: 'sentence' | 'upgrade'
+    issue: string              // sentence.issue or 'upgrade'
+    original: string
+    explanation: string
+    suggestion: string
+}
+
+type HighlightSegment =
+    | { type: 'text'; text: string }
+    | { type: 'mark'; text: string; item: HighlightItem; order: number }
 
 function countWords(s: string) {
     if (!s) return 0
     const m = s.match(/\b[\w'\-]+\b/g)
     return m ? m.length : 0
+}
+
+function buildHighlightItems(review: Essay['deep_review']): HighlightItem[] {
+    if (!review) return []
+    const sentences: HighlightItem[] = (review.sentences || []).map((s, i) => ({
+        key: `s-${i}`,
+        kind: 'sentence',
+        issue: (s.issue || 'clarity').toLowerCase(),
+        original: s.original || '',
+        explanation: s.explanation || '',
+        suggestion: s.suggestion || '',
+    }))
+    const upgrades: HighlightItem[] = (review.vocabulary_upgrades || []).map((u, i) => ({
+        key: `v-${i}`,
+        kind: 'upgrade',
+        issue: 'upgrade',
+        original: u.from || '',
+        explanation: u.why || '',
+        suggestion: u.to || '',
+    }))
+    return [...sentences, ...upgrades]
+}
+
+function segmentBodyForHighlights(body: string, items: HighlightItem[]): {
+    segments: HighlightSegment[]
+    missing: HighlightItem[]
+    orderByKey: Record<string, number>
+} {
+    if (!body || items.length === 0) {
+        return { segments: [{ type: 'text', text: body || '' }], missing: items, orderByKey: {} }
+    }
+    const lower = body.toLowerCase()
+    type Range = { start: number; end: number; item: HighlightItem }
+    const ranges: Range[] = []
+    const missing: HighlightItem[] = []
+
+    for (const item of items) {
+        const needle = (item.original || '').trim()
+        if (!needle) {
+            missing.push(item)
+            continue
+        }
+        const lowerNeedle = needle.toLowerCase()
+        let from = 0
+        let placed = false
+        while (from < lower.length) {
+            const pos = lower.indexOf(lowerNeedle, from)
+            if (pos === -1) break
+            const end = pos + needle.length
+            const overlaps = ranges.some(r => !(end <= r.start || pos >= r.end))
+            if (!overlaps) {
+                ranges.push({ start: pos, end, item })
+                placed = true
+                break
+            }
+            from = pos + 1
+        }
+        if (!placed) missing.push(item)
+    }
+
+    ranges.sort((a, b) => a.start - b.start)
+
+    const orderByKey: Record<string, number> = {}
+    ranges.forEach((r, i) => { orderByKey[r.item.key] = i + 1 })
+
+    const segments: HighlightSegment[] = []
+    let cursor = 0
+    for (const r of ranges) {
+        if (r.start > cursor) segments.push({ type: 'text', text: body.slice(cursor, r.start) })
+        segments.push({
+            type: 'mark',
+            text: body.slice(r.start, r.end),
+            item: r.item,
+            order: orderByKey[r.item.key],
+        })
+        cursor = r.end
+    }
+    if (cursor < body.length) segments.push({ type: 'text', text: body.slice(cursor) })
+
+    return { segments, missing, orderByKey }
 }
 
 export default function EssayEditorPage() {
@@ -50,6 +154,8 @@ export default function EssayEditorPage() {
     const [body, setBody] = useState('')
     const [title, setTitle] = useState('')
     const [dirty, setDirty] = useState(false)
+    const [editMode, setEditMode] = useState(false)
+    const [activeHighlight, setActiveHighlight] = useState<string | null>(null)
     const tickRef = useRef<number>(0)
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -78,6 +184,16 @@ export default function EssayEditorPage() {
         const lower = body.toLowerCase()
         return new Set(essay.target_words.filter(w => lower.includes(w.toLowerCase())).map(w => w.toLowerCase()))
     }, [body, essay?.target_words])
+
+    const highlightItems = useMemo(() => buildHighlightItems(essay?.deep_review ?? null), [essay?.deep_review])
+    const highlight = useMemo(
+        () => segmentBodyForHighlights(essay?.body || '', highlightItems),
+        [essay?.body, highlightItems],
+    )
+    const reviewedAndUnedited = Boolean(
+        essay?.deep_review && !dirty && (essay?.body || '') === body,
+    )
+    const showHighlights = reviewedAndUnedited && !editMode
 
     const persistedTimeRef = useRef(0)
     useEffect(() => {
@@ -226,14 +342,38 @@ export default function EssayEditorPage() {
                             className="w-full bg-transparent text-2xl font-semibold text-white placeholder:text-white/30 outline-none border-b border-transparent focus:border-amber-500/30 pb-2"
                         />
 
-                        <textarea
-                            value={body}
-                            onChange={(e) => { setBody(e.target.value); setDirty(true) }}
-                            placeholder="Start writing…"
-                            rows={20}
-                            className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-amber-500/40 rounded-lg p-4 text-white placeholder:text-white/30 resize-y leading-relaxed outline-none transition-colors"
-                            style={{ minHeight: '420px' }}
-                        />
+                        {showHighlights ? (
+                            <HighlightedEssayView
+                                segments={highlight.segments}
+                                missing={highlight.missing}
+                                activeKey={activeHighlight}
+                                onSelect={(key) => setActiveHighlight(prev => prev === key ? null : key)}
+                                onEdit={() => { setEditMode(true); setActiveHighlight(null) }}
+                            />
+                        ) : (
+                            <>
+                                {reviewedAndUnedited && (
+                                    <div className="flex items-center justify-between gap-2 -mt-1 mb-2">
+                                        <p className="text-xs text-white/40">Editing — switch back to inline feedback view.</p>
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => setEditMode(false)}
+                                            className="h-8 px-3 text-xs text-white/60 hover:text-white"
+                                        >
+                                            View feedback
+                                        </Button>
+                                    </div>
+                                )}
+                                <textarea
+                                    value={body}
+                                    onChange={(e) => { setBody(e.target.value); setDirty(true) }}
+                                    placeholder="Start writing…"
+                                    rows={20}
+                                    className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-amber-500/40 rounded-lg p-4 text-white placeholder:text-white/30 resize-y leading-relaxed outline-none transition-colors"
+                                    style={{ minHeight: '420px' }}
+                                />
+                            </>
+                        )}
 
                         <div className="flex items-center justify-between flex-wrap gap-3">
                             <div className="flex items-center gap-3 text-xs text-white/50">
@@ -283,7 +423,14 @@ export default function EssayEditorPage() {
                     <div className="space-y-4">
                         {attempts.length > 0 && <AttemptHistory attempts={attempts} />}
                         {essay.deep_score !== null && essay.deep_review ? (
-                            <DeepReviewPanel essay={essay} />
+                            <DeepReviewPanel
+                                essay={essay}
+                                items={highlightItems}
+                                orderByKey={highlight.orderByKey}
+                                missing={highlight.missing}
+                                activeKey={activeHighlight}
+                                onSelect={(key) => setActiveHighlight(prev => prev === key ? null : key)}
+                            />
                         ) : essay.quick_score !== null && essay.quick_feedback ? (
                             <QuickFeedbackPanel essay={essay} />
                         ) : (
@@ -342,8 +489,28 @@ function Section({ title, items, color, Icon }: { title: string; items: string[]
     )
 }
 
-function DeepReviewPanel({ essay }: { essay: Essay }) {
+type DeepReviewPanelProps = {
+    essay: Essay
+    items: HighlightItem[]
+    orderByKey: Record<string, number>
+    missing: HighlightItem[]
+    activeKey: string | null
+    onSelect: (key: string) => void
+}
+
+function DeepReviewPanel({ essay, items, orderByKey, missing, activeKey, onSelect }: DeepReviewPanelProps) {
     const review = essay.deep_review!
+    const missingKeys = useMemo(() => new Set(missing.map(m => m.key)), [missing])
+
+    useEffect(() => {
+        if (!activeKey) return
+        const el = document.getElementById(`fb-${activeKey}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, [activeKey])
+
+    const sentenceItems = items.filter(i => i.kind === 'sentence')
+    const upgradeItems = items.filter(i => i.kind === 'upgrade')
+
     return (
         <div className="space-y-4">
             <Card className="p-5 bg-white/2.5 border border-amber-500/30">
@@ -376,40 +543,116 @@ function DeepReviewPanel({ essay }: { essay: Essay }) {
                 <StructureCoverageCard coverage={review.structure_coverage} />
             )}
 
-            {review.sentences && review.sentences.length > 0 && (
+            {sentenceItems.length > 0 && (
                 <Card className="p-5 bg-white/2.5 border border-white/10">
                     <h4 className="text-sm uppercase tracking-wider text-white/60 mb-3">Sentence fixes</h4>
                     <div className="space-y-3">
-                        {review.sentences.map((s: EssayDeepSentence, i: number) => (
-                            <div key={i} className={`p-3 rounded-md border ${ISSUE_COLOR[s.issue] || 'border-white/10 bg-white/2.5'}`}>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">{s.issue || 'note'}</span>
-                                <p className="text-sm text-white/80 mt-1 italic">&ldquo;{s.original}&rdquo;</p>
-                                <p className="text-xs text-white/60 mt-1">{s.explanation}</p>
-                                {s.suggestion && (
-                                    <p className="text-sm text-emerald-300 mt-2">→ {s.suggestion}</p>
-                                )}
-                            </div>
+                        {sentenceItems.map(item => (
+                            <FeedbackCard
+                                key={item.key}
+                                item={item}
+                                order={orderByKey[item.key]}
+                                active={activeKey === item.key}
+                                missing={missingKeys.has(item.key)}
+                                onSelect={() => onSelect(item.key)}
+                            />
                         ))}
                     </div>
                 </Card>
             )}
 
-            {review.vocabulary_upgrades && review.vocabulary_upgrades.length > 0 && (
+            {upgradeItems.length > 0 && (
                 <Card className="p-5 bg-white/2.5 border border-white/10">
                     <h4 className="text-sm uppercase tracking-wider text-white/60 mb-3">Vocab upgrades</h4>
                     <div className="space-y-2">
-                        {review.vocabulary_upgrades.map((u, i) => (
-                            <div key={i} className="text-sm">
-                                <span className="text-rose-300">{u.from}</span>
-                                <span className="text-white/30 mx-2">→</span>
-                                <span className="text-emerald-300 font-medium">{u.to}</span>
-                                {u.why && <p className="text-xs text-white/50 mt-0.5 ml-1">{u.why}</p>}
-                            </div>
-                        ))}
+                        {upgradeItems.map(item => {
+                            const order = orderByKey[item.key]
+                            const isMissing = missingKeys.has(item.key)
+                            const isActive = activeKey === item.key
+                            return (
+                                <button
+                                    key={item.key}
+                                    id={`fb-${item.key}`}
+                                    type="button"
+                                    onClick={() => onSelect(item.key)}
+                                    className={
+                                        'w-full text-left text-sm flex items-start gap-2 rounded px-2 py-1.5 transition-colors ' +
+                                        (isActive
+                                            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
+                                            : 'hover:bg-white/2.5')
+                                    }
+                                >
+                                    {order ? (
+                                        <span className="shrink-0 mt-0.5 inline-flex w-5 h-5 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold">
+                                            {order}
+                                        </span>
+                                    ) : (
+                                        <span className="shrink-0 mt-0.5 inline-flex w-5 h-5 items-center justify-center rounded-full bg-white/5 text-white/30 text-[10px]">
+                                            –
+                                        </span>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <div>
+                                            <span className="text-rose-300">{item.original}</span>
+                                            <span className="text-white/30 mx-2">→</span>
+                                            <span className="text-emerald-300 font-medium">{item.suggestion}</span>
+                                        </div>
+                                        {item.explanation && <p className="text-xs text-white/50 mt-0.5">{item.explanation}</p>}
+                                        {isMissing && (
+                                            <p className="text-[10px] text-white/30 mt-0.5 italic">not in current text</p>
+                                        )}
+                                    </div>
+                                </button>
+                            )
+                        })}
                     </div>
                 </Card>
             )}
         </div>
+    )
+}
+
+function FeedbackCard({ item, order, active, missing, onSelect }: {
+    item: HighlightItem
+    order: number | undefined
+    active: boolean
+    missing: boolean
+    onSelect: () => void
+}) {
+    const cls = ISSUE_COLOR[item.issue] || 'border-white/10 bg-white/2.5'
+    return (
+        <button
+            id={`fb-${item.key}`}
+            type="button"
+            onClick={onSelect}
+            className={
+                `w-full text-left p-3 rounded-md border transition-all ${cls} ` +
+                (active ? 'ring-2 ring-amber-400/60 shadow-[0_0_0_2px_rgba(251,191,36,0.15)]' : '')
+            }
+        >
+            <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                    {order ? (
+                        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold">
+                            {order}
+                        </span>
+                    ) : (
+                        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-white/5 text-white/30 text-[10px]">
+                            –
+                        </span>
+                    )}
+                    <span className="text-[10px] uppercase tracking-wider text-white/40">{item.issue || 'note'}</span>
+                </div>
+                {missing && (
+                    <span className="text-[10px] text-white/30 italic">not in current text</span>
+                )}
+            </div>
+            <p className="text-sm text-white/80 italic">&ldquo;{item.original}&rdquo;</p>
+            {item.explanation && <p className="text-xs text-white/60 mt-1">{item.explanation}</p>}
+            {item.suggestion && (
+                <p className="text-sm text-emerald-300 mt-2">→ {item.suggestion}</p>
+            )}
+        </button>
     )
 }
 
@@ -862,5 +1105,73 @@ function CoverageDot({ ok, label }: { ok: boolean; label: string }) {
             {ok ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
             {label}
         </span>
+    )
+}
+
+// ─── Highlighted essay view ──────────────────────────────────────────────────
+
+function HighlightedEssayView({ segments, missing, activeKey, onSelect, onEdit }: {
+    segments: HighlightSegment[]
+    missing: HighlightItem[]
+    activeKey: string | null
+    onSelect: (key: string) => void
+    onEdit: () => void
+}) {
+    useEffect(() => {
+        if (!activeKey) return
+        const el = document.getElementById(`mark-${activeKey}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, [activeKey])
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-white/40 flex items-center gap-2">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    Reviewed view — click any highlight to focus its feedback card.
+                </p>
+                <Button
+                    variant="ghost"
+                    onClick={onEdit}
+                    className="h-8 px-3 text-xs text-white/60 hover:text-white border border-white/10"
+                >
+                    Edit & resubmit
+                </Button>
+            </div>
+
+            <div
+                className="w-full bg-[#0f0f1a] border border-[#2a2b36] rounded-lg p-4 text-white leading-relaxed whitespace-pre-wrap"
+                style={{ minHeight: '420px' }}
+            >
+                {segments.map((seg, idx) => {
+                    if (seg.type === 'text') {
+                        return <span key={idx}>{seg.text}</span>
+                    }
+                    const cls = HIGHLIGHT_COLOR[seg.item.issue] || HIGHLIGHT_COLOR.clarity
+                    const active = activeKey === seg.item.key
+                    return (
+                        <span
+                            key={idx}
+                            id={`mark-${seg.item.key}`}
+                            onClick={() => onSelect(seg.item.key)}
+                            className={
+                                `cursor-pointer rounded-sm px-0.5 transition-colors ${cls} ` +
+                                (active ? 'ring-2 ring-amber-400/70' : 'hover:brightness-125')
+                            }
+                            title={seg.item.suggestion ? `${seg.item.explanation} → ${seg.item.suggestion}` : seg.item.explanation}
+                        >
+                            {seg.text}
+                            <sup className="text-[9px] font-bold ml-0.5 text-white/70">{seg.order}</sup>
+                        </span>
+                    )
+                })}
+            </div>
+
+            {missing.length > 0 && (
+                <p className="text-[11px] text-white/40">
+                    {missing.length} feedback item{missing.length === 1 ? '' : 's'} could not be matched to the current text — see the sidebar.
+                </p>
+            )}
+        </div>
     )
 }

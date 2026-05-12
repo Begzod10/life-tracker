@@ -251,6 +251,19 @@ export const API_ENDPOINTS = {
         },
         STATS: (days = 60) => `${API_URL}/essays/stats/overview?days=${days}`,
         PLAN: (id: number) => `${API_URL}/essays/${id}/plan`,
+        DRILLS_DUE: (args: { kind?: string; level?: string; limit?: number } = {}) => {
+            const p = new URLSearchParams()
+            if (args.kind) p.set('kind', args.kind)
+            if (args.level) p.set('level', args.level)
+            if (args.limit) p.set('limit', String(args.limit))
+            const qs = p.toString()
+            return qs
+                ? `${API_URL}/essays/errors/drills/due?${qs}`
+                : `${API_URL}/essays/errors/drills/due`
+        },
+        DRILLS_SUMMARY: `${API_URL}/essays/errors/drills/summary`,
+        DRILL_REVIEW: (id: number) => `${API_URL}/essays/errors/${id}/review`,
+        DRILL_ARCHIVE: (id: number) => `${API_URL}/essays/errors/${id}/archive`,
     },
 
     TIMETABLE: {

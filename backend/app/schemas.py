@@ -1051,6 +1051,10 @@ class EssayListItem(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class EssayErrorReview(BaseModel):
+    correct: bool
+
+
 class EssayPlanBody(BaseModel):
     label: Optional[str] = None
     claim: Optional[str] = None
