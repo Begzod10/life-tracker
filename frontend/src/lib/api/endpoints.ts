@@ -228,6 +228,30 @@ export const API_ENDPOINTS = {
         HISTORY: (limit = 10) => `${API_URL}/practice/history?limit=${limit}`,
     },
 
+    ESSAYS: {
+        LIST: (status?: string) => status
+            ? `${API_URL}/essays?status=${encodeURIComponent(status)}`
+            : `${API_URL}/essays`,
+        CREATE: `${API_URL}/essays`,
+        GET: (id: number) => `${API_URL}/essays/${id}`,
+        UPDATE: (id: number) => `${API_URL}/essays/${id}`,
+        DELETE: (id: number) => `${API_URL}/essays/${id}`,
+        PROMPT: `${API_URL}/essays/prompt`,
+        QUICK_CHECK: (id: number) => `${API_URL}/essays/${id}/quick-check`,
+        DEEP_REVIEW: (id: number) => `${API_URL}/essays/${id}/deep-review`,
+        ATTEMPTS: (id: number) => `${API_URL}/essays/${id}/attempts`,
+        ERRORS: (args: { kind?: string; level?: string; essayId?: number; limit?: number } = {}) => {
+            const p = new URLSearchParams()
+            if (args.kind) p.set('kind', args.kind)
+            if (args.level) p.set('level', args.level)
+            if (args.essayId !== undefined) p.set('essay_id', String(args.essayId))
+            if (args.limit) p.set('limit', String(args.limit))
+            const qs = p.toString()
+            return qs ? `${API_URL}/essays/errors/list?${qs}` : `${API_URL}/essays/errors/list`
+        },
+        STATS: (days = 60) => `${API_URL}/essays/stats/overview?days=${days}`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate

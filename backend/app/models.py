@@ -87,6 +87,21 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan"
     )
+    essays = relationship(
+        "Essay",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    essay_attempts = relationship(
+        "EssayAttempt",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
+    essay_errors = relationship(
+        "EssayError",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
@@ -650,3 +665,71 @@ class PracticeSession(Base):
     completed_at = Column(DateTime, nullable=True)
 
     person = relationship("Person", back_populates="practice_sessions")
+
+
+class Essay(Base):
+    __tablename__ = "essays"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=True)
+    prompt = Column(Text, nullable=False)
+    body = Column(Text, nullable=False, default="")
+    level = Column(String(10), nullable=False, default="B1")  # A1..C2
+    target_word_count = Column(Integer, nullable=True)
+    target_words = Column(Text, nullable=True)        # JSON-encoded list of strings (suggested dictionary words to use)
+    status = Column(String(20), nullable=False, default="draft")  # draft, submitted
+    word_count = Column(Integer, nullable=False, default=0)
+    quick_score = Column(Integer, nullable=True)      # 0..100
+    quick_feedback = Column(Text, nullable=True)      # JSON {strengths, improvements, suggestions}
+    deep_score = Column(Integer, nullable=True)       # 0..100
+    deep_review = Column(Text, nullable=True)         # JSON {overall, criteria, sentences[]}
+    time_spent_seconds = Column(Integer, nullable=False, default=0)
+    deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    submitted_at = Column(DateTime, nullable=True)
+
+    person = relationship("Person", back_populates="essays")
+    attempts = relationship("EssayAttempt", back_populates="essay", cascade="all, delete-orphan")
+    errors = relationship("EssayError", back_populates="essay", cascade="all, delete-orphan")
+
+
+class EssayAttempt(Base):
+    """One row per quick-check or deep-review run — preserves score history."""
+    __tablename__ = "essay_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    essay_id = Column(Integer, ForeignKey("essays.id", ondelete="CASCADE"), nullable=False, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)         # quick | deep
+    score = Column(Integer, nullable=False)
+    level_estimate = Column(String(10), nullable=True)
+    word_count = Column(Integer, nullable=False, default=0)
+    payload = Column(Text, nullable=True)             # full JSON response (feedback or review)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    essay = relationship("Essay", back_populates="attempts")
+    person = relationship("Person", back_populates="essay_attempts")
+
+
+class EssayError(Base):
+    """One row per discrete issue or vocab upgrade flagged by deep review.
+
+    Indexed by person + kind so users can see "all my grammar mistakes" across essays.
+    """
+    __tablename__ = "essay_errors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    attempt_id = Column(Integer, ForeignKey("essay_attempts.id", ondelete="CASCADE"), nullable=False, index=True)
+    essay_id = Column(Integer, ForeignKey("essays.id", ondelete="CASCADE"), nullable=False, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False, index=True)   # grammar | vocab | style | cohesion | clarity | task_response | upgrade
+    original = Column(Text, nullable=True)
+    explanation = Column(Text, nullable=True)
+    suggestion = Column(Text, nullable=True)
+    level = Column(String(10), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    essay = relationship("Essay", back_populates="errors")
+    person = relationship("Person", back_populates="essay_errors")
