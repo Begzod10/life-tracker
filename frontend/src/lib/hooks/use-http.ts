@@ -19,11 +19,12 @@ interface UseHttpReturn {
 // backend (which rotates the refresh token on every successful call).
 let refreshPromise: Promise<void> | null = null
 
-async function refreshSession(): Promise<void> {
+export async function refreshSession(): Promise<void> {
     if (refreshPromise) return refreshPromise
 
     refreshPromise = (async () => {
-        const response = await fetch(API_ENDPOINTS.AUTH.REFRESH, {
+        // Fast path — rotate the backend refresh-token cookie.
+        const direct = await fetch(API_ENDPOINTS.AUTH.REFRESH, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -31,7 +32,18 @@ async function refreshSession(): Promise<void> {
             body: JSON.stringify({}),
         })
 
-        if (!response.ok) {
+        if (direct.ok) return
+
+        // Slow path — backend cookies are missing or rejected. The NextAuth
+        // session lasts 30 days and can re-mint backend cookies from its
+        // own refresh token. This is the same call AuthProvider runs at
+        // login; running it here recovers expired backend sessions
+        // without bouncing the user to /auth.
+        const installed = await fetch('/api/auth/install-cookies', {
+            method: 'POST',
+            credentials: 'include',
+        })
+        if (!installed.ok) {
             throw new Error('SESSION_EXPIRED')
         }
     })().finally(() => {

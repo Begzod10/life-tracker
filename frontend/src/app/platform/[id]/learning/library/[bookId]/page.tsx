@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-components'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
+import { fetchWithAuth } from '@/lib/api/fetch-with-auth'
 import {
     useBook, useBookUpdate, useBookHighlights, useHighlightCreate, useHighlightDelete,
     type BookHighlight,
@@ -67,20 +68,49 @@ export default function ReaderPage() {
     const [showHighlights, setShowHighlights] = useState(true)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     const [containerWidth, setContainerWidth] = useState(720)
+    const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
+    const [fileError, setFileError] = useState<string | null>(null)
 
     const containerRef = useRef<HTMLDivElement>(null)
     const pageRef = useRef<HTMLDivElement>(null)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const fileSource = useMemo(
-        () => ({ url: API_ENDPOINTS.BOOKS.FILE(bookId), withCredentials: true }),
-        [bookId],
-    )
-
     // ─── PDF runtime ────────────────────────────────────────────────────────
     useEffect(() => {
         ensurePdfJs().then(() => setPdfReady(true)).catch(() => setPdfReady(true))
     }, [])
+
+    // Fetch the PDF bytes through our auth-aware fetch so 401s trigger the
+    // shared refresh-and-retry path. react-pdf's own loader does its own
+    // fetch and can't see our refresh flow, which is why we feed it bytes
+    // instead of a URL.
+    useEffect(() => {
+        if (!bookId) return
+        let cancelled = false
+        setFileBytes(null)
+        setFileError(null)
+        ;(async () => {
+            try {
+                const res = await fetchWithAuth(API_ENDPOINTS.BOOKS.FILE(bookId))
+                if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                const buf = await res.arrayBuffer()
+                if (cancelled) return
+                setFileBytes(new Uint8Array(buf))
+            } catch (err: unknown) {
+                if (cancelled) return
+                setFileError(err instanceof Error ? err.message : 'Failed to load PDF')
+            }
+        })()
+        return () => { cancelled = true }
+    }, [bookId])
+
+    // pdf.js mutates the Uint8Array it receives, so each render gets a fresh
+    // view over the same buffer. Otherwise the second render throws
+    // "TypedArray is detached".
+    const fileSource = useMemo(
+        () => (fileBytes ? { data: new Uint8Array(fileBytes) } : null),
+        [fileBytes],
+    )
 
     // Initial page sync once book loads.
     useEffect(() => {
@@ -272,7 +302,11 @@ export default function ReaderPage() {
                         className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
                         style={{ maxWidth: containerWidth + 32 }}
                     >
-                        {pdfReady ? (
+                        {fileError ? (
+                            <PdfError message={fileError} />
+                        ) : !pdfReady || !fileSource ? (
+                            <PdfLoading />
+                        ) : (
                             <PdfDocument
                                 file={fileSource}
                                 onLoadSuccess={(doc: { numPages: number }) => setNumPages(doc.numPages)}
@@ -289,8 +323,6 @@ export default function ReaderPage() {
                                     loading={<PdfLoading />}
                                 />
                             </PdfDocument>
-                        ) : (
-                            <PdfLoading />
                         )}
                     </div>
 
@@ -370,12 +402,14 @@ function PdfLoading() {
     )
 }
 
-function PdfError() {
+function PdfError({ message }: { message?: string } = {}) {
     return (
         <div className="py-20 text-center text-red-300">
             <BookOpen className="w-8 h-8 text-red-400/60 mx-auto mb-3" />
             <p className="text-sm">Could not load this PDF.</p>
-            <p className="text-xs text-white/40 mt-1">The file may be corrupted or your session expired.</p>
+            <p className="text-xs text-white/40 mt-1">
+                {message ?? 'The file may be corrupted or your session expired.'}
+            </p>
         </div>
     )
 }
