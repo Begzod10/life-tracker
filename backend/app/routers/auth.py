@@ -449,6 +449,7 @@ def change_password(
 
 @router.post('/refresh', response_model=AuthResponse)
 def refresh_token(
+        request: Request,
         response: Response,
         body: Optional[TokenRefreshRequest] = None,
         refresh_cookie: Optional[str] = Cookie(default=None, alias=REFRESH_COOKIE),
@@ -456,41 +457,69 @@ def refresh_token(
 ):
     """Get a new access token using a refresh token. The token is read from
     the httpOnly refresh_token cookie; the request body is accepted as a
-    fallback for older clients still posting the token explicitly."""
+    fallback for older clients still posting the token explicitly.
+
+    Every refusal path emits a structured log line so failures can be
+    diagnosed from `journalctl -u life_tracker.service | grep auth.refresh`
+    without needing to reproduce locally."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired refresh token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    # Useful tags for log correlation when a user complains about being
+    # bounced — we never log token contents, only their presence/source.
+    client_host = request.client.host if request.client else "?"
+    source = "cookie" if refresh_cookie else ("body" if (body and body.refresh_token) else "none")
     token = refresh_cookie or (body.refresh_token if body else None)
     if not token:
+        logger.warning("auth.refresh REJECT no_token client=%s source=%s", client_host, source)
         raise credentials_exception
 
     try:
         payload = verify_refresh_token(token)
-    except ValueError:
+    except ValueError as exc:
+        logger.warning(
+            "auth.refresh REJECT bad_jwt client=%s source=%s reason=%s",
+            client_host, source, exc,
+        )
         raise credentials_exception
 
     email: str = payload.get("sub")
     if not email:
+        logger.warning("auth.refresh REJECT missing_sub client=%s source=%s", client_host, source)
         raise credentials_exception
 
     user = db.query(models.Person).filter(models.Person.email == email).first()
     if not user:
+        logger.warning(
+            "auth.refresh REJECT unknown_user client=%s source=%s email=%s",
+            client_host, source, email,
+        )
         raise credentials_exception
 
     if not user.is_active:
+        logger.warning("auth.refresh REJECT inactive_user client=%s user_id=%s", client_host, user.id)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
 
     if user.is_locked:
+        logger.warning("auth.refresh REJECT locked_user client=%s user_id=%s", client_host, user.id)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is locked")
 
-    # Reject refresh tokens issued before the last logout
+    # Reject refresh tokens issued before the last logout.
+    # iat is whole seconds (`int(time.time())`) while last_logout_at can
+    # have microseconds — compare against the truncated value so a token
+    # issued the same second as a logout isn't unfairly rejected.
     iat = payload.get("iat")
     if iat and user.last_logout_at:
         token_issued_at = datetime.utcfromtimestamp(iat)
-        if token_issued_at <= user.last_logout_at:
+        logout_floor = user.last_logout_at.replace(microsecond=0)
+        if token_issued_at < logout_floor:
+            logger.info(
+                "auth.refresh REJECT pre_logout user_id=%s iat=%s logout=%s",
+                user.id, token_issued_at.isoformat(), user.last_logout_at.isoformat(),
+            )
             raise credentials_exception
 
     # Issue new access token and rotate the refresh token
@@ -512,6 +541,10 @@ def refresh_token(
     )
 
     set_auth_cookies(response, new_access_token, new_refresh_token)
+    logger.info(
+        "auth.refresh OK user_id=%s source=%s client=%s",
+        user.id, source, client_host,
+    )
     return AuthResponse(
         access_token=new_access_token,
         refresh_token=new_refresh_token,
