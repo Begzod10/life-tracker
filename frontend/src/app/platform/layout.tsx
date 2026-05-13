@@ -42,17 +42,19 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 </div>
             )}
 
-            {/* Weather theme tester — pinned just below the sticky header so
-                it doesn't crowd the bottom of the screen on long pages. */}
+            {/* Weather theme tester — slotted into the header bar to the left
+                of the weather widget (which is `fixed top-4 left-1/2`). Sits
+                at the same vertical level as the Back button. */}
             <div
-                className="fixed top-20 left-1/2 -translate-x-1/2 z-40 flex gap-1 p-1.5 rounded-2xl backdrop-blur-md border border-white/10 overflow-x-auto max-w-[calc(100vw-2rem)] scrollbar-none"
+                className="fixed top-3 left-28 z-50 flex gap-1 p-1 rounded-full backdrop-blur-md border border-white/10 overflow-x-auto max-w-[min(46rem,calc(50vw-12rem))] scrollbar-none"
                 style={{ background: 'rgba(0,0,0,0.55)' }}
             >
                 {WEATHER_THEMES.map(t => (
                     <button
                         key={t}
                         onClick={() => setPreviewTheme(previewTheme === t ? null : t)}
-                        className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        title={t}
+                        className={`px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-all whitespace-nowrap ${
                             activeTheme === t ? 'bg-white/20 text-white' : 'text-white/45 hover:text-white hover:bg-white/10'
                         }`}
                     >
