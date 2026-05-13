@@ -2,10 +2,11 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine } from 'lucide-react'
+import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine, Library } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useDictStats } from '@/lib/hooks/use-dictionary'
 import { usePracticeHistory } from '@/lib/hooks/use-practice'
+import { useLibraryStats } from '@/lib/hooks/use-books'
 
 const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const DIFF_COLOR: Record<string, string> = {
@@ -19,6 +20,7 @@ export default function LearningPage() {
     const router = useRouter()
     const { data: stats } = useDictStats()
     const { data: history = [] } = usePracticeHistory()
+    const { data: libraryStats } = useLibraryStats()
 
     const recentSessions = history.slice(0, 5)
 
@@ -49,7 +51,7 @@ export default function LearningPage() {
                 </div>
 
                 {/* Main sections */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
                     {/* Dictionary */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                         <Card
@@ -150,6 +152,37 @@ export default function LearningPage() {
                             <p className="text-sm text-white/50">
                                 AI-graded essays. Quick check or deep review.
                             </p>
+                        </Card>
+                    </motion.div>
+
+                    {/* Library */}
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                        <Card
+                            onClick={() => router.push(`/platform/${params.id}/learning/library`)}
+                            className="p-6 bg-white/2.5 border border-white/5 hover:border-violet-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-2.5 rounded-lg bg-violet-500/10">
+                                    <Library className="w-6 h-6 text-violet-400" />
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" />
+                            </div>
+                            <h2 className="text-lg font-semibold text-white mb-1">Library</h2>
+                            <p className="text-sm text-white/50">
+                                {libraryStats?.total_books
+                                    ? `${libraryStats.total_books} book${libraryStats.total_books === 1 ? '' : 's'}${
+                                          libraryStats.pages_last_30d
+                                              ? ` · ${libraryStats.pages_last_30d}p · 30d`
+                                              : ''
+                                      }`
+                                    : 'Upload PDFs, save words as you read'}
+                            </p>
+                            {libraryStats && libraryStats.by_status?.reading > 0 && (
+                                <div className="mt-4 inline-flex items-center gap-1.5 text-xs text-amber-300/80">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                    {libraryStats.by_status.reading} reading now
+                                </div>
+                            )}
                         </Card>
                     </motion.div>
                 </div>

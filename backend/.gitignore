@@ -11,3 +11,5 @@ alembic/versions
 .idea
 structure
 test_main.http
+uploads/books/*
+!uploads/books/.gitkeep

@@ -266,6 +266,22 @@ export const API_ENDPOINTS = {
         DRILL_ARCHIVE: (id: number) => `${API_URL}/essays/errors/${id}/archive`,
     },
 
+    BOOKS: {
+        LIST: (status?: string) => status
+            ? `${API_URL}/books?status=${encodeURIComponent(status)}`
+            : `${API_URL}/books`,
+        CREATE: `${API_URL}/books`,
+        GET: (id: number) => `${API_URL}/books/${id}`,
+        UPDATE: (id: number) => `${API_URL}/books/${id}`,
+        DELETE: (id: number, hard = false) =>
+            hard ? `${API_URL}/books/${id}?hard=true` : `${API_URL}/books/${id}`,
+        FILE: (id: number) => `${API_URL}/books/${id}/file`,
+        HIGHLIGHTS: (id: number) => `${API_URL}/books/${id}/highlights`,
+        HIGHLIGHT: (id: number, highlightId: number) => `${API_URL}/books/${id}/highlights/${highlightId}`,
+        SESSIONS: (id: number) => `${API_URL}/books/${id}/sessions`,
+        STATS: `${API_URL}/books/stats/overview`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate
