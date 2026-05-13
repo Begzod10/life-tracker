@@ -92,10 +92,28 @@ export default function ReaderPage() {
         ;(async () => {
             try {
                 const res = await fetchWithAuth(API_ENDPOINTS.BOOKS.FILE(bookId))
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                if (!res.ok) {
+                    throw new Error(
+                        res.status === 401
+                            ? 'Session expired — please reload the page.'
+                            : res.status === 404
+                                ? 'PDF file is missing on the server.'
+                                : `Server returned HTTP ${res.status}.`,
+                    )
+                }
                 const buf = await res.arrayBuffer()
                 if (cancelled) return
-                setFileBytes(new Uint8Array(buf))
+                // pdf.js needs the first bytes to be "%PDF-". If we got HTML
+                // back (e.g. a reverse-proxy login page) we'd silently feed
+                // garbage to pdf.js and get a generic parse error — catch
+                // that here so the user sees the real cause.
+                const bytes = new Uint8Array(buf)
+                const head = String.fromCharCode(...bytes.slice(0, 5))
+                if (head !== '%PDF-') {
+                    const ct = res.headers.get('content-type') ?? 'unknown'
+                    throw new Error(`Response wasn't a PDF (content-type: ${ct}). Reload or re-upload.`)
+                }
+                setFileBytes(bytes)
             } catch (err: unknown) {
                 if (cancelled) return
                 setFileError(err instanceof Error ? err.message : 'Failed to load PDF')
@@ -310,8 +328,15 @@ export default function ReaderPage() {
                             <PdfDocument
                                 file={fileSource}
                                 onLoadSuccess={(doc: { numPages: number }) => setNumPages(doc.numPages)}
+                                onLoadError={(err: Error) => {
+                                    // pdf.js rejected the bytes — usually a
+                                    // corrupted PDF or unsupported encryption.
+                                    // Surface the actual parser message so the
+                                    // user knows whether to retry or re-upload.
+                                    setFileError(`pdf.js: ${err.message}`)
+                                }}
                                 loading={<PdfLoading />}
-                                error={<PdfError />}
+                                error={<PdfError message="pdf.js could not parse this file." />}
                                 className="flex items-center justify-center min-h-[60vh]"
                             >
                                 <PdfPage
