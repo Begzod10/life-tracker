@@ -27,12 +27,16 @@ const PdfDocument = dynamic(() => import('react-pdf').then(m => m.Document), { s
 const PdfPage = dynamic(() => import('react-pdf').then(m => m.Page), { ssr: false })
 
 // One-shot worker config + CSS imports. We pull this in once when the page mounts.
+// The query string on workerSrc is tied to pdf.js's API version so that any
+// caching layer (browser, Cloudflare, CDN) is forced to fetch a fresh worker
+// when we bump pdfjs-dist — pdf.js does an exact-string version handshake
+// between the main thread and the worker and refuses to load on mismatch.
 let pdfJsReady: Promise<void> | null = null
 async function ensurePdfJs() {
     if (pdfJsReady) return pdfJsReady
     pdfJsReady = (async () => {
         const { pdfjs } = await import('react-pdf')
-        pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+        pdfjs.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.mjs?v=${pdfjs.version}`
         await Promise.all([
             // @ts-ignore — CSS modules don't have types
             import('react-pdf/dist/Page/AnnotationLayer.css'),
