@@ -38,13 +38,22 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
 
-    # Initialize Telegram bot (webhook mode — no background polling thread)
-    await bot_service.initialize()
+    # Initialize Telegram bot (webhook mode — no background polling thread).
+    # Failures here (e.g. proxy 407, Telegram unreachable) must not crash the API.
+    try:
+        await bot_service.initialize()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Telegram bot initialization failed — continuing without bot"
+        )
 
     yield
 
     scheduler.shutdown()
-    await bot_service.shutdown()
+    try:
+        await bot_service.shutdown()
+    except Exception:
+        logging.getLogger(__name__).exception("Telegram bot shutdown failed")
 
 
 app = FastAPI(

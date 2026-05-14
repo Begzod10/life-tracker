@@ -603,6 +603,7 @@ class TelegramBotService:
     """
 
     def __init__(self):
+        self._initialized = False
         if not settings.TELEGRAM_BOT_TOKEN:
             logger.warning("TELEGRAM_BOT_TOKEN not set — bot disabled")
             self._app = None
@@ -643,6 +644,7 @@ class TelegramBotService:
             return
         await self._app.initialize()
         await self._app.start()
+        self._initialized = True
 
         if settings.WEBHOOK_BASE_URL:
             webhook_url = f"{settings.WEBHOOK_BASE_URL.rstrip('/')}/api/bot/webhook"
@@ -668,14 +670,16 @@ class TelegramBotService:
         logger.info("Telegram bot commands registered")
 
     async def shutdown(self):
-        if not self._app:
+        if not self._app or not self._initialized:
             return
         await self._app.stop()
         await self._app.shutdown()
+        self._initialized = False
         logger.info("Telegram bot stopped")
 
     async def process_update(self, data: dict):
-        if not self._app:
+        if not self._app or not self._initialized:
+            logger.warning("Telegram bot not initialized — dropping webhook update")
             return
         update = Update.de_json(data, self._app.bot)
         await self._app.process_update(update)
