@@ -615,15 +615,21 @@ class TelegramBotService:
             .updater(None)          # disable built-in polling updater
         )
 
-        # Route Telegram traffic through a proxy when set (e.g. for filtered networks)
+        # Route Telegram traffic through a proxy when set (e.g. for filtered networks).
+        # trust_env=False forces httpx to ignore the server's HTTP_PROXY/HTTPS_PROXY env
+        # vars — otherwise a misconfigured corporate proxy returns 407 and breaks the bot.
         proxy_url = settings.TELEGRAM_PROXY_URL
+        request_kwargs = {
+            "connect_timeout": 30,
+            "read_timeout": 30,
+            "httpx_kwargs": {"trust_env": False},
+        }
         if proxy_url:
             logger.info("Telegram bot using proxy: %s", proxy_url)
-            builder = builder.request(
-                HTTPXRequest(proxy=proxy_url, connect_timeout=30, read_timeout=30)
-            ).get_updates_request(
-                HTTPXRequest(proxy=proxy_url, connect_timeout=30, read_timeout=30)
-            )
+            request_kwargs["proxy"] = proxy_url
+        builder = builder.request(HTTPXRequest(**request_kwargs)).get_updates_request(
+            HTTPXRequest(**request_kwargs)
+        )
 
         self._app = builder.build()
         self._app.add_handler(CommandHandler("start", start))

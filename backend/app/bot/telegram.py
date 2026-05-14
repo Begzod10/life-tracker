@@ -63,13 +63,19 @@ def send_message(
     if settings.TELEGRAM_PROXY_URL:
         proxies = {"http": settings.TELEGRAM_PROXY_URL, "https": settings.TELEGRAM_PROXY_URL}
 
+    # Disable trust_env so the server's HTTP_PROXY/HTTPS_PROXY env vars do not
+    # silently route this request through a broken corporate proxy (407 errors).
+    session = requests.Session()
+    session.trust_env = False
     try:
-        resp = requests.post(url, json=payload, timeout=15, proxies=proxies)
+        resp = session.post(url, json=payload, timeout=15, proxies=proxies)
         resp.raise_for_status()
         return True
     except requests.RequestException as exc:
         logger.error("Failed to send Telegram message: %s", exc)
         return False
+    finally:
+        session.close()
 
 
 def is_configured() -> bool:

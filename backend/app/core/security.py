@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 import time
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import requests as requests_lib
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from google.auth import exceptions as google_exceptions
@@ -94,9 +95,13 @@ def verify_google_token(token: str) -> Dict[str, Any]:
     The frontend MUST send the `id_token` (not access_token) from Google Sign-In.
     """
     try:
+        # trust_env=False prevents the server's HTTP_PROXY/HTTPS_PROXY env vars
+        # from intercepting Google's OAuth verification call (causes 407 errors).
+        session = requests_lib.Session()
+        session.trust_env = False
         idinfo = id_token.verify_oauth2_token(
             token,
-            requests.Request(),
+            requests.Request(session=session),
             settings.GOOGLE_CLIENT_ID
         )
         return idinfo

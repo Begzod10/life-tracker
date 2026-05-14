@@ -713,7 +713,9 @@ def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7
     if not settings.OPENAI_API_KEY:
         return ""
 
-    client_kwargs = {"timeout": 30}
+    # trust_env=False ignores HTTP_PROXY/HTTPS_PROXY env on the server so a
+    # misconfigured corporate proxy can't intercept this request and return 407.
+    client_kwargs = {"timeout": 30, "trust_env": False}
     if settings.OPENAI_PROXY_URL:
         client_kwargs["proxy"] = settings.OPENAI_PROXY_URL
         logger.info("OpenAI request routed through proxy")
@@ -743,17 +745,17 @@ def _call_groq(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) 
     if not settings.GROQ_API_KEY:
         return ""
 
-    resp = httpx.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
-        json={
-            "model": "llama-3.1-8b-instant",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        },
-        timeout=30,
-    )
+    with httpx.Client(timeout=30, trust_env=False) as client:
+        resp = client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
