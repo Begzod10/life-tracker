@@ -25,7 +25,6 @@ async def lifespan(app: FastAPI):
     try:
         JobService.create_current_month_for_all_jobs()
     except Exception:
-        import logging
         logging.getLogger(__name__).exception("Startup salary-month generation failed")
 
     # Schedule to run at 00:05 on the 1st of every month
