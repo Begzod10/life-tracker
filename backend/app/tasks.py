@@ -344,12 +344,19 @@ def send_morning_tasks(self):
 @celery_app.task(name="app.tasks.check_block_completions", bind=True, max_retries=2)
 def check_block_completions(self):
     """
-    Runs every 5 minutes. Asks about any incomplete blocks that have already ended today
-    and haven't been notified yet. Uses notified_at to prevent duplicate messages.
+    Runs every 5 minutes. Asks about any incomplete blocks that ended within the
+    last NOTIFY_WINDOW_MIN minutes and haven't been notified yet. Blocks that
+    ended longer ago are auto-marked as missed so we never spam past prompts.
+
+    Dedupes by (person_id, title, start_time, end_time) within today so that
+    duplicate rows for the same logical block produce at most one notification.
+
     Tashkent = UTC+5, blocks store times as "HH:MM" strings.
     """
     if not is_configured():
         return {"skipped": True}
+
+    NOTIFY_WINDOW_MIN = 60  # only prompt within 60 min of block end
 
     db = SessionLocal()
     sent = 0
@@ -358,9 +365,30 @@ def check_block_completions(self):
         now_tashkent = datetime.utcnow() + TASHKENT
         today_tashkent = now_tashkent.date()
         now_str = now_tashkent.strftime("%H:%M")
+        window_start_str = (
+            now_tashkent - timedelta(minutes=NOTIFY_WINDOW_MIN)
+        ).strftime("%H:%M")
 
-        # All incomplete blocks for today that have already ended and not yet notified
-        blocks = (
+        # 1) Stale-clear: blocks that ended more than NOTIFY_WINDOW_MIN ago and
+        # were never notified — silently mark as notified + missed so we stop
+        # asking. This is what prevents the every-5-min-forever spam loop.
+        stale = (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.date == today_tashkent,
+                models.TimeBlock.deleted == False,
+                models.TimeBlock.is_completed == False,
+                models.TimeBlock.notified_at.is_(None),
+                models.TimeBlock.end_time < window_start_str,
+            )
+            .all()
+        )
+        for b in stale:
+            b.notified_at = datetime.utcnow()
+            b.is_missed = True
+
+        # 2) Candidates: ended within the active window and not yet notified.
+        candidates = (
             db.query(models.TimeBlock)
             .filter(
                 models.TimeBlock.date == today_tashkent,
@@ -368,9 +396,22 @@ def check_block_completions(self):
                 models.TimeBlock.is_completed == False,
                 models.TimeBlock.notified_at.is_(None),
                 models.TimeBlock.end_time <= now_str,
+                models.TimeBlock.end_time >= window_start_str,
             )
             .all()
         )
+
+        # 3) Dedupe duplicates: same (person, title, start, end) on the same
+        # day → one notification, the rest are marked as notified silently.
+        seen: set[tuple[int, str, str, str]] = set()
+        blocks: list[models.TimeBlock] = []
+        for b in candidates:
+            key = (b.person_id, b.title, b.start_time, b.end_time)
+            if key in seen:
+                b.notified_at = datetime.utcnow()
+                continue
+            seen.add(key)
+            blocks.append(b)
 
         for block in blocks:
             person = db.query(models.Person).filter(models.Person.id == block.person_id).first()
@@ -397,8 +438,11 @@ def check_block_completions(self):
                 sent += 1
 
         db.commit()
-        logger.info("check_block_completions: sent %d notifications", sent)
-        return {"sent": sent}
+        logger.info(
+            "check_block_completions: sent=%d stale_cleared=%d window=%s–%s",
+            sent, len(stale), window_start_str, now_str,
+        )
+        return {"sent": sent, "stale_cleared": len(stale)}
 
     except Exception as exc:
         db.rollback()
