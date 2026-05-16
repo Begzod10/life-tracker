@@ -261,6 +261,10 @@ def toggle_time_block(
     if not db_block:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
     db_block.is_completed = not db_block.is_completed
+    # A completed block can never also be "missed" — keep the two states
+    # mutually exclusive so the day-overview count doesn't double-count.
+    if db_block.is_completed:
+        db_block.is_missed = False
     db.commit()
 
     # Sync ProgressLogTask for linked recurring tasks so streak counts the block completion

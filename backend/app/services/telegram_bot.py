@@ -516,6 +516,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await query.edit_message_text("⚠️ Block not found or not yours.")
                 return
             block.is_completed = True
+            block.is_missed = False
             db.commit()
             await query.edit_message_text(
                 f"✅ Marked as done: *{block.title}*", parse_mode="Markdown"
