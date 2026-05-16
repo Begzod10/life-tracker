@@ -116,6 +116,9 @@ export default function ReaderPage() {
     const [showHighlightOverlay, setShowHighlightOverlay] = useState(true)
     const [showTranslations, setShowTranslations] = useState(true)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+    // Bump this to force the resume flash effect to re-run even when the
+    // page/text didn't change — used by the header chip's onClick.
+    const [resumeFlashTick, setResumeFlashTick] = useState(0)
     const [containerWidth, setContainerWidth] = useState(720)
     const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
     const [fileError, setFileError] = useState<string | null>(null)
@@ -335,7 +338,7 @@ export default function ReaderPage() {
             clearTimeout(id)
             flashed.forEach(el => el.classList.remove('resume-flash'))
         }
-    }, [book?.resume_text, book?.resume_page, page, zoom])
+    }, [book?.resume_text, book?.resume_page, page, zoom, resumeFlashTick])
 
     // ─── Highlight overlay (kind='highlight') ──────────────────────────────
     // For each saved highlight on the current page, find its text in the
@@ -512,6 +515,10 @@ export default function ReaderPage() {
                         <button
                             onClick={() => {
                                 if (book.resume_page) goToPage(book.resume_page)
+                                // Force a re-flash even when already on the
+                                // resume page (no page change → flash effect
+                                // deps wouldn't re-trigger otherwise).
+                                setResumeFlashTick(t => t + 1)
                             }}
                             title={`Resume here · "${book.resume_text.slice(0, 80)}${book.resume_text.length > 80 ? '…' : ''}"`}
                             className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border bg-emerald-500/10 border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/15 max-w-[200px]"
