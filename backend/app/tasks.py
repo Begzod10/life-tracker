@@ -341,12 +341,29 @@ def send_morning_tasks(self):
         db.close()
 
 
+def _block_end_datetime(block) -> datetime | None:
+    """Return the block's end as a full datetime, or None if unparseable."""
+    if not block.end_time or not block.date:
+        return None
+    try:
+        h, m = block.end_time.split(":")
+        return datetime.combine(block.date, datetime.min.time()).replace(
+            hour=int(h), minute=int(m)
+        )
+    except (ValueError, AttributeError):
+        return None
+
+
 @celery_app.task(name="app.tasks.check_block_completions", bind=True, max_retries=2)
 def check_block_completions(self):
     """
     Runs every 5 minutes. Asks about any incomplete blocks that ended within the
     last NOTIFY_WINDOW_MIN minutes and haven't been notified yet. Blocks that
     ended longer ago are auto-marked as missed so we never spam past prompts.
+
+    Compares full datetimes rather than HH:MM strings — a string-only window
+    wraps around midnight Tashkent (e.g. `"23:30"` for "60 min before 00:30")
+    and would falsely mark every today block ending before 23:30 as missed.
 
     Dedupes by (person_id, title, start_time, end_time) within today so that
     duplicate rows for the same logical block produce at most one notification.
@@ -364,44 +381,65 @@ def check_block_completions(self):
         TASHKENT = timedelta(hours=5)
         now_tashkent = datetime.utcnow() + TASHKENT
         today_tashkent = now_tashkent.date()
-        now_str = now_tashkent.strftime("%H:%M")
-        window_start_str = (
-            now_tashkent - timedelta(minutes=NOTIFY_WINDOW_MIN)
-        ).strftime("%H:%M")
+        window_start_dt = now_tashkent - timedelta(minutes=NOTIFY_WINDOW_MIN)
 
-        # 1) Stale-clear: blocks that ended more than NOTIFY_WINDOW_MIN ago and
-        # were never notified — silently mark as notified + missed so we stop
-        # asking. This is what prevents the every-5-min-forever spam loop.
-        stale = (
+        # Self-heal: an earlier version of this task did HH:MM string comparison
+        # which, during the 00:00–00:59 Tashkent window, falsely set is_missed
+        # on every today block ending before 23:00 (string "14:00" < "23:30").
+        # On each tick, undo that damage for any today block whose end-datetime
+        # is still in the future. Legitimate misses (end_dt <= now) stay set.
+        possibly_damaged = (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.date == today_tashkent,
+                models.TimeBlock.deleted == False,
+                models.TimeBlock.is_completed == False,
+                models.TimeBlock.is_missed == True,
+            )
+            .all()
+        )
+        reset_future = 0
+        for b in possibly_damaged:
+            end_dt = _block_end_datetime(b)
+            if end_dt is None:
+                continue
+            if end_dt > now_tashkent:
+                b.is_missed = False
+                b.notified_at = None
+                reset_future += 1
+
+        # Pull today's pending un-notified blocks and split in Python so we can
+        # compare full datetimes (not HH:MM strings) against the window.
+        pending_today = (
             db.query(models.TimeBlock)
             .filter(
                 models.TimeBlock.date == today_tashkent,
                 models.TimeBlock.deleted == False,
                 models.TimeBlock.is_completed == False,
                 models.TimeBlock.notified_at.is_(None),
-                models.TimeBlock.end_time < window_start_str,
             )
             .all()
         )
+
+        stale: list[models.TimeBlock] = []
+        candidates: list[models.TimeBlock] = []
+        for b in pending_today:
+            end_dt = _block_end_datetime(b)
+            if end_dt is None:
+                continue
+            if end_dt < window_start_dt:
+                stale.append(b)
+            elif end_dt <= now_tashkent:
+                candidates.append(b)
+            # else: end_dt is in the future — leave alone
+
+        # 1) Stale-clear: blocks that ended longer than NOTIFY_WINDOW_MIN ago —
+        # silently mark notified + missed so we stop asking.
         for b in stale:
             b.notified_at = datetime.utcnow()
             b.is_missed = True
 
-        # 2) Candidates: ended within the active window and not yet notified.
-        candidates = (
-            db.query(models.TimeBlock)
-            .filter(
-                models.TimeBlock.date == today_tashkent,
-                models.TimeBlock.deleted == False,
-                models.TimeBlock.is_completed == False,
-                models.TimeBlock.notified_at.is_(None),
-                models.TimeBlock.end_time <= now_str,
-                models.TimeBlock.end_time >= window_start_str,
-            )
-            .all()
-        )
-
-        # 3) Dedupe duplicates: same (person, title, start, end) on the same
+        # 2) Dedupe duplicates: same (person, title, start, end) on the same
         # day → one notification, the rest are marked as notified silently.
         seen: set[tuple[int, str, str, str]] = set()
         blocks: list[models.TimeBlock] = []
@@ -439,10 +477,10 @@ def check_block_completions(self):
 
         db.commit()
         logger.info(
-            "check_block_completions: sent=%d stale_cleared=%d window=%s–%s",
-            sent, len(stale), window_start_str, now_str,
+            "check_block_completions: sent=%d stale_cleared=%d reset_future=%d",
+            sent, len(stale), reset_future,
         )
-        return {"sent": sent, "stale_cleared": len(stale)}
+        return {"sent": sent, "stale_cleared": len(stale), "reset_future": reset_future}
 
     except Exception as exc:
         db.rollback()
