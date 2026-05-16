@@ -82,6 +82,12 @@ export function TextareaInput({
     )
 }
 
+// Radix Select forbids empty-string values on Select.Item — it reserves "" to
+// mean "cleared, show placeholder". Callers still want to express "no choice"
+// as an option (e.g. `{ value: '', label: 'None' }`), so we translate empty
+// strings to this sentinel on the way in and back to "" on the way out.
+const EMPTY_VALUE_SENTINEL = '__select_empty__'
+
 // Select Dropdown
 export function SelectInput({
     value,
@@ -96,8 +102,13 @@ export function SelectInput({
     placeholder?: string
     triggerClassName?: string
 }) {
+    const encode = (v: string | number) => {
+        const s = String(v)
+        return s === '' ? EMPTY_VALUE_SENTINEL : s
+    }
+    const decode = (v: string) => (v === EMPTY_VALUE_SENTINEL ? '' : v)
     return (
-        <Select value={String(value)} onValueChange={onChange}>
+        <Select value={encode(value)} onValueChange={(v) => onChange(decode(v))}>
             <SelectTrigger className={triggerClassName ?? "bg-[#0f0f1a] border-[#2a2b36] text-white"}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
@@ -105,7 +116,7 @@ export function SelectInput({
                 {options.map((option) => (
                     <SelectItem
                         key={String(option.value)}
-                        value={String(option.value)}
+                        value={encode(option.value)}
                         className="text-white hover:bg-[#2a2b36]"
                     >
                         {option.label}
