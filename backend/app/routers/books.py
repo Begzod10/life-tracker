@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import shutil
+import string
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,17 @@ from app.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["books"])
+
+# Strip-set used for "is this the same word?" comparison. The stored word
+# keeps its original form (commas, parentheses, etc.) — this is purely for
+# dedup. Includes whitespace so trailing newlines from PDF selections don't
+# cause false misses.
+_DEDUP_STRIP = string.punctuation + string.whitespace
+
+
+def _norm_word_for_dedup(s: str) -> str:
+    """Lowercase, trim, and strip leading/trailing punctuation+whitespace."""
+    return (s or "").strip().strip(_DEDUP_STRIP).lower()
 
 
 def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]:
@@ -472,10 +484,13 @@ def create_highlight(
             raise HTTPException(status_code=400, detail="Selection is empty")
 
         # Look for an existing entry for this user, case-insensitively, across
-        # ALL modules — a word the user already saved (with or without a
-        # module) should be reused rather than duplicated. If a match is in a
-        # different module than the one picked here, we still reuse it: the
-        # user can move it on the Dictionary page if they really want to.
+        # ALL modules. Two-stage strategy:
+        #   1) Cheap SQL lower() equality — handles the common case fast and
+        #      lets the DB use the (person_id, word) index pair.
+        #   2) On miss, normalize both sides by stripping surrounding
+        #      punctuation/whitespace so "AGILITY," matches an earlier
+        #      saved "agility". Only runs when Stage 1 fails, so it doesn't
+        #      penalize the common path.
         existing = (
             db.query(models.DictionaryWord)
             .filter(
@@ -485,6 +500,21 @@ def create_highlight(
             )
             .first()
         )
+        if not existing:
+            normalized = _norm_word_for_dedup(token)
+            if normalized:
+                others = (
+                    db.query(models.DictionaryWord)
+                    .filter(
+                        models.DictionaryWord.person_id == current_user.id,
+                        models.DictionaryWord.deleted == False,
+                    )
+                    .all()
+                )
+                existing = next(
+                    (w for w in others if _norm_word_for_dedup(w.word) == normalized),
+                    None,
+                )
 
         if existing:
             dictionary_word_id = existing.id
