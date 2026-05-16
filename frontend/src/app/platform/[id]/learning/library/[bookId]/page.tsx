@@ -451,7 +451,10 @@ export default function ReaderPage() {
     return (
         <div className="min-h-screen flex flex-col bg-[#070710]">
             {/* Header */}
-            <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-0 z-30">
+            {/* The platform-wide <Header> is sticky top-0 z-50, so we offset
+                this reader-specific bar by its height to stack below it. Both
+                stay visible while scrolling the PDF. */}
+            <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[68px] z-40">
                 <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning/library`)}
