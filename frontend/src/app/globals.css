@@ -105,14 +105,16 @@ body {
 }
 
 /* Inline translation badge — anchored just below the matching word in the
-   PDF text layer. Style is deliberately quiet so it doesn't compete with
-   the book's typography. Pointer events stay off because the text layer
-   itself owns selection. */
+   PDF text layer. The !important on color + text-fill is required because
+   the text-layer suppression rule below makes everything inside the layer
+   render glyphs as transparent; the badge needs to opt out so its text
+   actually shows. */
 .react-pdf__Page__textContent .vocab-translation-badge {
   position: absolute;
   font-size: 10px;
   line-height: 1;
-  color: rgb(99, 102, 241);
+  color: rgb(99, 102, 241) !important;
+  -webkit-text-fill-color: rgb(99, 102, 241) !important;
   background: rgba(238, 242, 255, 0.92);
   border: 1px solid rgba(99, 102, 241, 0.35);
   border-radius: 3px;

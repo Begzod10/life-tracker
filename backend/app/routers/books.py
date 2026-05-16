@@ -57,7 +57,14 @@ def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]
     prompt = (
         f'Generate a dictionary entry for the English word/phrase: "{safe_word}"'
         f'{ctx_line}\n\n'
-        'Return ONLY a single JSON object with two string keys, no prose:\n'
+        'Rules:\n'
+        '- If the word is a common noun/verb/adj, give a normal definition + translation.\n'
+        '- If it is a proper noun (person, place, brand), the definition should '
+        "name what it refers to in <= 12 words; translation should just be a "
+        "transliteration in Uzbek + Russian (e.g. \"Bogues / Богус\").\n"
+        '- Drop trailing punctuation from the headword when reasoning, but '
+        'keep the answer concise.\n\n'
+        'Return ONLY a single JSON object, no prose:\n'
         '{\n'
         '  "definition": "<one short English sentence, under 18 words>",\n'
         '  "translation": "<Uzbek translation> / <Russian translation>"\n'
