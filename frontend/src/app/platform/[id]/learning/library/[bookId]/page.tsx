@@ -137,6 +137,20 @@ export default function ReaderPage() {
     const [pdfReady, setPdfReady] = useState(false)
     const [numPages, setNumPages] = useState<number | null>(null)
     const [page, setPage] = useState(1)
+    // Vocab highlights are the saved-to-dictionary picks. We show them in a
+    // separate sidebar panel sorted so the current page surfaces first, then
+    // ascending by page — so the reader can scan all dictionary entries
+    // they've collected in this book without leaving the reader.
+    const vocabHighlights = useMemo(() => {
+        const vocab = highlights.filter(h => h.kind === 'vocab')
+        return [...vocab].sort((a, b) => {
+            const aOnPage = a.page === page ? 0 : 1
+            const bOnPage = b.page === page ? 0 : 1
+            if (aOnPage !== bOnPage) return aOnPage - bOnPage
+            if (a.page !== b.page) return a.page - b.page
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+    }, [highlights, page])
     const [pageInput, setPageInput] = useState('1')
     const [zoom, setZoom] = useState(1.1)
     const [selection, setSelection] = useState<Selection | null>(null)
@@ -674,36 +688,70 @@ export default function ReaderPage() {
                     </p>
                 </div>
 
-                {/* Highlights sidebar */}
+                {/* Highlights + Dictionary sidebar */}
                 {showHighlights && (
                     <aside className="hidden lg:flex flex-col w-80 shrink-0">
-                        <div className="sticky top-24 max-h-[calc(100vh-7rem)] flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden">
-                            <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-sm font-medium text-white flex items-center gap-2">
-                                    <Bookmark className="w-4 h-4 text-amber-300" />
-                                    Highlights
-                                </h2>
-                                <span className="text-xs text-white/40">{sidebarHighlights.length}</span>
+                        <div className="sticky top-24 max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden">
+                            {/* Highlights card */}
+                            <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
+                                        <Bookmark className="w-4 h-4 text-amber-300" />
+                                        Highlights
+                                    </h2>
+                                    <span className="text-xs text-white/40">{sidebarHighlights.length}</span>
+                                </div>
+
+                                {sidebarHighlights.length === 0 ? (
+                                    <p className="text-xs text-white/30 leading-relaxed">
+                                        Nothing yet. Select text on the page and tap Highlight to save your first one.
+                                    </p>
+                                ) : (
+                                    <div className="overflow-y-auto -mr-2 pr-2 space-y-2">
+                                        {sidebarHighlights.map(h => (
+                                            <HighlightRow
+                                                key={h.id}
+                                                highlight={h}
+                                                onJump={() => goToPage(h.page)}
+                                                onDelete={() =>
+                                                    deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
-                            {sidebarHighlights.length === 0 ? (
-                                <p className="text-xs text-white/30 leading-relaxed">
-                                    Nothing yet. Select text on the page and tap Highlight to save your first one. Saved vocab words live on the Dictionary page.
-                                </p>
-                            ) : (
-                                <div className="overflow-y-auto -mr-2 pr-2 space-y-2">
-                                    {sidebarHighlights.map(h => (
-                                        <HighlightRow
-                                            key={h.id}
-                                            highlight={h}
-                                            onJump={() => goToPage(h.page)}
-                                            onDelete={() =>
-                                                deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
-                                            }
-                                        />
-                                    ))}
+                            {/* Dictionary card */}
+                            <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h2 className="text-sm font-medium text-white flex items-center gap-2">
+                                        <Languages className="w-4 h-4 text-indigo-300" />
+                                        Dictionary
+                                    </h2>
+                                    <span className="text-xs text-white/40">{vocabHighlights.length}</span>
                                 </div>
-                            )}
+
+                                {vocabHighlights.length === 0 ? (
+                                    <p className="text-xs text-white/30 leading-relaxed">
+                                        No words yet. Select text and tap <span className="text-indigo-300">Save word</span> to add a dictionary entry tied to this book.
+                                    </p>
+                                ) : (
+                                    <div className="overflow-y-auto -mr-2 pr-2 space-y-1.5">
+                                        {vocabHighlights.map(h => (
+                                            <VocabRow
+                                                key={h.id}
+                                                highlight={h}
+                                                onCurrentPage={h.page === page}
+                                                onJump={() => goToPage(h.page)}
+                                                onDelete={() =>
+                                                    deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </aside>
                 )}
@@ -754,6 +802,57 @@ function PdfError({ message }: { message?: string } = {}) {
             <p className="text-xs text-white/40 mt-1">
                 {message ?? 'The file may be corrupted or your session expired.'}
             </p>
+        </div>
+    )
+}
+
+function VocabRow({
+    highlight, onCurrentPage, onJump, onDelete,
+}: {
+    highlight: BookHighlight
+    onCurrentPage: boolean
+    onJump: () => void
+    onDelete: () => void
+}) {
+    const word = highlight.text.trim()
+    return (
+        <div
+            className={`group relative px-2.5 py-2 rounded-lg border transition-colors ${
+                onCurrentPage
+                    ? 'border-indigo-400/40 bg-indigo-500/[0.09]'
+                    : 'border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]'
+            }`}
+        >
+            <div className="flex items-start gap-2">
+                <button
+                    onClick={onJump}
+                    className="flex-1 min-w-0 text-left"
+                    title="Jump to page"
+                >
+                    <p className={`text-sm font-medium leading-tight truncate ${onCurrentPage ? 'text-white' : 'text-white/90'}`}>
+                        {word}
+                    </p>
+                    {highlight.translation && (
+                        <p className="text-xs text-white/55 leading-snug mt-0.5 line-clamp-2">
+                            {highlight.translation}
+                        </p>
+                    )}
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                    <span className={`text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium ${
+                        onCurrentPage ? 'bg-indigo-500/20 text-indigo-200' : 'bg-white/5 text-white/40'
+                    }`}>
+                        p.{highlight.page}
+                    </span>
+                    <button
+                        onClick={onDelete}
+                        className="opacity-0 group-hover:opacity-100 transition text-white/30 hover:text-red-300 p-0.5"
+                        title="Remove from this book"
+                    >
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }
