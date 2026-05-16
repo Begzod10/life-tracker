@@ -1190,6 +1190,11 @@ class BookHighlightRead(BaseModel):
     kind: str
     color: Optional[str] = None
     dictionary_word_id: Optional[int] = None
+    # Joined from the linked DictionaryWord so the reader can render an
+    # inline translation badge under a saved vocab word without a second
+    # round-trip. Null when no dictionary word is linked or no translation
+    # has been filled in yet.
+    translation: Optional[str] = None
     created_at: datetime
 
 

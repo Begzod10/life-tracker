@@ -43,6 +43,7 @@ export interface BookHighlight {
     kind: 'highlight' | 'vocab' | 'note'
     color: string | null
     dictionary_word_id: number | null
+    translation: string | null
     created_at: string
 }
 

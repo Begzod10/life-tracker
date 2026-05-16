@@ -93,3 +93,34 @@ body {
   60%  { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.25); }
   100% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
 }
+
+/* Persistent yellow highlight overlay applied to every PDF text span that
+   a saved BookHighlight (kind='highlight') covers. We use a subtle alpha
+   so the underlying glyphs stay readable, and rounded corners that look
+   intentional even when many adjacent spans get the class. */
+.react-pdf__Page__textContent .hl-overlay {
+  background: rgba(250, 204, 21, 0.32);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.18);
+}
+
+/* Inline translation badge — anchored just below the matching word in the
+   PDF text layer. Style is deliberately quiet so it doesn't compete with
+   the book's typography. Pointer events stay off because the text layer
+   itself owns selection. */
+.react-pdf__Page__textContent .vocab-translation-badge {
+  position: absolute;
+  font-size: 10px;
+  line-height: 1;
+  color: rgb(99, 102, 241);
+  background: rgba(238, 242, 255, 0.92);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 3px;
+  padding: 1px 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

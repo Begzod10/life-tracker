@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, ChevronLeft, ChevronRight, Loader2, Plus, Sparkles, X,
     BookOpen, Highlighter, Bookmark, ZoomIn, ZoomOut, Trash2, ListChecks,
-    MapPin,
+    MapPin, Languages,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,42 @@ interface Selection {
     rect: DOMRect | null
 }
 
+// ─── Text-layer matching helper ────────────────────────────────────────────
+// pdf.js renders one <span> per visual text run (≈ per line). For features
+// that need to highlight or annotate a saved string of text, we build a flat
+// normalized concatenation of all spans with each span's [start, end] offset
+// recorded, then locate the target substring inside the flat string and map
+// the match range back onto the spans it covers. Returns the matching spans
+// in document order, or [] if no match.
+function spansForText(layer: Element, target: string): HTMLElement[] {
+    const norm = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
+    const needle = norm(target).trim()
+    if (needle.length < 2) return []
+
+    const spans = Array.from(layer.querySelectorAll('span')) as HTMLElement[]
+    let flat = ''
+    const ranges: { span: HTMLElement; start: number; end: number }[] = []
+    for (const s of spans) {
+        const text = norm(s.textContent || '')
+        if (!text) continue
+        const start = flat.length
+        flat += text
+        ranges.push({ span: s, start, end: flat.length })
+        flat += ' '
+    }
+
+    let idx = flat.indexOf(needle)
+    let matchLen = needle.length
+    if (idx < 0) {
+        const head = needle.slice(0, Math.min(40, needle.length))
+        idx = flat.indexOf(head)
+        matchLen = head.length
+    }
+    if (idx < 0) return []
+    const matchEnd = idx + matchLen
+    return ranges.filter(r => r.end > idx && r.start < matchEnd).map(r => r.span)
+}
+
 export default function ReaderPage() {
     const params = useParams<{ id: string; bookId: string }>()
     const router = useRouter()
@@ -63,6 +99,12 @@ export default function ReaderPage() {
     const { data: highlights = [] } = useBookHighlights(bookId)
     const createHighlight = useHighlightCreate()
     const deleteHighlight = useHighlightDelete()
+    // Vocab highlights are tracked behind the scenes to drive the inline
+    // translation badge — they should not pollute the user-facing sidebar.
+    const sidebarHighlights = useMemo(
+        () => highlights.filter(h => h.kind !== 'vocab'),
+        [highlights],
+    )
 
     const [pdfReady, setPdfReady] = useState(false)
     const [numPages, setNumPages] = useState<number | null>(null)
@@ -71,6 +113,8 @@ export default function ReaderPage() {
     const [zoom, setZoom] = useState(1.1)
     const [selection, setSelection] = useState<Selection | null>(null)
     const [showHighlights, setShowHighlights] = useState(true)
+    const [showHighlightOverlay, setShowHighlightOverlay] = useState(true)
+    const [showTranslations, setShowTranslations] = useState(true)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     const [containerWidth, setContainerWidth] = useState(720)
     const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
@@ -254,19 +298,11 @@ export default function ReaderPage() {
     }, [book?.resume_text, book?.resume_page, page])
 
     // After the PDF text layer renders, find every span the saved sentence
-    // overlaps and flash all of them. pdf.js renders one <span> per visual
-    // text run (≈ per line) so a multi-line sentence touches several spans.
-    // Strategy: build a flat normalized string of all spans with their
-    // offsets, locate the target inside it, then apply the flash class to
-    // every span whose offset range overlaps the match.
+    // overlaps and flash all of them.
     useEffect(() => {
         if (!book?.resume_text || !book.resume_page) return
         if (page !== book.resume_page) return
         if (!pageRef.current) return
-
-        const norm = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
-        const target = norm(book.resume_text).trim()
-        if (target.length < 4) return
 
         let cancelled = false
         let attempts = 0
@@ -275,54 +311,24 @@ export default function ReaderPage() {
         const tryFlash = () => {
             if (cancelled || !pageRef.current) return
             const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
-            const spans = layer
-                ? (Array.from(layer.querySelectorAll('span')) as HTMLElement[])
-                : []
-
-            // Build the flat string + range map. We join with a single space
-            // so adjacent spans don't run together (which would let "foo" +
-            // "bar" produce a false "oob" match).
-            let flat = ''
-            const ranges: { span: HTMLElement; start: number; end: number }[] = []
-            for (const s of spans) {
-                const text = norm(s.textContent || '')
-                if (!text) continue
-                const start = flat.length
-                flat += text
-                ranges.push({ span: s, start, end: flat.length })
-                flat += ' '
+            if (!layer) {
+                if (++attempts < 30) requestAnimationFrame(tryFlash)
+                return
             }
-
-            // Exact substring first — falls back to first-40-chars prefix if
-            // the saved sentence has been edited slightly or the PDF has a
-            // hyphenation quirk we can't reverse.
-            let idx = flat.indexOf(target)
-            let matchLen = target.length
-            if (idx < 0) {
-                const head = target.slice(0, Math.min(40, target.length))
-                idx = flat.indexOf(head)
-                matchLen = head.length
+            const hits = spansForText(layer, book.resume_text || '')
+            if (hits.length === 0) {
+                if (++attempts < 30) requestAnimationFrame(tryFlash)
+                return
             }
-
-            if (idx >= 0) {
-                const matchEnd = idx + matchLen
-                const hits = ranges.filter(r => r.end > idx && r.start < matchEnd)
-                if (hits.length > 0) {
-                    hits[0].span.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    hits.forEach(r => {
-                        r.span.classList.add('resume-flash')
-                        flashed.push(r.span)
-                    })
-                    setTimeout(() => {
-                        flashed.forEach(el => el.classList.remove('resume-flash'))
-                    }, 2400)
-                    return
-                }
-            }
-
-            if (++attempts < 30) requestAnimationFrame(tryFlash)
+            hits[0].scrollIntoView({ behavior: 'smooth', block: 'center' })
+            hits.forEach(el => {
+                el.classList.add('resume-flash')
+                flashed.push(el)
+            })
+            setTimeout(() => {
+                flashed.forEach(el => el.classList.remove('resume-flash'))
+            }, 2400)
         }
-        // Give the text layer a moment to mount.
         const id = setTimeout(tryFlash, 120)
         return () => {
             cancelled = true
@@ -330,6 +336,106 @@ export default function ReaderPage() {
             flashed.forEach(el => el.classList.remove('resume-flash'))
         }
     }, [book?.resume_text, book?.resume_page, page, zoom])
+
+    // ─── Highlight overlay (kind='highlight') ──────────────────────────────
+    // For each saved highlight on the current page, find its text in the
+    // rendered text layer and apply a persistent yellow background class.
+    // Re-runs whenever the page renders, the highlight set changes, or the
+    // toggle flips. Cleanup removes the class so flipping the toggle off or
+    // navigating away leaves the text layer pristine.
+    useEffect(() => {
+        if (!pageRef.current) return
+        if (!showHighlightOverlay) return
+        const pageHighlights = highlights.filter(h => h.page === page && h.kind === 'highlight')
+        if (pageHighlights.length === 0) return
+
+        let cancelled = false
+        let attempts = 0
+        const styled: HTMLElement[] = []
+
+        const tryApply = () => {
+            if (cancelled || !pageRef.current) return
+            const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
+            if (!layer) {
+                if (++attempts < 30) requestAnimationFrame(tryApply)
+                return
+            }
+            let anyHit = false
+            for (const h of pageHighlights) {
+                const hits = spansForText(layer, h.text)
+                if (hits.length === 0) continue
+                anyHit = true
+                hits.forEach(el => {
+                    el.classList.add('hl-overlay')
+                    styled.push(el)
+                })
+            }
+            // Text layer not fully mounted yet — retry a few frames.
+            if (!anyHit && ++attempts < 30) requestAnimationFrame(tryApply)
+        }
+        const id = setTimeout(tryApply, 120)
+        return () => {
+            cancelled = true
+            clearTimeout(id)
+            styled.forEach(el => el.classList.remove('hl-overlay'))
+        }
+    }, [highlights, page, zoom, showHighlightOverlay])
+
+    // ─── Translation badges (kind='vocab' with translation) ───────────────
+    // For each vocab highlight on this page whose linked dictionary word
+    // has a translation filled in, mount a small absolute-positioned label
+    // just below the matching span. Stored inside a sibling layer attached
+    // to the page surface so they stay aligned during scroll, and torn down
+    // cleanly when deps change.
+    useEffect(() => {
+        if (!pageRef.current) return
+        if (!showTranslations) return
+        const pageVocab = highlights.filter(
+            h => h.page === page && h.kind === 'vocab' && h.translation,
+        )
+        if (pageVocab.length === 0) return
+
+        let cancelled = false
+        let attempts = 0
+        const mounted: HTMLElement[] = []
+
+        const tryApply = () => {
+            if (cancelled || !pageRef.current) return
+            const surface = pageRef.current
+            const layer = surface.querySelector('.react-pdf__Page__textContent')
+            if (!layer) {
+                if (++attempts < 30) requestAnimationFrame(tryApply)
+                return
+            }
+            // Translations are positioned relative to the text layer (which
+            // already sits in absolute coords inside the page surface).
+            const layerEl = layer as HTMLElement
+            const layerRect = layerEl.getBoundingClientRect()
+            let anyHit = false
+            for (const h of pageVocab) {
+                const hits = spansForText(layer, h.text)
+                if (hits.length === 0) continue
+                anyHit = true
+                const first = hits[0]
+                const rect = first.getBoundingClientRect()
+                const badge = document.createElement('div')
+                badge.className = 'vocab-translation-badge'
+                badge.textContent = h.translation || ''
+                // Position relative to the text layer.
+                badge.style.left = `${rect.left - layerRect.left}px`
+                badge.style.top = `${rect.bottom - layerRect.top + 1}px`
+                layerEl.appendChild(badge)
+                mounted.push(badge)
+            }
+            if (!anyHit && ++attempts < 30) requestAnimationFrame(tryApply)
+        }
+        const id = setTimeout(tryApply, 150)
+        return () => {
+            cancelled = true
+            clearTimeout(id)
+            mounted.forEach(el => el.remove())
+        }
+    }, [highlights, page, zoom, showTranslations])
 
     if (isLoading || !book) {
         return (
@@ -422,6 +528,30 @@ export default function ReaderPage() {
                             </span>
                         </button>
                     )}
+                    {/* On-page overlay toggles: yellow highlight marks +
+                        inline translation badges for saved vocab words. */}
+                    <button
+                        onClick={() => setShowHighlightOverlay(s => !s)}
+                        title="Toggle yellow highlight marks on the page"
+                        className={`hidden md:flex items-center justify-center p-1.5 rounded-lg border transition-all ${
+                            showHighlightOverlay
+                                ? 'bg-amber-400/15 border-amber-400/30 text-amber-200'
+                                : 'bg-white/[0.04] border-white/10 text-white/40 hover:text-white'
+                        }`}
+                    >
+                        <Highlighter className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => setShowTranslations(s => !s)}
+                        title="Toggle inline translations for saved vocab words"
+                        className={`hidden md:flex items-center justify-center p-1.5 rounded-lg border transition-all ${
+                            showTranslations
+                                ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-200'
+                                : 'bg-white/[0.04] border-white/10 text-white/40 hover:text-white'
+                        }`}
+                    >
+                        <Languages className="w-3.5 h-3.5" />
+                    </button>
                     <button
                         onClick={() => setShowHighlights(s => !s)}
                         className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${
@@ -430,8 +560,8 @@ export default function ReaderPage() {
                                 : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white'
                         }`}
                     >
-                        <Highlighter className="w-3.5 h-3.5" />
-                        Highlights · {highlights.length}
+                        <Bookmark className="w-3.5 h-3.5" />
+                        {sidebarHighlights.length}
                     </button>
                 </div>
 
@@ -499,16 +629,16 @@ export default function ReaderPage() {
                                     <Bookmark className="w-4 h-4 text-amber-300" />
                                     Highlights
                                 </h2>
-                                <span className="text-xs text-white/40">{highlights.length}</span>
+                                <span className="text-xs text-white/40">{sidebarHighlights.length}</span>
                             </div>
 
-                            {highlights.length === 0 ? (
+                            {sidebarHighlights.length === 0 ? (
                                 <p className="text-xs text-white/30 leading-relaxed">
-                                    Nothing yet. Select text on the page to save your first highlight or word.
+                                    Nothing yet. Select text on the page and tap Highlight to save your first one. Saved vocab words live on the Dictionary page.
                                 </p>
                             ) : (
                                 <div className="overflow-y-auto -mr-2 pr-2 space-y-2">
-                                    {highlights.map(h => (
+                                    {sidebarHighlights.map(h => (
                                         <HighlightRow
                                             key={h.id}
                                             highlight={h}
