@@ -162,6 +162,9 @@ export default function ReaderPage() {
     const [showHighlights, setShowHighlights] = useState(true)
     const [showHighlightOverlay, setShowHighlightOverlay] = useState(true)
     const [showTranslations, setShowTranslations] = useState(true)
+    // Hover-driven translation tooltip — populated by the mouseover handler
+    // when the cursor enters a marked vocab span, cleared on mouseout.
+    const [vocabTooltip, setVocabTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     // Bump this to force the resume flash effect to re-run even when the
     // page/text didn't change — used by the header chip's onClick.
@@ -436,12 +439,13 @@ export default function ReaderPage() {
         }
     }, [highlights, page, zoom, showHighlightOverlay, pageRenderTick])
 
-    // ─── Translation badges (kind='vocab' with translation) ───────────────
-    // For each vocab highlight on this page whose linked dictionary word
-    // has a translation filled in, mount a small absolute-positioned label
-    // just below the matching span. Stored inside a sibling layer attached
-    // to the page surface so they stay aligned during scroll, and torn down
-    // cleanly when deps change.
+    // ─── Vocab markers + hover tooltips ───────────────────────────────────
+    // Earlier we mounted always-visible badges under each saved word, but
+    // pdf.js line-spacing is too tight (~5px gap) for a 14px badge — they
+    // bled into the line below and made the page hard to read. Now we tag
+    // each matched span with an indigo highlight + a data-attr translation,
+    // and a single React-managed tooltip shows the translation only while
+    // the reader is hovering the word.
     useEffect(() => {
         if (!pageRef.current) return
         if (!showTranslations) return
@@ -452,51 +456,80 @@ export default function ReaderPage() {
 
         let cancelled = false
         let attempts = 0
-        const mounted: HTMLElement[] = []
+        const marked: HTMLElement[] = []
 
         const tryApply = () => {
             if (cancelled || !pageRef.current) return
-            const surface = pageRef.current
-            const layer = surface.querySelector('.react-pdf__Page__textContent')
+            const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
             if (!layer) {
                 if (++attempts < 30) requestAnimationFrame(tryApply)
                 return
             }
-            // Translations are positioned relative to the text layer (which
-            // already sits in absolute coords inside the page surface).
-            const layerEl = layer as HTMLElement
-            const layerRect = layerEl.getBoundingClientRect()
             let anyHit = false
             for (const h of pageVocab) {
                 const hits = spansForText(layer, h.text)
                 if (hits.length === 0) continue
-                // Use a Range-based precise rect so the badge sits under
-                // the actual word, not at the left edge of the line span.
-                const rect = rectForText(hits, h.text)
-                if (!rect) continue
-                // pdf.js initially mounts the text layer with empty rects;
-                // glyph positioning runs a tick later. If we placed a badge
-                // now it would land at (0,0). Skip and let the retry pick it
-                // up once the layer has real dimensions.
-                if (rect.width === 0 || rect.height === 0) continue
                 anyHit = true
-                const badge = document.createElement('div')
-                badge.className = 'vocab-translation-badge'
-                badge.textContent = h.translation || ''
-                badge.style.left = `${rect.left - layerRect.left}px`
-                badge.style.top = `${rect.bottom - layerRect.top + 1}px`
-                layerEl.appendChild(badge)
-                mounted.push(badge)
+                for (const el of hits) {
+                    el.classList.add('vocab-overlay')
+                    // Concatenate when several saved words share a span so a
+                    // long line with multiple matches doesn't overwrite earlier
+                    // tooltips with whichever happened to be processed last.
+                    const prev = el.getAttribute('data-vocab-translation')
+                    el.setAttribute(
+                        'data-vocab-translation',
+                        prev ? `${prev} · ${h.translation}` : (h.translation || ''),
+                    )
+                    marked.push(el)
+                }
             }
             if (!anyHit && ++attempts < 30) requestAnimationFrame(tryApply)
         }
-        const id = setTimeout(tryApply, 150)
+        const id = setTimeout(tryApply, 120)
         return () => {
             cancelled = true
             clearTimeout(id)
-            mounted.forEach(el => el.remove())
+            marked.forEach(el => {
+                el.classList.remove('vocab-overlay')
+                el.removeAttribute('data-vocab-translation')
+            })
         }
     }, [highlights, page, zoom, showTranslations, pageRenderTick])
+
+    // Hover tooltip for vocab markers. Event delegation on the page surface
+    // so we don't re-bind on every render. The tooltip itself is rendered
+    // inside the page surface (see JSX below) using `vocabTooltip` state.
+    useEffect(() => {
+        const surface = pageRef.current
+        if (!surface || !showTranslations) return
+
+        const handleOver = (e: MouseEvent) => {
+            const tgt = e.target as HTMLElement | null
+            const span = tgt?.closest?.('[data-vocab-translation]') as HTMLElement | null
+            if (!span) return
+            const translation = span.getAttribute('data-vocab-translation') || ''
+            if (!translation) return
+            const rect = span.getBoundingClientRect()
+            const surfaceRect = surface.getBoundingClientRect()
+            setVocabTooltip({
+                x: rect.left - surfaceRect.left + rect.width / 2,
+                y: rect.top - surfaceRect.top,
+                text: translation,
+            })
+        }
+        const handleOut = (e: MouseEvent) => {
+            const related = (e.relatedTarget as HTMLElement | null) ?? null
+            if (related && related.closest?.('[data-vocab-translation]')) return
+            setVocabTooltip(null)
+        }
+        surface.addEventListener('mouseover', handleOver)
+        surface.addEventListener('mouseout', handleOut)
+        return () => {
+            surface.removeEventListener('mouseover', handleOver)
+            surface.removeEventListener('mouseout', handleOut)
+            setVocabTooltip(null)
+        }
+    }, [showTranslations])
 
     if (isLoading || !book) {
         return (
@@ -648,7 +681,7 @@ export default function ReaderPage() {
                     <div
                         ref={pageRef}
                         onMouseUp={handleMouseUp}
-                        className="bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
+                        className="relative bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
                         style={{ maxWidth: containerWidth + 32 }}
                     >
                         {fileError ? (
@@ -684,6 +717,23 @@ export default function ReaderPage() {
                                     onRenderSuccess={() => setPageRenderTick(t => t + 1)}
                                 />
                             </PdfDocument>
+                        )}
+
+                        {/* Hover translation tooltip — single floating element
+                            positioned above the hovered vocab span. Pointer-
+                            events disabled so moving the cursor between the
+                            span and tooltip doesn't strand it. */}
+                        {vocabTooltip && (
+                            <div
+                                className="absolute z-30 pointer-events-none px-2 py-1 rounded-md text-[11px] font-medium leading-tight bg-[#0a0a14]/95 border border-indigo-400/40 text-indigo-100 shadow-lg max-w-[260px] whitespace-normal text-center"
+                                style={{
+                                    left: `${vocabTooltip.x}px`,
+                                    top: `${vocabTooltip.y}px`,
+                                    transform: 'translate(-50%, calc(-100% - 6px))',
+                                }}
+                            >
+                                {vocabTooltip.text}
+                            </div>
                         )}
                     </div>
 

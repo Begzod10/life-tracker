@@ -104,27 +104,17 @@ body {
   box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.18);
 }
 
-/* Inline translation badge — anchored just below the matching word in the
-   PDF text layer. The !important on color + text-fill is required because
-   the text-layer suppression rule below makes everything inside the layer
-   render glyphs as transparent; the badge needs to opt out so its text
-   actually shows. */
-.react-pdf__Page__textContent .vocab-translation-badge {
-  position: absolute;
-  font-size: 10px;
-  line-height: 1;
-  color: rgb(99, 102, 241) !important;
-  -webkit-text-fill-color: rgb(99, 102, 241) !important;
-  background: rgba(238, 242, 255, 0.92);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  border-radius: 3px;
-  padding: 1px 4px;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 5;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Vocab overlay — applied to text-layer spans that contain a saved
+   dictionary word with a translation. Indigo tint distinguishes vocab
+   from yellow highlights. Pointer-events:auto + a help cursor makes the
+   span hoverable so we can show the translation in a floating tooltip
+   (see the React-rendered tooltip in the reader page). */
+.react-pdf__Page__textContent .vocab-overlay {
+  background: rgba(99, 102, 241, 0.22);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18);
+  cursor: help;
+  pointer-events: auto;
 }
 
 /* pdf.js renders an invisible "text layer" of <span>s on top of the canvas
