@@ -29,6 +29,51 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["books"])
 
 
+def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]:
+    """Return (definition, translation) for an English word using the same
+    AI provider chain as tasks.py. Best-effort — returns ("", "") if the
+    model is unconfigured, the call fails, or the response can't be parsed.
+    Translation format is "Uzbek / Russian" so it matches the rest of the app.
+    """
+    try:
+        from app.tasks import _generate_text  # local import to avoid cycle
+    except Exception:
+        return ("", "")
+
+    safe_word = (word or "").strip().replace('"', "'")
+    ctx_line = f'\nContext: "{context.strip()}"' if context and context.strip() else ""
+    prompt = (
+        f'Generate a dictionary entry for the English word/phrase: "{safe_word}"'
+        f'{ctx_line}\n\n'
+        'Return ONLY a single JSON object with two string keys, no prose:\n'
+        '{\n'
+        '  "definition": "<one short English sentence, under 18 words>",\n'
+        '  "translation": "<Uzbek translation> / <Russian translation>"\n'
+        '}'
+    )
+    try:
+        text = _generate_text(prompt, max_tokens=180, temperature=0.3)
+    except Exception as exc:
+        logger.warning("_ai_word_lookup: AI call failed: %s", exc)
+        return ("", "")
+    if not text:
+        return ("", "")
+
+    import json
+    # Models occasionally wrap the JSON in code fences or commentary.
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return ("", "")
+    try:
+        data = json.loads(match.group(0))
+    except Exception:
+        return ("", "")
+
+    definition = str(data.get("definition") or "").strip()
+    translation = str(data.get("translation") or "").strip()
+    return (definition, translation)
+
+
 # ─── Storage ─────────────────────────────────────────────────────────────────
 
 UPLOAD_ROOT = Path(os.environ.get(
@@ -443,17 +488,51 @@ def create_highlight(
         if existing:
             dictionary_word_id = existing.id
         else:
+            # Try AI fill-in for definition + translation. If it returns empty
+            # we still create the word so the user can edit it manually.
+            ai_definition, ai_translation = _ai_word_lookup(
+                token, context=payload.note or payload.text
+            )
             word = models.DictionaryWord(
                 person_id=current_user.id,
                 module_id=payload.module_id,
                 word=token,
-                definition=payload.note or "(saved from reader — fill definition)",
+                definition=(
+                    payload.note
+                    or ai_definition
+                    or "(saved from reader — fill definition)"
+                ),
+                translation=ai_translation or None,
                 difficulty="B1",
                 tags=f"book:{book.id}|page:{payload.page}",
             )
             db.add(word)
             db.flush()
             dictionary_word_id = word.id
+
+    # Avoid duplicate vocab highlights for the same (book, page, text, word)
+    # — clicking Save twice in the dialog shouldn't pile up rows.
+    if payload.kind == "vocab" and dictionary_word_id is not None:
+        dup = (
+            db.query(models.BookHighlight)
+            .filter(
+                models.BookHighlight.book_id == book.id,
+                models.BookHighlight.person_id == current_user.id,
+                models.BookHighlight.page == payload.page,
+                models.BookHighlight.text == payload.text,
+                models.BookHighlight.dictionary_word_id == dictionary_word_id,
+                models.BookHighlight.kind == "vocab",
+            )
+            .first()
+        )
+        if dup:
+            dup_translation: Optional[str] = None
+            if dup.dictionary_word_id:
+                w = db.query(models.DictionaryWord).filter(
+                    models.DictionaryWord.id == dup.dictionary_word_id
+                ).first()
+                dup_translation = w.translation if w else None
+            return _serialize_highlight(dup, dup_translation)
 
     hl = models.BookHighlight(
         book_id=book.id,
