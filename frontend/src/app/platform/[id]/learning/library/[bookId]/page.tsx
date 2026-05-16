@@ -253,43 +253,82 @@ export default function ReaderPage() {
         resumeJumpedRef.current = true
     }, [book?.resume_text, book?.resume_page, page])
 
-    // After the PDF text layer renders, find the saved sentence and flash it.
-    // pdf.js builds the text layer asynchronously, so we poll briefly with rAF.
+    // After the PDF text layer renders, find every span the saved sentence
+    // overlaps and flash all of them. pdf.js renders one <span> per visual
+    // text run (≈ per line) so a multi-line sentence touches several spans.
+    // Strategy: build a flat normalized string of all spans with their
+    // offsets, locate the target inside it, then apply the flash class to
+    // every span whose offset range overlaps the match.
     useEffect(() => {
         if (!book?.resume_text || !book.resume_page) return
         if (page !== book.resume_page) return
         if (!pageRef.current) return
 
-        const target = book.resume_text.trim()
+        const norm = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
+        const target = norm(book.resume_text).trim()
         if (target.length < 4) return
 
         let cancelled = false
         let attempts = 0
+        const flashed: HTMLElement[] = []
+
         const tryFlash = () => {
             if (cancelled || !pageRef.current) return
             const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
             const spans = layer
-                ? Array.from(layer.querySelectorAll('span'))
+                ? (Array.from(layer.querySelectorAll('span')) as HTMLElement[])
                 : []
-            // pdf.js renders one <span> per text run, not per sentence — find
-            // the run that contains the start of the target, then scroll to it.
-            const normalized = target.replace(/\s+/g, ' ').toLowerCase()
-            const head = normalized.slice(0, Math.min(40, normalized.length))
-            const hit = spans.find(s =>
-                s.textContent &&
-                s.textContent.replace(/\s+/g, ' ').toLowerCase().includes(head),
-            )
-            if (hit) {
-                hit.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                hit.classList.add('resume-flash')
-                setTimeout(() => hit.classList.remove('resume-flash'), 2400)
-                return
+
+            // Build the flat string + range map. We join with a single space
+            // so adjacent spans don't run together (which would let "foo" +
+            // "bar" produce a false "oob" match).
+            let flat = ''
+            const ranges: { span: HTMLElement; start: number; end: number }[] = []
+            for (const s of spans) {
+                const text = norm(s.textContent || '')
+                if (!text) continue
+                const start = flat.length
+                flat += text
+                ranges.push({ span: s, start, end: flat.length })
+                flat += ' '
             }
+
+            // Exact substring first — falls back to first-40-chars prefix if
+            // the saved sentence has been edited slightly or the PDF has a
+            // hyphenation quirk we can't reverse.
+            let idx = flat.indexOf(target)
+            let matchLen = target.length
+            if (idx < 0) {
+                const head = target.slice(0, Math.min(40, target.length))
+                idx = flat.indexOf(head)
+                matchLen = head.length
+            }
+
+            if (idx >= 0) {
+                const matchEnd = idx + matchLen
+                const hits = ranges.filter(r => r.end > idx && r.start < matchEnd)
+                if (hits.length > 0) {
+                    hits[0].span.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    hits.forEach(r => {
+                        r.span.classList.add('resume-flash')
+                        flashed.push(r.span)
+                    })
+                    setTimeout(() => {
+                        flashed.forEach(el => el.classList.remove('resume-flash'))
+                    }, 2400)
+                    return
+                }
+            }
+
             if (++attempts < 30) requestAnimationFrame(tryFlash)
         }
         // Give the text layer a moment to mount.
         const id = setTimeout(tryFlash, 120)
-        return () => { cancelled = true; clearTimeout(id) }
+        return () => {
+            cancelled = true
+            clearTimeout(id)
+            flashed.forEach(el => el.classList.remove('resume-flash'))
+        }
     }, [book?.resume_text, book?.resume_page, page, zoom])
 
     if (isLoading || !book) {
