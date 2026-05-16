@@ -471,19 +471,20 @@ def create_highlight(
         if not token:
             raise HTTPException(status_code=400, detail="Selection is empty")
 
-        # Make sure we don't duplicate the same word in the same module.
-        existing = None
-        if payload.module_id is not None:
-            existing = (
-                db.query(models.DictionaryWord)
-                .filter(
-                    models.DictionaryWord.person_id == current_user.id,
-                    models.DictionaryWord.module_id == payload.module_id,
-                    func.lower(models.DictionaryWord.word) == token.lower(),
-                    models.DictionaryWord.deleted == False,
-                )
-                .first()
+        # Look for an existing entry for this user, case-insensitively, across
+        # ALL modules — a word the user already saved (with or without a
+        # module) should be reused rather than duplicated. If a match is in a
+        # different module than the one picked here, we still reuse it: the
+        # user can move it on the Dictionary page if they really want to.
+        existing = (
+            db.query(models.DictionaryWord)
+            .filter(
+                models.DictionaryWord.person_id == current_user.id,
+                func.lower(models.DictionaryWord.word) == token.lower(),
+                models.DictionaryWord.deleted == False,
             )
+            .first()
+        )
 
         if existing:
             dictionary_word_id = existing.id
