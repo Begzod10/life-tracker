@@ -449,8 +449,17 @@ export default function ReaderPage() {
     useEffect(() => {
         if (!pageRef.current) return
         if (!showTranslations) return
+        const placeholder = '(saved from reader — fill definition)'
+        // Pick the English definition first; only fall back to the bilingual
+        // translation when no real definition exists yet (backend default
+        // placeholder shouldn't be shown as a meaning).
+        const tooltipText = (h: BookHighlight): string => {
+            const def = (h.definition || '').trim()
+            if (def && def !== placeholder) return def
+            return (h.translation || '').trim()
+        }
         const pageVocab = highlights.filter(
-            h => h.page === page && h.kind === 'vocab' && h.translation,
+            h => h.page === page && h.kind === 'vocab' && tooltipText(h),
         )
         if (pageVocab.length === 0) return
 
@@ -470,6 +479,7 @@ export default function ReaderPage() {
                 const hits = spansForText(layer, h.text)
                 if (hits.length === 0) continue
                 anyHit = true
+                const text = tooltipText(h)
                 for (const el of hits) {
                     el.classList.add('vocab-overlay')
                     // Concatenate when several saved words share a span so a
@@ -478,7 +488,7 @@ export default function ReaderPage() {
                     const prev = el.getAttribute('data-vocab-translation')
                     el.setAttribute(
                         'data-vocab-translation',
-                        prev ? `${prev} · ${h.translation}` : (h.translation || ''),
+                        prev ? `${prev} · ${text}` : text,
                     )
                     marked.push(el)
                 }
@@ -899,6 +909,12 @@ function VocabRow({
     onDelete: () => void
 }) {
     const word = highlight.text.trim()
+    // English definition is the primary subline. The placeholder string
+    // backend uses for fresh saves shouldn't render — fall back to the
+    // bilingual translation only if no real definition exists yet.
+    const placeholder = '(saved from reader — fill definition)'
+    const hasDefinition = !!highlight.definition && highlight.definition.trim() !== placeholder
+    const subline = hasDefinition ? highlight.definition : highlight.translation
     return (
         <div
             className={`group relative px-2.5 py-2 rounded-lg border transition-colors ${
@@ -916,9 +932,9 @@ function VocabRow({
                     <p className={`text-sm font-medium leading-tight truncate ${onCurrentPage ? 'text-white' : 'text-white/90'}`}>
                         {word}
                     </p>
-                    {highlight.translation && (
+                    {subline && (
                         <p className="text-xs text-white/55 leading-snug mt-0.5 line-clamp-2">
-                            {highlight.translation}
+                            {subline}
                         </p>
                     )}
                 </button>

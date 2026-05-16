@@ -432,7 +432,11 @@ def stream_book_file(
 
 # ─── Highlights ──────────────────────────────────────────────────────────────
 
-def _serialize_highlight(h: models.BookHighlight, translation: Optional[str] = None) -> dict:
+def _serialize_highlight(
+    h: models.BookHighlight,
+    translation: Optional[str] = None,
+    definition: Optional[str] = None,
+) -> dict:
     return {
         "id": h.id,
         "book_id": h.book_id,
@@ -443,6 +447,7 @@ def _serialize_highlight(h: models.BookHighlight, translation: Optional[str] = N
         "color": h.color,
         "dictionary_word_id": h.dictionary_word_id,
         "translation": translation,
+        "definition": definition,
         "created_at": h.created_at,
     }
 
@@ -455,9 +460,14 @@ def list_highlights(
 ):
     _own_book_or_404(db, current_user.id, book_id)
     # Outer-join against DictionaryWord so vocab highlights bring their
-    # translation along. Non-vocab highlights and unlinked rows get null.
+    # English definition + bilingual translation along. Non-vocab highlights
+    # and unlinked rows get null for both.
     rows = (
-        db.query(models.BookHighlight, models.DictionaryWord.translation)
+        db.query(
+            models.BookHighlight,
+            models.DictionaryWord.translation,
+            models.DictionaryWord.definition,
+        )
         .outerjoin(
             models.DictionaryWord,
             models.DictionaryWord.id == models.BookHighlight.dictionary_word_id,
@@ -469,7 +479,10 @@ def list_highlights(
         .order_by(models.BookHighlight.page.asc(), models.BookHighlight.created_at.asc())
         .all()
     )
-    return [_serialize_highlight(h, translation) for h, translation in rows]
+    return [
+        _serialize_highlight(h, translation, definition)
+        for h, translation, definition in rows
+    ]
 
 
 @router.post("/{book_id}/highlights", status_code=status.HTTP_201_CREATED)
@@ -565,12 +578,15 @@ def create_highlight(
         )
         if dup:
             dup_translation: Optional[str] = None
+            dup_definition: Optional[str] = None
             if dup.dictionary_word_id:
                 w = db.query(models.DictionaryWord).filter(
                     models.DictionaryWord.id == dup.dictionary_word_id
                 ).first()
-                dup_translation = w.translation if w else None
-            return _serialize_highlight(dup, dup_translation)
+                if w:
+                    dup_translation = w.translation
+                    dup_definition = w.definition
+            return _serialize_highlight(dup, dup_translation, dup_definition)
 
     hl = models.BookHighlight(
         book_id=book.id,
@@ -586,13 +602,15 @@ def create_highlight(
     db.commit()
     db.refresh(hl)
     translation: Optional[str] = None
+    definition: Optional[str] = None
     if hl.dictionary_word_id:
         word = db.query(models.DictionaryWord).filter(
             models.DictionaryWord.id == hl.dictionary_word_id
         ).first()
         if word:
             translation = word.translation
-    return _serialize_highlight(hl, translation)
+            definition = word.definition
+    return _serialize_highlight(hl, translation, definition)
 
 
 @router.patch("/{book_id}/highlights/{highlight_id}")

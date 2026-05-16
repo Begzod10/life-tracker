@@ -44,6 +44,7 @@ export interface BookHighlight {
     color: string | null
     dictionary_word_id: number | null
     translation: string | null
+    definition: string | null
     created_at: string
 }
 
