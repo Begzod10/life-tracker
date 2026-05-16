@@ -382,6 +382,12 @@ def check_block_completions(self):
         now_tashkent = datetime.utcnow() + TASHKENT
         today_tashkent = now_tashkent.date()
         window_start_dt = now_tashkent - timedelta(minutes=NOTIFY_WINDOW_MIN)
+        # Block end_time is stored at minute precision ("HH:MM"), so a block
+        # ending at 13:30 actually ends at 13:30:00. A cron tick that lands a
+        # few hundred ms before the minute boundary would otherwise classify
+        # that block as "future" and skip it. Treat anything within the next
+        # 30 seconds as already-ended.
+        boundary_now = now_tashkent + timedelta(seconds=30)
 
         # Self-heal: an earlier version of this task did HH:MM string comparison
         # which, during the 00:00–00:59 Tashkent window, falsely set is_missed
@@ -429,7 +435,7 @@ def check_block_completions(self):
                 continue
             if end_dt < window_start_dt:
                 stale.append(b)
-            elif end_dt <= now_tashkent:
+            elif end_dt <= boundary_now:
                 candidates.append(b)
             # else: end_dt is in the future — leave alone
 
