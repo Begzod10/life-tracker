@@ -124,3 +124,27 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* pdf.js renders an invisible "text layer" of <span>s on top of the canvas
+   so the user can select and copy. By default the spans have `color:
+   transparent` which the browser respects only until selection — once
+   selected the browser shows the text in its default selection color,
+   producing a ghosted double image overlapping the canvas glyphs.
+   Forcing the fill to transparent stops the duplicate render; the canvas
+   below still shows the real letters and the selection background still
+   draws as a colored rectangle so the user sees what they've selected. */
+.react-pdf__Page__textContent,
+.react-pdf__Page__textContent span {
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.react-pdf__Page__textContent span::selection {
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  background: rgba(59, 130, 246, 0.32);
+}
+.react-pdf__Page__textContent span::-moz-selection {
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  background: rgba(59, 130, 246, 0.32);
+}
