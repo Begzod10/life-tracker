@@ -79,3 +79,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+/* "Resume here" flash — applied to the matching text run in the PDF text
+   layer when the user reopens a book at their saved resume pointer. Uses
+   box-shadow so it doesn't disturb pdf.js's layout, plus a brief pulse. */
+.react-pdf__Page__textContent .resume-flash {
+  background: rgba(52, 211, 153, 0.55);
+  border-radius: 3px;
+  box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.25);
+  animation: resume-flash-pulse 2.2s ease-out;
+}
+@keyframes resume-flash-pulse {
+  0%   { box-shadow: 0 0 0 16px rgba(52, 211, 153, 0.65); }
+  60%  { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.25); }
+  100% { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
+}

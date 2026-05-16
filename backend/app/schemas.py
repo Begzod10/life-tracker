@@ -1122,6 +1122,9 @@ class BookUpdate(BaseModel):
     tags: Optional[str] = None
     notes: Optional[str] = None
     current_page: Optional[int] = Field(default=None, ge=1)
+    # Pass "" to clear, or a string + page to set a resume pointer.
+    resume_text: Optional[str] = None
+    resume_page: Optional[int] = Field(default=None, ge=1)
 
 
 class BookRead(BaseModel):
@@ -1142,6 +1145,8 @@ class BookRead(BaseModel):
     updated_at: Optional[datetime] = None
     progress_percent: int = 0
     highlight_count: int = 0
+    resume_text: Optional[str] = None
+    resume_page: Optional[int] = None
 
 
 class BookListResponse(BaseModel):

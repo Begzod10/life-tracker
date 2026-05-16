@@ -812,6 +812,10 @@ class Book(Base):
     file_size_bytes = Column(Integer, nullable=True)
     total_pages = Column(Integer, nullable=False, default=0)
     current_page = Column(Integer, nullable=False, default=1)
+    # User-marked "resume here" pointer — last sentence they finished reading,
+    # captured from the rendered text layer. Used to scroll + flash on reopen.
+    resume_text = Column(Text, nullable=True)
+    resume_page = Column(Integer, nullable=True)
     status = Column(String(20), nullable=False, default="reading", index=True)  # want, reading, done
     cover_url = Column(String(500), nullable=True)          # Open Library or user-supplied
     isbn = Column(String(20), nullable=True)

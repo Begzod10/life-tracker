@@ -24,6 +24,8 @@ export interface Book {
     updated_at: string | null
     progress_percent: number
     highlight_count: number
+    resume_text: string | null
+    resume_page: number | null
 }
 
 export interface BookListResponse {
@@ -79,6 +81,9 @@ export interface BookUpdateInput {
     tags?: string
     notes?: string
     current_page?: number
+    // Pass null to clear the resume pointer.
+    resume_text?: string | null
+    resume_page?: number | null
 }
 
 export interface HighlightCreateInput {

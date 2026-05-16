@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, ChevronLeft, ChevronRight, Loader2, Plus, Sparkles, X,
     BookOpen, Highlighter, Bookmark, ZoomIn, ZoomOut, Trash2, ListChecks,
+    MapPin,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -222,6 +223,75 @@ export default function ReaderPage() {
         )
     }
 
+    // ─── Mark this selection as the "resume here" pointer ──────────────────
+    const handleResumeHere = () => {
+        if (!selection || !book) return
+        updateBook.mutate(
+            { id: book.id, data: { resume_text: selection.text, resume_page: page } },
+            { onSuccess: () => setSelection(null) },
+        )
+    }
+    const handleClearResume = () => {
+        if (!book) return
+        updateBook.mutate({ id: book.id, data: { resume_text: null, resume_page: null } })
+    }
+
+    // ─── Jump to the resume pointer once: navigate to the page on first
+    // book load, then on every page render, search the text layer for the
+    // saved sentence and flash it. Uses a ref so we only auto-jump once.
+    const resumeJumpedRef = useRef(false)
+    useEffect(() => {
+        if (!book?.resume_text || !book.resume_page) return
+        if (resumeJumpedRef.current) return
+        // Only auto-jump when the saved pointer differs from where we land —
+        // book.current_page already places us on the right page most of the
+        // time, but resume_page is the source of truth for sentence position.
+        if (page !== book.resume_page) {
+            setPage(book.resume_page)
+            setPageInput(String(book.resume_page))
+        }
+        resumeJumpedRef.current = true
+    }, [book?.resume_text, book?.resume_page, page])
+
+    // After the PDF text layer renders, find the saved sentence and flash it.
+    // pdf.js builds the text layer asynchronously, so we poll briefly with rAF.
+    useEffect(() => {
+        if (!book?.resume_text || !book.resume_page) return
+        if (page !== book.resume_page) return
+        if (!pageRef.current) return
+
+        const target = book.resume_text.trim()
+        if (target.length < 4) return
+
+        let cancelled = false
+        let attempts = 0
+        const tryFlash = () => {
+            if (cancelled || !pageRef.current) return
+            const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
+            const spans = layer
+                ? Array.from(layer.querySelectorAll('span'))
+                : []
+            // pdf.js renders one <span> per text run, not per sentence — find
+            // the run that contains the start of the target, then scroll to it.
+            const normalized = target.replace(/\s+/g, ' ').toLowerCase()
+            const head = normalized.slice(0, Math.min(40, normalized.length))
+            const hit = spans.find(s =>
+                s.textContent &&
+                s.textContent.replace(/\s+/g, ' ').toLowerCase().includes(head),
+            )
+            if (hit) {
+                hit.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                hit.classList.add('resume-flash')
+                setTimeout(() => hit.classList.remove('resume-flash'), 2400)
+                return
+            }
+            if (++attempts < 30) requestAnimationFrame(tryFlash)
+        }
+        // Give the text layer a moment to mount.
+        const id = setTimeout(tryFlash, 120)
+        return () => { cancelled = true; clearTimeout(id) }
+    }, [book?.resume_text, book?.resume_page, page, zoom])
+
     if (isLoading || !book) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -293,6 +363,26 @@ export default function ReaderPage() {
                         </button>
                     </div>
 
+                    {book.resume_text && book.resume_page && (
+                        <button
+                            onClick={() => {
+                                if (book.resume_page) goToPage(book.resume_page)
+                            }}
+                            title={`Resume here · "${book.resume_text.slice(0, 80)}${book.resume_text.length > 80 ? '…' : ''}"`}
+                            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border bg-emerald-500/10 border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/15 max-w-[200px]"
+                        >
+                            <MapPin className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Resume · p.{book.resume_page}</span>
+                            <span
+                                role="button"
+                                aria-label="Clear resume pointer"
+                                onClick={(e) => { e.stopPropagation(); handleClearResume() }}
+                                className="text-emerald-200/60 hover:text-red-300 cursor-pointer -mr-0.5"
+                            >
+                                <X className="w-3 h-3" />
+                            </span>
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowHighlights(s => !s)}
                         className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${
@@ -401,8 +491,10 @@ export default function ReaderPage() {
                 selection={selection}
                 onHighlight={handleQuickHighlight}
                 onSaveWord={() => setSaveDialogOpen(true)}
+                onResumeHere={handleResumeHere}
                 onDismiss={() => setSelection(null)}
                 isSaving={createHighlight.isPending}
+                isMarkingResume={updateBook.isPending}
             />
 
             <AnimatePresence>
@@ -480,13 +572,15 @@ function HighlightRow({
 }
 
 function SelectionPopover({
-    selection, onHighlight, onSaveWord, onDismiss, isSaving,
+    selection, onHighlight, onSaveWord, onResumeHere, onDismiss, isSaving, isMarkingResume,
 }: {
     selection: Selection | null
     onHighlight: () => void
     onSaveWord: () => void
+    onResumeHere: () => void
     onDismiss: () => void
     isSaving: boolean
+    isMarkingResume: boolean
 }) {
     if (!selection || !selection.rect) return null
     const top = selection.rect.top + window.scrollY - 48
@@ -518,6 +612,18 @@ function SelectionPopover({
             >
                 <Sparkles className="w-3.5 h-3.5" />
                 Save word
+            </button>
+            <span className="w-px h-4 bg-white/10" />
+            <button
+                onClick={onResumeHere}
+                disabled={isMarkingResume}
+                title="Mark this sentence — next time the book opens, jump here"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/10 rounded transition disabled:opacity-50"
+            >
+                {isMarkingResume
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <MapPin className="w-3.5 h-3.5" />}
+                Resume here
             </button>
             <button
                 onClick={onDismiss}

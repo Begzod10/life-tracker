@@ -98,6 +98,8 @@ def _serialize_book(book: models.Book, highlight_count: int = 0) -> dict:
         "updated_at": book.updated_at,
         "progress_percent": progress,
         "highlight_count": highlight_count,
+        "resume_text": book.resume_text,
+        "resume_page": book.resume_page,
     }
 
 
