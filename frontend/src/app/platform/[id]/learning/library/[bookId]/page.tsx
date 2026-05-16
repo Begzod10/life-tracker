@@ -54,12 +54,12 @@ interface Selection {
 }
 
 // ─── Text-layer matching helper ────────────────────────────────────────────
-// pdf.js renders one <span> per visual text run (≈ per line). For features
-// that need to highlight or annotate a saved string of text, we build a flat
-// normalized concatenation of all spans with each span's [start, end] offset
-// recorded, then locate the target substring inside the flat string and map
-// the match range back onto the spans it covers. Returns the matching spans
-// in document order, or [] if no match.
+// pdf.js renders one <span> per visual text run (often an entire line). For
+// features that need to highlight or annotate a saved string of text, we
+// build a flat normalized concatenation of all spans with each span's
+// [start, end] offset recorded, then locate the target substring inside the
+// flat string and map the match range back onto the spans it covers.
+// Returns the matching spans in document order, or [] if no match.
 function spansForText(layer: Element, target: string): HTMLElement[] {
     const norm = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
     const needle = norm(target).trim()
@@ -87,6 +87,34 @@ function spansForText(layer: Element, target: string): HTMLElement[] {
     if (idx < 0) return []
     const matchEnd = idx + matchLen
     return ranges.filter(r => r.end > idx && r.start < matchEnd).map(r => r.span)
+}
+
+// Return the exact pixel rectangle of `target` inside the given spans.
+// pdf.js often packs a whole line into one <span>, so a per-span bounding
+// rect would point at the left edge of the line rather than the actual
+// word. We scan each span's raw text case-insensitively and build a Range
+// for the matched offset so the rect lands tight against the word itself.
+// Falls back to the first span's bbox if no in-span substring match works.
+function rectForText(spans: HTMLElement[], target: string): DOMRect | null {
+    if (spans.length === 0) return null
+    const needle = target.toLowerCase()
+    for (const span of spans) {
+        const text = span.textContent || ''
+        const idx = text.toLowerCase().indexOf(needle)
+        if (idx < 0) continue
+        const node = span.firstChild
+        if (!node || node.nodeType !== Node.TEXT_NODE) continue
+        const nodeLen = (node.textContent || '').length
+        try {
+            const range = document.createRange()
+            range.setStart(node, Math.min(idx, nodeLen))
+            range.setEnd(node, Math.min(idx + target.length, nodeLen))
+            return range.getBoundingClientRect()
+        } catch {
+            continue
+        }
+    }
+    return spans[0].getBoundingClientRect()
 }
 
 export default function ReaderPage() {
@@ -418,13 +446,14 @@ export default function ReaderPage() {
             for (const h of pageVocab) {
                 const hits = spansForText(layer, h.text)
                 if (hits.length === 0) continue
+                // Use a Range-based precise rect so the badge sits under
+                // the actual word, not at the left edge of the line span.
+                const rect = rectForText(hits, h.text)
+                if (!rect) continue
                 anyHit = true
-                const first = hits[0]
-                const rect = first.getBoundingClientRect()
                 const badge = document.createElement('div')
                 badge.className = 'vocab-translation-badge'
                 badge.textContent = h.translation || ''
-                // Position relative to the text layer.
                 badge.style.left = `${rect.left - layerRect.left}px`
                 badge.style.top = `${rect.bottom - layerRect.top + 1}px`
                 layerEl.appendChild(badge)
