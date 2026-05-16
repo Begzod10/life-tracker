@@ -147,6 +147,11 @@ export default function ReaderPage() {
     // Bump this to force the resume flash effect to re-run even when the
     // page/text didn't change — used by the header chip's onClick.
     const [resumeFlashTick, setResumeFlashTick] = useState(0)
+    // Bumps every time pdf.js finishes rendering a page. Effects that depend
+    // on glyph positions (highlight overlay, translation badges) include this
+    // in their dep array so they re-run with valid coordinates, not the
+    // pre-layout zero-size rects.
+    const [pageRenderTick, setPageRenderTick] = useState(0)
     const [containerWidth, setContainerWidth] = useState(720)
     const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
     const [fileError, setFileError] = useState<string | null>(null)
@@ -366,7 +371,7 @@ export default function ReaderPage() {
             clearTimeout(id)
             flashed.forEach(el => el.classList.remove('resume-flash'))
         }
-    }, [book?.resume_text, book?.resume_page, page, zoom, resumeFlashTick])
+    }, [book?.resume_text, book?.resume_page, page, zoom, resumeFlashTick, pageRenderTick])
 
     // ─── Highlight overlay (kind='highlight') ──────────────────────────────
     // For each saved highlight on the current page, find its text in the
@@ -410,7 +415,7 @@ export default function ReaderPage() {
             clearTimeout(id)
             styled.forEach(el => el.classList.remove('hl-overlay'))
         }
-    }, [highlights, page, zoom, showHighlightOverlay])
+    }, [highlights, page, zoom, showHighlightOverlay, pageRenderTick])
 
     // ─── Translation badges (kind='vocab' with translation) ───────────────
     // For each vocab highlight on this page whose linked dictionary word
@@ -450,6 +455,11 @@ export default function ReaderPage() {
                 // the actual word, not at the left edge of the line span.
                 const rect = rectForText(hits, h.text)
                 if (!rect) continue
+                // pdf.js initially mounts the text layer with empty rects;
+                // glyph positioning runs a tick later. If we placed a badge
+                // now it would land at (0,0). Skip and let the retry pick it
+                // up once the layer has real dimensions.
+                if (rect.width === 0 || rect.height === 0) continue
                 anyHit = true
                 const badge = document.createElement('div')
                 badge.className = 'vocab-translation-badge'
@@ -467,7 +477,7 @@ export default function ReaderPage() {
             clearTimeout(id)
             mounted.forEach(el => el.remove())
         }
-    }, [highlights, page, zoom, showTranslations])
+    }, [highlights, page, zoom, showTranslations, pageRenderTick])
 
     if (isLoading || !book) {
         return (
@@ -648,6 +658,11 @@ export default function ReaderPage() {
                                     renderTextLayer
                                     renderAnnotationLayer={false}
                                     loading={<PdfLoading />}
+                                    // pdf.js finishes laying out glyphs here,
+                                    // so any DOM-position-dependent effect
+                                    // (highlight overlay, translation badge,
+                                    // resume flash) needs to re-run after this.
+                                    onRenderSuccess={() => setPageRenderTick(t => t + 1)}
                                 />
                             </PdfDocument>
                         )}
