@@ -61,7 +61,16 @@ interface Selection {
 // flat string and map the match range back onto the spans it covers.
 // Returns the matching spans in document order, or [] if no match.
 function spansForText(layer: Element, target: string): HTMLElement[] {
-    const norm = (s: string) => s.replace(/\s+/g, ' ').toLowerCase()
+    // NFKD decomposes ligatures (ﬁ → fi, ﬂ → fl, ﬀ → ff…) and stripped
+    // diacritics, so a saved word always reduces to its plain ASCII form
+    // even when the PDF source encodes glyphs with combining marks or
+    // typographic ligatures. Without this, "Bogues" can fail to match
+    // because the PDF text layer carries an unexpected codepoint.
+    const norm = (s: string) =>
+        (s || '')
+            .normalize('NFKD')
+            .replace(/\s+/g, ' ')
+            .toLowerCase()
     const needle = norm(target).trim()
     if (needle.length < 2) return []
 
@@ -91,6 +100,20 @@ function spansForText(layer: Element, target: string): HTMLElement[] {
         }
     }
     if (idx < 0) {
+        // Word-boundary regex search — picks up cases where the literal
+        // indexOf misses (e.g. "Bogues" surrounded by punctuation that
+        // landed in adjacent spans without a clean lower-cased match).
+        try {
+            const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const re = new RegExp(`(?:^|\\W)${escaped}(?:\\W|$)`, 'i')
+            const m = re.exec(flat)
+            if (m && m.index >= 0) {
+                idx = m.index + (m[0].startsWith(needle) ? 0 : m[0].indexOf(needle))
+                matchLen = needle.length
+            }
+        } catch {/* regex pathologies fall through to head match */}
+    }
+    if (idx < 0) {
         const head = needle.slice(0, Math.min(40, needle.length))
         idx = flat.indexOf(head)
         matchLen = head.length
@@ -108,11 +131,17 @@ function spansForText(layer: Element, target: string): HTMLElement[] {
 // Falls back to the first span's bbox if no in-span substring match works.
 function rectForText(spans: HTMLElement[], target: string): DOMRect | null {
     if (spans.length === 0) return null
-    const needle = target.toLowerCase()
+    const normGlyph = (s: string) => (s || '').normalize('NFKD').toLowerCase()
+    const needle = normGlyph(target)
     for (const span of spans) {
-        const text = span.textContent || ''
-        const idx = text.toLowerCase().indexOf(needle)
+        const rawText = span.textContent || ''
+        const normText = normGlyph(rawText)
+        const idx = normText.indexOf(needle)
         if (idx < 0) continue
+        // Range needs offsets in the *raw* text node, not the normalized
+        // form. NFKD almost always produces the same length as the source
+        // for plain ASCII; when a ligature expands (ﬁ → fi) the offset
+        // gets a small drift but Math.min() against nodeLen keeps it safe.
         const node = span.firstChild
         if (!node || node.nodeType !== Node.TEXT_NODE) continue
         const nodeLen = (node.textContent || '').length
@@ -120,7 +149,8 @@ function rectForText(spans: HTMLElement[], target: string): DOMRect | null {
             const range = document.createRange()
             range.setStart(node, Math.min(idx, nodeLen))
             range.setEnd(node, Math.min(idx + target.length, nodeLen))
-            return range.getBoundingClientRect()
+            const rect = range.getBoundingClientRect()
+            if (rect.width >= 2 && rect.height >= 2) return rect
         } catch {
             continue
         }
@@ -1065,7 +1095,7 @@ function VocabRow({
                 <button
                     onClick={onJump}
                     className="flex-1 min-w-0 text-left"
-                    title="Jump to page"
+                    aria-label="Jump to page"
                 >
                     <p className={`text-sm font-medium leading-tight truncate ${onCurrentPage ? 'text-white' : 'text-white/90'}`}>
                         {word}
