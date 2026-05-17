@@ -1054,14 +1054,14 @@ function VocabRow({
                     style={{ position: 'fixed', left: popoverPos.left, top: popoverPos.top, width: POPOVER_W }}
                     className="z-[100] pointer-events-auto"
                 >
-                    <div className="rounded-xl border border-indigo-400/25 bg-[#0f1019] shadow-2xl shadow-black/50 overflow-hidden">
-                        <div className="px-4 pt-3 pb-2 border-b border-white/5 flex items-center justify-between gap-3">
+                    <div className="rounded-xl border border-white/10 bg-[#0f1019] shadow-2xl shadow-black/60 overflow-hidden">
+                        <div className="px-4 pt-3 pb-2.5 flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-white truncate">{word}</p>
-                            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium bg-indigo-500/20 text-indigo-200 shrink-0">
+                            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium bg-white/10 text-white/70 shrink-0">
                                 p.{highlight.page}
                             </span>
                         </div>
-                        <div className="px-4 py-3 space-y-2.5">
+                        <div className="px-4 pb-3 space-y-2.5">
                             {fullDef && (
                                 <div>
                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300/70 mb-1">
