@@ -104,12 +104,14 @@ body {
   box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.18);
 }
 
-/* Vocab overlay — applied to text-layer spans that contain a saved
-   dictionary word with a translation. Indigo tint distinguishes vocab
-   from yellow highlights. Pointer-events:auto + a help cursor makes the
-   span hoverable so we can show the translation in a floating tooltip
-   (see the React-rendered tooltip in the reader page). */
-.react-pdf__Page__textContent .vocab-overlay {
+/* Vocab overlay — appended as a tightly-positioned <span> child of the
+   pdf.js text layer, sized to the exact word rect via the Range API.
+   Earlier passes added a CSS class to the matched text-layer span, but
+   pdf.js usually packs whole lines into single spans, so the tint bled
+   across the whole sentence. Indigo distinguishes vocab from yellow
+   highlights; pointer-events:auto + the help cursor make the rect
+   hoverable so the React-rendered translation tooltip can fire. */
+.react-pdf__Page__textContent .vocab-overlay-rect {
   background: rgba(99, 102, 241, 0.22);
   border-radius: 2px;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.18);

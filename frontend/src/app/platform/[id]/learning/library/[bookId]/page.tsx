@@ -452,12 +452,12 @@ export default function ReaderPage() {
     }, [highlights, page, zoom, showHighlightOverlay, pageRenderTick])
 
     // ─── Vocab markers + hover tooltips ───────────────────────────────────
-    // Earlier we mounted always-visible badges under each saved word, but
-    // pdf.js line-spacing is too tight (~5px gap) for a 14px badge — they
-    // bled into the line below and made the page hard to read. Now we tag
-    // each matched span with an indigo highlight + a data-attr translation,
-    // and a single React-managed tooltip shows the translation only while
-    // the reader is hovering the word.
+    // Earlier passes applied a CSS class to the matched pdf.js span — but
+    // pdf.js typically packs an entire line into one span, so tinting the
+    // span tinted the whole line. Instead, compute each word's exact rect
+    // via the Range API and append an absolute-positioned overlay element
+    // into the text layer. The overlay is sized to the word only, so it
+    // never bleeds beyond the actual letters.
     useEffect(() => {
         if (!pageRef.current) return
         if (!showTranslations) return
@@ -477,12 +477,19 @@ export default function ReaderPage() {
 
         let cancelled = false
         let attempts = 0
-        const marked: HTMLElement[] = []
+        const overlays: HTMLElement[] = []
 
         const tryApply = () => {
             if (cancelled || !pageRef.current) return
-            const layer = pageRef.current.querySelector('.react-pdf__Page__textContent')
+            const layer = pageRef.current.querySelector('.react-pdf__Page__textContent') as HTMLElement | null
             if (!layer) {
+                if (++attempts < 30) requestAnimationFrame(tryApply)
+                return
+            }
+            const layerRect = layer.getBoundingClientRect()
+            // Some text layers come back zero-sized for a frame after a zoom
+            // change — wait until they have real dimensions so our rects align.
+            if (layerRect.width < 10 || layerRect.height < 10) {
                 if (++attempts < 30) requestAnimationFrame(tryApply)
                 return
             }
@@ -492,17 +499,25 @@ export default function ReaderPage() {
                 if (hits.length === 0) continue
                 anyHit = true
                 const text = tooltipText(h)
-                for (const el of hits) {
-                    el.classList.add('vocab-overlay')
-                    // Concatenate when several saved words share a span so a
-                    // long line with multiple matches doesn't overwrite earlier
-                    // tooltips with whichever happened to be processed last.
-                    const prev = el.getAttribute('data-vocab-translation')
-                    el.setAttribute(
-                        'data-vocab-translation',
-                        prev ? `${prev} · ${text}` : text,
-                    )
-                    marked.push(el)
+                // Strip trailing punctuation when measuring — same reason
+                // as in spansForText: the comma may live in a different
+                // run than the headword.
+                const wordText = h.text.trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
+                if (wordText.length < 2) continue
+
+                for (const span of hits) {
+                    const wordRect = rectForText([span], wordText)
+                    if (!wordRect || wordRect.width < 2 || wordRect.height < 2) continue
+                    const overlay = document.createElement('span')
+                    overlay.className = 'vocab-overlay-rect'
+                    overlay.setAttribute('data-vocab-translation', text)
+                    overlay.style.position = 'absolute'
+                    overlay.style.left = `${wordRect.left - layerRect.left}px`
+                    overlay.style.top = `${wordRect.top - layerRect.top}px`
+                    overlay.style.width = `${wordRect.width}px`
+                    overlay.style.height = `${wordRect.height}px`
+                    layer.appendChild(overlay)
+                    overlays.push(overlay)
                 }
             }
             if (!anyHit && ++attempts < 30) requestAnimationFrame(tryApply)
@@ -511,10 +526,7 @@ export default function ReaderPage() {
         return () => {
             cancelled = true
             clearTimeout(id)
-            marked.forEach(el => {
-                el.classList.remove('vocab-overlay')
-                el.removeAttribute('data-vocab-translation')
-            })
+            overlays.forEach(el => el.remove())
         }
     }, [highlights, page, zoom, showTranslations, pageRenderTick])
 
