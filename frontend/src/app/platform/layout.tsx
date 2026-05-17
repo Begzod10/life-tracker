@@ -19,7 +19,9 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         <div className="dark bg-[#0a0a0f] relative min-h-screen">
             <WeatherBackground theme={activeTheme} />
 
-            <Sidebar />
+            <Suspense fallback={null}>
+                <Sidebar />
+            </Suspense>
 
             <div className="relative z-10 lg:pl-60">
                 <Suspense fallback={null}>
