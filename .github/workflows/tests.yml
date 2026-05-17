@@ -1,0 +1,61 @@
+name: Backend tests
+
+# Run the critical-path test suite on every push and PR. The deploy
+# workflow runs in parallel and doesn't currently gate on this job —
+# wire `needs: [tests]` into deploy.yml when you want green tests to
+# be a hard prerequisite for shipping.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: "123"
+          POSTGRES_DB: life_tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run critical-path tests
+        env:
+          # Same connection string conftest.py uses for the test DB.
+          DATABASE_URL: postgresql://postgres:123@localhost:5432/life_tracker_test
+          SECRET_KEY: ci-only-secret-key-not-used-for-anything-real
+        run: |
+          pytest tests/test_timetable_toggle.py \
+                 tests/test_books_highlights.py \
+                 tests/test_definition_lookup.py \
+                 -v --tb=short
