@@ -133,6 +133,72 @@ def _dictionary_api_lookup(word: str) -> str:
         return ""
 
 
+def _wiktionary_lookup(word: str) -> str:
+    """Second free fallback using Wiktionary's REST API. Wiktionary has
+    much broader coverage than dictionaryapi.dev — e.g. it knows "dunk"
+    while dictionaryapi.dev returns 404. Strips inline HTML tags from
+    the definition so it renders as plain text in the UI. Returns "" on
+    any error / unknown response shape.
+    """
+    try:
+        import requests
+        clean = (word or "").strip().strip(_DEDUP_STRIP)
+        if len(clean) < 2:
+            return ""
+        resp = requests.get(
+            f"https://en.wiktionary.org/api/rest_v1/page/definition/{clean}",
+            timeout=4,
+            headers={"Accept": "application/json"},
+        )
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        # Successful response is {lang_code: [entries]}. Errors come back
+        # as a flat dict with "type"/"title"/"detail". We only want the
+        # English ("en") entries.
+        if not isinstance(data, dict):
+            return ""
+        entries = data.get("en")
+        if not isinstance(entries, list):
+            return ""
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for defn in (entry.get("definitions") or []):
+                if not isinstance(defn, dict):
+                    continue
+                raw = (defn.get("definition") or "").strip()
+                if not raw:
+                    continue
+                # Wiktionary embeds <a>/<i>/<b>/<span> tags in definitions.
+                # Strip them so the UI shows clean text.
+                text = re.sub(r"<[^>]+>", "", raw).strip()
+                if text:
+                    return text
+        return ""
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("_wiktionary_lookup failed for %r: %s", word, exc)
+        return ""
+
+
+def _lookup_definition(word: str, context: Optional[str] = None) -> tuple[str, str]:
+    """Run the full definition-fetch chain in priority order:
+        1. AI (OpenAI → Groq) — best at proper nouns + context awareness
+        2. dictionaryapi.dev — common dictionary words
+        3. Wiktionary — broadest coverage incl. slang, plurals, "dunk"
+
+    Returns ``(definition, translation)``. Translation is only ever set
+    by the AI path; the two dictionary APIs are English-only.
+    """
+    ai_definition, ai_translation = _ai_word_lookup(word, context=context)
+    if ai_definition:
+        return (ai_definition, ai_translation)
+    definition = _dictionary_api_lookup(word)
+    if not definition:
+        definition = _wiktionary_lookup(word)
+    return (definition, ai_translation)
+
+
 # ─── Storage ─────────────────────────────────────────────────────────────────
 
 UPLOAD_ROOT = Path(os.environ.get(
@@ -579,15 +645,11 @@ def create_highlight(
         if existing:
             dictionary_word_id = existing.id
         else:
-            # Try AI fill-in for definition + translation. If the AI didn't
-            # produce a definition (rate-limit, parse failure, etc.), fall
-            # back to dictionaryapi.dev so plain English words always get
-            # *something* readable rather than the placeholder.
-            ai_definition, ai_translation = _ai_word_lookup(
+            # Try AI → dictionaryapi.dev → Wiktionary. dictionaryapi.dev
+            # misses words like "dunk"; Wiktionary catches the long tail.
+            ai_definition, ai_translation = _lookup_definition(
                 token, context=payload.note or payload.text
             )
-            if not ai_definition:
-                ai_definition = _dictionary_api_lookup(token)
             word = models.DictionaryWord(
                 person_id=current_user.id,
                 module_id=payload.module_id,
@@ -688,9 +750,7 @@ def refresh_highlight_definition(
     if not word:
         raise HTTPException(status_code=404, detail="Dictionary word not found")
 
-    ai_definition, ai_translation = _ai_word_lookup(word.word, context=hl.text)
-    if not ai_definition:
-        ai_definition = _dictionary_api_lookup(word.word)
+    ai_definition, ai_translation = _lookup_definition(word.word, context=hl.text)
 
     placeholder = "(saved from reader — fill definition)"
     changed = False

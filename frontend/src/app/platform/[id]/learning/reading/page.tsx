@@ -3,13 +3,14 @@
 import { useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, FileText, Sparkles, Check, Plus } from 'lucide-react'
+import { ArrowLeft, FileText, Sparkles, Check, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-    useFolders, useModules, useWordCreate, useAiExtractVocab,
+    useFolders, useModules, useWordCreate, useAiExtractVocab, useFolderCreate, useModuleCreate,
     type AiExtractCandidate, type DictionaryFolder, type DictionaryModule,
 } from '@/lib/hooks/use-dictionary'
 import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-components'
+import { Input } from '@/components/ui/input'
 
 const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const DIFF_COLOR: Record<string, string> = {
@@ -35,11 +36,35 @@ export default function ReadingPage() {
     const [folderId, setFolderId] = useState<number | undefined>(undefined)
     const [moduleId, setModuleId] = useState<number | undefined>(undefined)
 
+    // Inline create-on-the-fly. The user wants to create a new folder
+    // or module without leaving the reading page when none of the existing
+    // ones fit the words they just extracted.
+    const [newFolderName, setNewFolderName] = useState<string | null>(null)
+    const [newModuleName, setNewModuleName] = useState<string | null>(null)
+
     const { data: folders = [] } = useFolders()
     const { data: modules = [] } = useModules(folderId)
 
     const { mutate: extract, isPending: isExtracting, error: extractError, reset: resetExtract } = useAiExtractVocab()
     const { mutate: createWord, isPending: isSaving } = useWordCreate()
+    const { mutateAsync: createFolder, isPending: isCreatingFolder } = useFolderCreate()
+    const { mutateAsync: createModule, isPending: isCreatingModule } = useModuleCreate()
+
+    const handleCreateFolder = async () => {
+        const name = (newFolderName || '').trim()
+        if (!name) return
+        const created = await createFolder({ name })
+        setFolderId(created.id)
+        setModuleId(undefined)
+        setNewFolderName(null)
+    }
+    const handleCreateModule = async () => {
+        const name = (newModuleName || '').trim()
+        if (!name || !folderId) return
+        const created = await createModule({ folder_id: folderId, name })
+        setModuleId(created.id)
+        setNewModuleName(null)
+    }
 
     const candidateKey = (c: AiExtractCandidate) => c.word.toLowerCase()
 
@@ -235,26 +260,89 @@ export default function ReadingPage() {
                         <div className="border-t border-white/5 pt-4 space-y-3">
                             <p className="text-xs text-white/40">Save selected words to:</p>
                             <div className="grid grid-cols-2 gap-3">
-                                <FormField label="Folder">
-                                    <SelectInput
-                                        value={folderId ? String(folderId) : ''}
-                                        onChange={(v) => { setFolderId(v ? Number(v) : undefined); setModuleId(undefined) }}
-                                        options={[
-                                            { value: '', label: 'Pick a folder…' },
-                                            ...folders.map((f: DictionaryFolder) => ({ value: String(f.id), label: f.name })),
-                                        ]}
-                                    />
-                                </FormField>
-                                <FormField label="Module">
-                                    <SelectInput
-                                        value={moduleId ? String(moduleId) : ''}
-                                        onChange={(v) => setModuleId(v ? Number(v) : undefined)}
-                                        options={[
-                                            { value: '', label: folderId ? 'Pick a module…' : 'Pick a folder first' },
-                                            ...modules.map((m: DictionaryModule) => ({ value: String(m.id), label: m.name })),
-                                        ]}
-                                    />
-                                </FormField>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium text-gray-300">Folder</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setNewFolderName(newFolderName === null ? '' : null) }}
+                                            className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5"
+                                        >
+                                            {newFolderName === null ? <><Plus className="w-3 h-3" />New</> : <><X className="w-3 h-3" />Cancel</>}
+                                        </button>
+                                    </div>
+                                    {newFolderName === null ? (
+                                        <SelectInput
+                                            value={folderId ? String(folderId) : ''}
+                                            onChange={(v) => { setFolderId(v ? Number(v) : undefined); setModuleId(undefined) }}
+                                            options={[
+                                                { value: '', label: 'Pick a folder…' },
+                                                ...folders.map((f: DictionaryFolder) => ({ value: String(f.id), label: f.name })),
+                                            ]}
+                                        />
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <Input
+                                                autoFocus
+                                                value={newFolderName}
+                                                onChange={(e) => setNewFolderName(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder() }}
+                                                placeholder="New folder name…"
+                                                className="bg-white/[0.04] border-white/10 text-white"
+                                            />
+                                            <Button
+                                                size="sm"
+                                                onClick={handleCreateFolder}
+                                                disabled={!newFolderName.trim() || isCreatingFolder}
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            >
+                                                {isCreatingFolder ? '…' : 'Add'}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium text-gray-300">Module</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setNewModuleName(newModuleName === null ? '' : null) }}
+                                            disabled={!folderId}
+                                            className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            {newModuleName === null ? <><Plus className="w-3 h-3" />New</> : <><X className="w-3 h-3" />Cancel</>}
+                                        </button>
+                                    </div>
+                                    {newModuleName === null ? (
+                                        <SelectInput
+                                            value={moduleId ? String(moduleId) : ''}
+                                            onChange={(v) => setModuleId(v ? Number(v) : undefined)}
+                                            options={[
+                                                { value: '', label: folderId ? 'Pick a module…' : 'Pick a folder first' },
+                                                ...modules.map((m: DictionaryModule) => ({ value: String(m.id), label: m.name })),
+                                            ]}
+                                        />
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <Input
+                                                autoFocus
+                                                value={newModuleName}
+                                                onChange={(e) => setNewModuleName(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateModule() }}
+                                                placeholder="New module name…"
+                                                className="bg-white/[0.04] border-white/10 text-white"
+                                            />
+                                            <Button
+                                                size="sm"
+                                                onClick={handleCreateModule}
+                                                disabled={!newModuleName.trim() || isCreatingModule}
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            >
+                                                {isCreatingModule ? '…' : 'Add'}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <Button
                                 onClick={saveSelected}
