@@ -203,7 +203,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-6">
                     {isEditMode && (
-                        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+                        <Card className="bg-white/[0.025] border-white/5">
                             <div className="p-6 space-y-4">
                                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                     <User size={22} className="text-blue-500" />
@@ -235,7 +235,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
                                         <SelectTrigger className="bg-[#0f0f1a] border-[#2a2b36] text-white">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-[#1a1b26] border-[#2a2b36] text-white max-h-64">
+                                        <SelectContent className="bg-white/[0.025] border-white/5 text-white max-h-64">
                                             {TIMEZONES.map(tz => (
                                                 <SelectItem key={tz.value} value={tz.value}>
                                                     {tz.label}
@@ -285,7 +285,7 @@ function formatDate(value: string | null | undefined) {
 
 function ProfileInfoCard({ profile }: { profile: NonNullable<ReturnType<typeof useProfile>['data']> }) {
     return (
-        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+        <Card className="bg-white/[0.025] border-white/5">
             <div className="p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Account Info</h3>
                 <div className="space-y-3">
@@ -324,7 +324,7 @@ function PrivacySettingsSection({ privacySettings, togglePrivacy }: {
     }
 
     return (
-        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+        <Card className="bg-white/[0.025] border-white/5">
             <div className="p-6">
                 <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                     <Shield size={22} className="text-blue-500" />
@@ -424,7 +424,7 @@ function TelegramCard({ profile }: { profile: NonNullable<ReturnType<typeof useP
     }
 
     return (
-        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+        <Card className="bg-white/[0.025] border-white/5">
             <div className="p-6 space-y-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -514,7 +514,7 @@ function QuickActionsCard() {
     ]
 
     return (
-        <Card className="bg-[#1a1b26] border-[#2a2b36]">
+        <Card className="bg-white/[0.025] border-white/5">
             <div className="p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Quick Actions</h3>
                 <div className="space-y-2">

@@ -287,7 +287,7 @@ function GoalRecurringStats({ goalId }: { goalId: string }) {
         >
             <Card
                 className="p-6 border border-white/5 backdrop-blur-sm"
-                style={{ backgroundColor: 'oklch(0.18 0.02 240)', borderColor: 'oklch(0.25 0.02 240)' }}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.025)', borderColor: 'rgba(255, 255, 255, 0.06)' }}
             >
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -423,7 +423,7 @@ function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
         >
             <Card
                 className="p-5 border border-white/5 backdrop-blur-sm"
-                style={{ backgroundColor: 'oklch(0.18 0.02 240)', borderColor: 'oklch(0.25 0.02 240)' }}
+                style={{ backgroundColor: 'rgba(255, 255, 255, 0.025)', borderColor: 'rgba(255, 255, 255, 0.06)' }}
             >
                 <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
                     🔄 Recurring Tasks
@@ -777,12 +777,7 @@ export default function GoalPage() {
 
 
     return (
-        <div
-            className="min-h-screen p-6"
-            style={{
-                backgroundColor: 'oklch(0.15 0.02 240)',
-            }}
-        >
+        <div className="min-h-screen p-6">
             <motion.div
                 className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6"
                 variants={containerVariants}
@@ -895,7 +890,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-8 border border-white/5 backdrop-blur-sm overflow-hidden relative"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
@@ -963,7 +958,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
@@ -983,7 +978,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
@@ -1121,7 +1116,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
@@ -1254,7 +1249,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-6 border border-white/5 backdrop-blur-sm"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
@@ -1304,7 +1299,7 @@ export default function GoalPage() {
                             <Card
                                 className="p-6 border border-white/5 backdrop-blur-sm"
                                 style={{
-                                    backgroundColor: 'oklch(0.18 0.02 240)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >

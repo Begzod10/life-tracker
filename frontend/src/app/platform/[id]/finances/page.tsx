@@ -201,7 +201,7 @@ const OverviewCard: React.FC<{
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: delay * 0.05 }}
     >
-        <Card className="bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl hover:border-[#3a3b46] transition-all">
+        <Card className="bg-white/[0.025] border border-white/5 p-6 rounded-xl hover:border-white/15 transition-all">
             <p className="text-sm text-gray-400 mb-2">{label}</p>
             {isLoading ? (
                 <div className="space-y-2">
@@ -238,7 +238,7 @@ const JobCard: React.FC<{ job: Job; onDelete: (id: string | number) => void }> =
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 20 }}
     >
-        <Card className="bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl hover:border-[#3a3b46] transition-all">
+        <Card className="bg-white/[0.025] border border-white/5 p-6 rounded-xl hover:border-white/15 transition-all">
             <div className="flex items-start justify-between mb-4">
                 <div>
                     <h3 className="text-lg font-semibold text-white">{job.name}</h3>
@@ -307,7 +307,7 @@ const DeleteJobButton: React.FC<{ job: Job; onDelete: (id: string | number) => v
                     Delete
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Job</DialogTitle>
                 </DialogHeader>
@@ -404,7 +404,7 @@ const EditJobButton: React.FC<{ job: Job; personId: string | number }> = React.m
                     Edit
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Edit Job</DialogTitle>
                 </DialogHeader>
@@ -592,7 +592,7 @@ const JobFormModal: React.FC<{ personId: string; onAdd?: (job: Job) => void }> =
                     Add Job
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Add New Job</DialogTitle>
                 </DialogHeader>
@@ -746,7 +746,7 @@ const SalaryFormModal: React.FC<{ personId: string | number }> = ({ personId }) 
                     Add Salary
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Add New Salary Record</DialogTitle>
                 </DialogHeader>
@@ -839,7 +839,7 @@ const DeleteSalaryButton: React.FC<{ salary: SalaryMonth }> = ({ salary }) => {
                     <Trash2 className="w-4 h-4" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Salary Record</DialogTitle>
                 </DialogHeader>
@@ -922,13 +922,13 @@ const SalaryTab: React.FC<{ personId: string | number }> = ({ personId }) => {
             </div>
 
             {displaySalaries.length === 0 ? (
-                <div className="text-center py-12 bg-[#1a1b26] rounded-xl border border-[#2a2b36]">
+                <div className="text-center py-12 bg-white/[0.025] rounded-xl border border-white/5">
                     <p className="text-gray-400 mb-4">{showDeleted ? 'No deleted salary records found.' : 'No salary records found.'}</p>
                 </div>
             ) : (
                 <div className="grid gap-4">
                     {displaySalaries.map((salary: SalaryMonth) => (
-                        <Card key={salary.id} className="bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl hover:border-[#3a3b46] transition-all cursor-pointer" onClick={() => !showDeleted && router.push(`/platform/${personId}/salary?id=${salary.id}`)}>
+                        <Card key={salary.id} className="bg-white/[0.025] border border-white/5 p-6 rounded-xl hover:border-white/15 transition-all cursor-pointer" onClick={() => !showDeleted && router.push(`/platform/${personId}/salary?id=${salary.id}`)}>
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
@@ -1318,7 +1318,7 @@ const ExpenseFormModal: React.FC<{ personId: string | number }> = ({ personId })
                     Add Expense
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Add New Expense</DialogTitle>
                 </DialogHeader>
@@ -1522,7 +1522,7 @@ const EditExpenseButton: React.FC<{ expense: Expense; personId: string | number 
                     <Edit2 className="w-4 h-4" />
                 </button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-h-[90vh] overflow-y-auto w-full max-w-lg sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-white">Edit Expense</DialogTitle>
                 </DialogHeader>
@@ -1672,7 +1672,7 @@ const DeleteExpenseButton: React.FC<{ expense: Expense; onDelete: (id: string | 
                     <Trash2 className="w-4 h-4" />
                 </button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Expense</DialogTitle>
                 </DialogHeader>
@@ -1767,7 +1767,7 @@ const ExpensesTab: React.FC<{ personId: string }> = ({ personId }) => {
                 <ExpenseFormModal personId={personId} />
             </div>
 
-            <div className="bg-[#1a1b26] border border-[#2a2b36] rounded-xl overflow-hidden">
+            <div className="bg-white/[0.025] border border-white/5 rounded-xl overflow-hidden">
                 <table className="w-full">
                     <thead>
                         <tr className="border-b border-[#2a2b36]">
@@ -1861,7 +1861,7 @@ const DeleteBudgetButton: React.FC<{ budget: Budget; onDelete: (id: string | num
                     <Trash2 className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Budget</DialogTitle>
                 </DialogHeader>
@@ -1962,7 +1962,7 @@ const BudgetFormModal: React.FC<{ personId: string; budgetToEdit?: Budget }> = (
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-h-[80vh] overflow-y-auto">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-white">{isEditing ? 'Edit Budget' : 'Set New Budget'}</DialogTitle>
                 </DialogHeader>
@@ -2067,7 +2067,7 @@ const BudgetsTab: React.FC<{ personId: string }> = ({ personId }) => {
                 {!showDeleted && <BudgetFormModal personId={personId} />}
             </div>
             {budgets.length === 0 ? (
-                <div className="text-gray-500 text-center py-8 bg-[#1a1b26] border border-[#2a2b36] rounded-xl">
+                <div className="text-gray-500 text-center py-8 bg-white/[0.025] border border-white/5 rounded-xl">
                     No budgets found.
                 </div>
             ) : (
@@ -2078,7 +2078,7 @@ const BudgetsTab: React.FC<{ personId: string }> = ({ personId }) => {
 
                         return (
                             <motion.div key={budget.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                                <Card className={`bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl relative group ${showDeleted ? 'opacity-70' : ''}`}>
+                                <Card className={`bg-white/[0.025] border border-white/5 p-6 rounded-xl relative group ${showDeleted ? 'opacity-70' : ''}`}>
                                     {showDeleted && (
                                         <div className="absolute -top-3 left-4 bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded border border-red-500/30">
                                             Deleted
@@ -2099,7 +2099,7 @@ const BudgetsTab: React.FC<{ personId: string }> = ({ personId }) => {
                                             {isOverBudget ? `-${Math.abs(budget.remaining_amount).toLocaleString()} UZS` : `${Math.abs(budget.remaining_amount).toLocaleString()} UZS left`}
                                         </span>
                                     </div>
-                                    <div className="w-full bg-[#0f0f1a] rounded-full h-3 overflow-hidden mb-2">
+                                    <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden mb-2">
                                         <motion.div
                                             className={`h-full rounded-full ${isOverBudget ? 'bg-red-500' : 'bg-gradient-to-r from-green-500 to-emerald-500'}`}
                                             initial={{ width: 0 }}
@@ -2140,7 +2140,7 @@ const DeleteIncomeSourceButton: React.FC<{ source: IncomeSource; onDelete: (id: 
                     <Trash2 className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Income Source</DialogTitle>
                 </DialogHeader>
@@ -2247,7 +2247,7 @@ const IncomeSourceFormModal: React.FC<{ personId: string; sourceToEdit?: IncomeS
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-w-lg">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-w-lg">
                 <DialogHeader>
                     <DialogTitle className="text-white">{isEditing ? 'Edit Income Source' : 'Add New Income Source'}</DialogTitle>
                 </DialogHeader>
@@ -2371,7 +2371,7 @@ const IncomeSourcesTab: React.FC<{ personId: string }> = ({ personId }) => {
             </div>
 
             {sources.length === 0 ? (
-                <div className="text-gray-500 text-center py-8 bg-[#1a1b26] border border-[#2a2b36] rounded-xl">
+                <div className="text-gray-500 text-center py-8 bg-white/[0.025] border border-white/5 rounded-xl">
                     No income sources found.
                 </div>
             ) : (
@@ -2383,7 +2383,7 @@ const IncomeSourcesTab: React.FC<{ personId: string }> = ({ personId }) => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.1 }}
                         >
-                            <Card className={`bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl relative group transition-all ${showDeleted ? 'opacity-70' : 'hover:border-[#3a3b46]'}`}>
+                            <Card className={`bg-white/[0.025] border border-white/5 p-6 rounded-xl relative group transition-all ${showDeleted ? 'opacity-70' : 'hover:border-white/15'}`}>
                                 {showDeleted && (
                                     <div className="absolute -top-3 left-4 bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded border border-red-500/30">
                                         Deleted
@@ -2518,7 +2518,7 @@ const SavingsFormModal: React.FC<{ personId: string; accountToEdit?: SavingsAcco
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36] max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="bg-white/[0.025] border border-white/5 max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-white">{isEditing ? 'Edit Savings Account' : 'Add New Account'}</DialogTitle>
                 </DialogHeader>
@@ -2652,7 +2652,7 @@ const DeleteSavingsButton: React.FC<{ account: SavingsAccount, onDelete: (id: st
                     <Trash2 className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
-            <DialogContent className="bg-[#1a1b26] border border-[#2a2b36]">
+            <DialogContent className="bg-white/[0.025] border border-white/5">
                 <DialogHeader>
                     <DialogTitle className="text-white">Delete Savings Account</DialogTitle>
                 </DialogHeader>
@@ -2720,7 +2720,7 @@ const SavingsTab: React.FC<{ personId: string }> = ({ personId }) => {
             </div>
 
             {accounts.length === 0 ? (
-                <div className="text-gray-500 text-center py-8 bg-[#1a1b26] border border-[#2a2b36] rounded-xl">
+                <div className="text-gray-500 text-center py-8 bg-white/[0.025] border border-white/5 rounded-xl">
                     No savings accounts found.
                 </div>
             ) : (
@@ -2735,7 +2735,7 @@ const SavingsTab: React.FC<{ personId: string }> = ({ personId }) => {
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: index * 0.1 }}
                             >
-                                <Card className={`bg-[#1a1b26] border border-[#2a2b36] p-6 rounded-xl relative group transition-all ${showDeleted ? 'opacity-70' : 'hover:border-[#3a3b46]'}`}>
+                                <Card className={`bg-white/[0.025] border border-white/5 p-6 rounded-xl relative group transition-all ${showDeleted ? 'opacity-70' : 'hover:border-white/15'}`}>
                                     {showDeleted && (
                                         <div className="absolute -top-3 left-4 bg-red-500/20 text-red-400 text-xs px-2 py-1 rounded border border-red-500/30">
                                             Deleted
@@ -2767,7 +2767,7 @@ const SavingsTab: React.FC<{ personId: string }> = ({ personId }) => {
                                                 <span className="text-gray-400">Target</span>
                                                 <span className="text-gray-300">{account.target_amount.toLocaleString()} {account.currency}</span>
                                             </div>
-                                            <div className="w-full bg-[#0f0f1a] rounded-full h-3 overflow-hidden">
+                                            <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
                                                 <motion.div
                                                     className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-500"
                                                     initial={{ width: 0 }}
@@ -2879,7 +2879,7 @@ export default function FinancesPage() {
                     transition={{ delay: 0.2 }}
                 >
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="bg-[#1a1b26] border border-[#2a2b36] mb-8">
+                        <TabsList className="bg-white/[0.025] border border-white/5 mb-8">
                             <TabsTrigger value="overview">Overview</TabsTrigger>
                             <TabsTrigger value="jobs">Jobs</TabsTrigger>
                             <TabsTrigger value="salary">Salary</TabsTrigger>

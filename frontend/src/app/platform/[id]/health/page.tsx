@@ -122,7 +122,7 @@ function HealthProfilePage() {
     if (error || !data) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <Card className="bg-[#1a1b26] border-[#2a2b36] max-w-md w-full">
+                <Card className="bg-white/[0.025] border-white/5 max-w-md w-full">
                     <CardContent className="pt-6 text-center">
                         <p className="text-gray-400 mb-6">Record Not Found</p>
                         <Button onClick={() => router.push('/platform')} variant="outline">
@@ -210,7 +210,7 @@ function HealthProfilePage() {
                     <div className="lg:col-span-2 space-y-6">
                         {/* Body Metrics Card */}
                         <motion.div variants={itemVariants}>
-                            <Card className="bg-[#1a1b26] border-[#2a2b36] border border-white/5 hover:border-white/10 transition-all">
+                            <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-white">
                                         <Scale className="w-5 h-5" />
@@ -220,7 +220,7 @@ function HealthProfilePage() {
                                 <CardContent>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {/* Weight */}
-                                        <div className="bg-[#0f0f1a] rounded-lg p-4">
+                                        <div className="bg-white/[0.02] rounded-lg p-4 border border-white/5">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <Scale className="w-4 h-4 text-blue-400" />
                                                 <span className="text-gray-400 text-sm">Weight</span>
@@ -229,7 +229,7 @@ function HealthProfilePage() {
                                         </div>
 
                                         {/* Height */}
-                                        <div className="bg-[#0f0f1a] rounded-lg p-4">
+                                        <div className="bg-white/[0.02] rounded-lg p-4 border border-white/5">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <TrendingUp className="w-4 h-4 text-purple-400" />
                                                 <span className="text-gray-400 text-sm">Height</span>
@@ -238,7 +238,7 @@ function HealthProfilePage() {
                                         </div>
 
                                         {/* Body Fat */}
-                                        <div className="bg-[#0f0f1a] rounded-lg p-4">
+                                        <div className="bg-white/[0.02] rounded-lg p-4 border border-white/5">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <TrendingDown className="w-4 h-4 text-orange-400" />
                                                 <span className="text-gray-400 text-sm">Body Fat</span>
@@ -247,7 +247,7 @@ function HealthProfilePage() {
                                         </div>
 
                                         {/* Muscle Mass */}
-                                        <div className="bg-[#0f0f1a] rounded-lg p-4">
+                                        <div className="bg-white/[0.02] rounded-lg p-4 border border-white/5">
                                             <div className="flex items-center gap-2 mb-3">
                                                 <Dumbbell className="w-4 h-4 text-green-400" />
                                                 <span className="text-gray-400 text-sm">Muscle Mass</span>
@@ -261,7 +261,7 @@ function HealthProfilePage() {
 
                         {/* Vitals Card */}
                         <motion.div variants={itemVariants}>
-                            <Card className="bg-[#1a1b26] border-[#2a2b36] border border-white/5 hover:border-white/10 transition-all">
+                            <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-white">
                                         <Activity className="w-5 h-5" />
@@ -306,7 +306,7 @@ function HealthProfilePage() {
 
                         {/* Daily Tracking Card */}
                         <motion.div variants={itemVariants}>
-                            <Card className="bg-[#1a1b26] border-[#2a2b36] border border-white/5 hover:border-white/10 transition-all">
+                            <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2 text-white">
                                         <Calendar className="w-5 h-5" />
@@ -509,7 +509,7 @@ function HealthProfilePage() {
                     <div className="space-y-6 lg:sticky lg:top-4 h-fit">
                         {/* Quick Actions */}
                         <motion.div variants={itemVariants}>
-                            <Card className="bg-[#1a1b26] border-[#2a2b36] border border-white/5 hover:border-white/10 transition-all">
+                            <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">
                                 <CardHeader>
                                     <CardTitle className="text-white">Quick Actions</CardTitle>
                                 </CardHeader>
@@ -546,7 +546,7 @@ function HealthProfilePage() {
 
                         {/* Statistics */}
                         <motion.div variants={itemVariants}>
-                            <Card className="bg-[#1a1b26] border-[#2a2b36] border border-white/5 hover:border-white/10 transition-all">
+                            <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">
                                 <CardHeader>
                                     <CardTitle className="text-white">Statistics</CardTitle>
                                 </CardHeader>
