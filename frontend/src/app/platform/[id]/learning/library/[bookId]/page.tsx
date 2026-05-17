@@ -955,10 +955,29 @@ function VocabRow({
     // beyond the truncated 2-line subline. A tiny delay keeps it from
     // flickering as the cursor flies past the row.
     const hasOverflow = fullDef.length > 80 || fullTrans.length > 0
-    const [hoverOpen, setHoverOpen] = useState(false)
+    const [popoverPos, setPopoverPos] = useState<{ left: number; top: number } | null>(null)
     const rowRef = useRef<HTMLDivElement | null>(null)
     const openTimer = useRef<number | null>(null)
     const closeTimer = useRef<number | null>(null)
+    // The dictionary panel uses overflow-y-auto, which implicitly clips the
+    // x-axis too — so an absolute popover anchored "right-full" would be
+    // chopped off at the panel's left edge. Position via fixed coords from
+    // the row's bounding rect instead so the popover escapes any clipping.
+    const POPOVER_W = 288
+    const GAP = 12
+    const openNow = () => {
+        if (!hasOverflow || !rowRef.current) return
+        const r = rowRef.current.getBoundingClientRect()
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        // Default: anchor to the row's left. Flip to the right when the
+        // popover would clip the viewport edge.
+        let left = r.left - POPOVER_W - GAP
+        if (left < 8) left = Math.min(r.right + GAP, vw - POPOVER_W - 8)
+        // Keep within the visible vertical band; the popover is ~180px tall.
+        const top = Math.max(8, Math.min(r.top, vh - 200))
+        setPopoverPos({ left, top })
+    }
     const scheduleOpen = () => {
         if (!hasOverflow) return
         if (closeTimer.current) {
@@ -967,7 +986,7 @@ function VocabRow({
         }
         if (openTimer.current) return
         openTimer.current = window.setTimeout(() => {
-            setHoverOpen(true)
+            openNow()
             openTimer.current = null
         }, 200)
     }
@@ -978,7 +997,7 @@ function VocabRow({
         }
         if (closeTimer.current) return
         closeTimer.current = window.setTimeout(() => {
-            setHoverOpen(false)
+            setPopoverPos(null)
             closeTimer.current = null
         }, 100)
     }
@@ -998,11 +1017,12 @@ function VocabRow({
                     : 'border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]'
             }`}
         >
-            {hoverOpen && (
+            {popoverPos && (
                 <div
                     onMouseEnter={scheduleOpen}
                     onMouseLeave={scheduleClose}
-                    className="absolute right-full top-0 mr-3 w-72 z-50 pointer-events-auto"
+                    style={{ position: 'fixed', left: popoverPos.left, top: popoverPos.top, width: POPOVER_W }}
+                    className="z-[100] pointer-events-auto"
                 >
                     <div className="rounded-xl border border-indigo-400/25 bg-[#0f1019]/95 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden">
                         <div className="px-4 pt-3 pb-2 border-b border-white/5 flex items-center justify-between gap-3">
