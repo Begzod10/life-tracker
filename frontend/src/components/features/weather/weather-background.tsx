@@ -286,12 +286,27 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
   const cfg = THEMES[theme]
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    // `fixed` so the weather backdrop tracks the viewport across scroll and
+    // across every platform page, regardless of how tall the page content
+    // is. With `absolute`, themes whose gradient stops at 60-70% from the
+    // top left a dead-dark slab at the bottom of any page taller than one
+    // viewport (image 36).
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
       {/* Base gradient */}
       {cfg.bg && <div className="absolute inset-0" style={{ background: cfg.bg }} />}
 
       {/* Top glow */}
       {cfg.glow && <div className="absolute inset-x-0 top-0 h-64" style={{ background: cfg.glow }} />}
+
+      {/* Secondary glow anchored to the bottom — keeps the lower viewport
+          from going pitch-black on themes whose primary gradient only
+          covers the top portion. */}
+      {cfg.glow && (
+        <div
+          className="absolute inset-x-0 bottom-0 h-72 opacity-60"
+          style={{ background: cfg.glow, transform: 'scaleY(-1)' }}
+        />
+      )}
 
       {/* Particle layers */}
       {(cfg.kind === 'rain' || cfg.kind === 'thunder-rain') && (
@@ -306,10 +321,11 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
       {/* 3D layer */}
       <Weather3D theme={theme} />
 
-      {/* Vignette to ground the content */}
+      {/* Vignette to ground the content — lighter than before so the
+          bottom of the viewport doesn't read as dead-dark. */}
       <div
         className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(10,10,15,0.6) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse 110% 110% at 50% 50%, transparent 55%, rgba(10,10,15,0.35) 100%)' }}
       />
     </div>
   )
