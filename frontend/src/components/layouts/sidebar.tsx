@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
 import {
@@ -19,6 +19,8 @@ import {
     LayoutGrid,
     ArrowLeft,
     User as UserIcon,
+    Target,
+    CheckSquare,
 } from 'lucide-react'
 
 type NavItem = {
@@ -27,6 +29,11 @@ type NavItem = {
     icon: React.ComponentType<{ className?: string }>
     /** active when current path starts with this prefix (in addition to exact match) */
     matchPrefix?: boolean
+    /**
+     * For ?category=… views on /platform: marks this item active when the
+     * pathname is /platform AND search has category=<value>.
+     */
+    hubCategory?: string
 }
 
 type NavSection = {
@@ -39,6 +46,8 @@ function buildSections(id: string): NavSection[] {
     return [
         {
             items: [
+                { name: 'Goals', href: '/platform?category=goals', icon: Target, hubCategory: 'goals' },
+                { name: 'Tasks', href: '/platform?category=tasks', icon: CheckSquare, hubCategory: 'tasks' },
                 { name: 'Timetable', href: `${base}/timetable`, icon: CalendarClock, matchPrefix: true },
             ],
         },
@@ -70,7 +79,14 @@ function buildSections(id: string): NavSection[] {
     ]
 }
 
-function isItemActive(pathname: string, item: NavItem): boolean {
+function isItemActive(
+    pathname: string,
+    item: NavItem,
+    hubCategoryParam: string | null,
+): boolean {
+    if (item.hubCategory) {
+        return pathname === '/platform' && hubCategoryParam === item.hubCategory
+    }
     if (pathname === item.href) return true
     if (item.matchPrefix && pathname.startsWith(`${item.href}/`)) return true
     return false
@@ -79,6 +95,8 @@ function isItemActive(pathname: string, item: NavItem): boolean {
 export function Sidebar() {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
+    const searchParams = useSearchParams()
+    const hubCategoryParam = searchParams?.get('category') ?? null
     const { data: user } = useUser()
 
     // Prefer URL param so the sidebar reflects the route you're already on;
@@ -123,7 +141,7 @@ export function Sidebar() {
                         )}
                         {section.items.map((item) => {
                             const Icon = item.icon
-                            const active = isItemActive(pathname, item)
+                            const active = isItemActive(pathname, item, hubCategoryParam)
                             return (
                                 <Link
                                     key={item.href}
