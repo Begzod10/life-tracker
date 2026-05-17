@@ -42,3 +42,4 @@ celerybeat.pid
 frontend/public/workbox-*.js
 frontend/public/workbox-*.js.map
 frontend/public/swe-worker-*.js
+local-popover-verification.png
