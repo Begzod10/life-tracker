@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useUser } from '@/lib/hooks/use-auth'
 import {
     BookOpen,
     Dumbbell,
@@ -78,7 +79,12 @@ function isItemActive(pathname: string, item: NavItem): boolean {
 export function Sidebar() {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
-    const id = params?.id
+    const { data: user } = useUser()
+
+    // Prefer URL param so the sidebar reflects the route you're already on;
+    // fall back to the authenticated user when the route has no [id]
+    // (e.g. /platform, /platform/profile).
+    const id = params?.id ?? (user?.id != null ? String(user.id) : undefined)
 
     if (!id) {
         return null

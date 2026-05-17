@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react'
 import { Header } from '@/components/layouts/header'
+import { Sidebar } from '@/components/layouts/sidebar'
 import { AICoach } from '@/components/features/ai-coach/ai-coach'
 import { useWeather } from '@/lib/hooks/use-weather'
 import { WeatherBackground, WeatherWidget } from '@/components/features/weather/weather-background'
@@ -18,7 +19,9 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
         <div className="dark bg-[#0a0a0f] relative min-h-screen">
             <WeatherBackground theme={activeTheme} />
 
-            <div className="relative z-10">
+            <Sidebar />
+
+            <div className="relative z-10 lg:pl-60">
                 <Suspense fallback={null}>
                     <Header />
                 </Suspense>
@@ -27,9 +30,10 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 </main>
             </div>
 
-            {/* Weather widget center-top */}
+            {/* Weather widget center-top — offset by half-sidebar on lg so
+                it stays optically centered above the content area. */}
             {weather && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-30">
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 lg:left-[calc(50%+120px)] z-30">
                     <WeatherWidget data={weather} />
                 </div>
             )}
