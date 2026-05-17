@@ -464,7 +464,7 @@ class ExpenseBase(BaseModel):
     amount: float = Field(..., description="Expense amount", gt=0)
     currency: str = Field(default="UZS", description="Currency code")
     category: str = Field(...,
-                          description="Category: food, transport, education, entertainment, bills, health, shopping, other")
+                          description="Category: food, transport, education, entertainment, bills, health, shopping, personal, family, other")
     subcategory: Optional[str] = Field(None, description="Subcategory for more specific classification")
     payment_type: Optional[str] = Field(None, description="Payment type: cash, card, transfer, crypto")
     payment_method: Optional[str] = Field(None, description="Specific card/wallet name")

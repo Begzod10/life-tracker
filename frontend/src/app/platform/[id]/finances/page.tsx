@@ -37,6 +37,8 @@ const EXPENSE_CATEGORY_OPTIONS = [
     { value: 'bills', label: 'Bills' },
     { value: 'health', label: 'Health' },
     { value: 'shopping', label: 'Shopping' },
+    { value: 'personal', label: 'Personal' },
+    { value: 'family', label: 'Family' },
 ]
 
 // Types
@@ -1744,6 +1746,8 @@ const ExpensesTab: React.FC<{ personId: string }> = ({ personId }) => {
                             <SelectItem value="bills">Bills</SelectItem>
                             <SelectItem value="health">Health</SelectItem>
                             <SelectItem value="shopping">Shopping</SelectItem>
+                            <SelectItem value="personal">Personal</SelectItem>
+                            <SelectItem value="family">Family</SelectItem>
                         </SelectContent>
                     </Select>
                     <Input

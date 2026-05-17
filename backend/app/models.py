@@ -404,7 +404,7 @@ class Expense(Base):
 
     # Categorization
     category = Column(String(50),
-                      nullable=False)  # food, transport, education, entertainment, bills, health, shopping, other
+                      nullable=False)  # food, transport, education, entertainment, bills, health, shopping, personal, family, other
     subcategory = Column(String(50))  # More specific categorization
 
     # Payment information

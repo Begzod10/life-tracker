@@ -328,7 +328,8 @@ function EditExpenseForm({ expense, salaryMonthId, onClose, onSavingChange }: {
                         options={[
                             { value: 'food', label: 'Food' }, { value: 'transport', label: 'Transport' },
                             { value: 'education', label: 'Education' }, { value: 'entertainment', label: 'Entertainment' },
-                            { value: 'bills', label: 'Bills' }, { value: 'health', label: 'Health' }, { value: 'shopping', label: 'Shopping' }
+                            { value: 'bills', label: 'Bills' }, { value: 'health', label: 'Health' }, { value: 'shopping', label: 'Shopping' },
+                            { value: 'personal', label: 'Personal' }, { value: 'family', label: 'Family' }
                         ]} />
                 </FormField>
                 <FormField label="Subcategory">
@@ -398,6 +399,8 @@ function ExpenseCard({ expense, salaryMonthId }: { expense: Expense; salaryMonth
         'Health': '🏥', 'health': '🏥',
         'education': '📚', 'Education': '📚',
         'bills': '🧾', 'Bills': '🧾',
+        'personal': '👤', 'Personal': '👤',
+        'family': '👨‍👩‍👧', 'Family': '👨‍👩‍👧',
     }
 
     const emoji = categoryEmojis[expense.category] || '💰'
@@ -769,7 +772,9 @@ function AddExpenseForm({ personId, salaryMonthId, onClose }: {
                             { value: 'entertainment', label: 'Entertainment' },
                             { value: 'bills', label: 'Bills' },
                             { value: 'health', label: 'Health' },
-                            { value: 'shopping', label: 'Shopping' }
+                            { value: 'shopping', label: 'Shopping' },
+                            { value: 'personal', label: 'Personal' },
+                            { value: 'family', label: 'Family' }
                         ]}
                     />
                 </FormField>
