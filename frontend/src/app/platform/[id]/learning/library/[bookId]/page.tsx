@@ -1054,7 +1054,10 @@ function VocabRow({
                     style={{ position: 'fixed', left: popoverPos.left, top: popoverPos.top, width: POPOVER_W }}
                     className="z-[100] pointer-events-auto"
                 >
-                    <div className="rounded-xl border border-white/10 bg-[#0f1019] shadow-2xl shadow-black/60 overflow-hidden">
+                    <div
+                        className="rounded-xl border border-white/10 shadow-2xl shadow-black/70 overflow-hidden"
+                        style={{ backgroundColor: '#0f1019' }}
+                    >
                         <div className="px-4 pt-3 pb-2.5 flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-white truncate">{word}</p>
                             <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium bg-white/10 text-white/70 shrink-0">
