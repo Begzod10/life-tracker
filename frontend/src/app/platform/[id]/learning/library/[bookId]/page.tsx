@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-components'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { fetchWithAuth } from '@/lib/api/fetch-with-auth'
@@ -19,7 +21,7 @@ import {
     type BookHighlight,
 } from '@/lib/hooks/use-books'
 import {
-    useFolders, useModules,
+    useFolders, useModules, useFolderCreate, useModuleCreate,
     type DictionaryFolder, type DictionaryModule,
 } from '@/lib/hooks/use-dictionary'
 
@@ -1047,24 +1049,36 @@ function VocabRow({
                     : 'border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]'
             }`}
         >
-            {popoverPos && (
+            {popoverPos && typeof document !== 'undefined' && createPortal(
                 <div
                     onMouseEnter={scheduleOpen}
                     onMouseLeave={scheduleClose}
-                    style={{ position: 'fixed', left: popoverPos.left, top: popoverPos.top, width: POPOVER_W }}
-                    className="z-[100] pointer-events-auto"
+                    style={{
+                        position: 'fixed',
+                        left: popoverPos.left,
+                        top: popoverPos.top,
+                        width: POPOVER_W,
+                        zIndex: 9999,
+                    }}
+                    className="pointer-events-auto"
                 >
                     <div
                         className="rounded-xl border border-white/10 shadow-2xl shadow-black/70 overflow-hidden"
-                        style={{ backgroundColor: '#0f1019' }}
+                        style={{ backgroundColor: '#0f1019', isolation: 'isolate' }}
                     >
-                        <div className="px-4 pt-3 pb-2.5 flex items-center justify-between gap-3">
+                        <div
+                            className="px-4 pt-3 pb-2.5 flex items-center justify-between gap-3 relative"
+                            style={{ backgroundColor: '#0f1019' }}
+                        >
                             <p className="text-sm font-semibold text-white truncate">{word}</p>
                             <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium bg-white/10 text-white/70 shrink-0">
                                 p.{highlight.page}
                             </span>
                         </div>
-                        <div className="px-4 pb-3 space-y-2.5">
+                        <div
+                            className="px-4 pb-3 space-y-2.5 relative"
+                            style={{ backgroundColor: '#0f1019' }}
+                        >
                             {fullDef && (
                                 <div>
                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300/70 mb-1">
@@ -1092,7 +1106,8 @@ function VocabRow({
                             )}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
             <div className="flex items-start gap-2">
                 <button
@@ -1252,9 +1267,31 @@ function SaveToDictionaryDialog({
     const [folderId, setFolderId] = useState<number | undefined>(undefined)
     const [moduleId, setModuleId] = useState<number | undefined>(undefined)
     const [note, setNote] = useState('')
+    // Inline-create state: null = show the select, '' or string = show the
+    // input. Matches the same affordance on the Reading page.
+    const [newFolderName, setNewFolderName] = useState<string | null>(null)
+    const [newModuleName, setNewModuleName] = useState<string | null>(null)
     const { data: folders = [] } = useFolders()
     const { data: modules = [] } = useModules(folderId)
     const createHighlight = useHighlightCreate()
+    const { mutateAsync: createFolder, isPending: isCreatingFolder } = useFolderCreate()
+    const { mutateAsync: createModule, isPending: isCreatingModule } = useModuleCreate()
+
+    const handleCreateFolder = async () => {
+        const name = (newFolderName || '').trim()
+        if (!name) return
+        const created = await createFolder({ name })
+        setFolderId(created.id)
+        setModuleId(undefined)
+        setNewFolderName(null)
+    }
+    const handleCreateModule = async () => {
+        const name = (newModuleName || '').trim()
+        if (!name || !folderId) return
+        const created = await createModule({ folder_id: folderId, name })
+        setModuleId(created.id)
+        setNewModuleName(null)
+    }
 
     const handleSave = () => {
         createHighlight.mutate(
@@ -1303,29 +1340,96 @@ function SaveToDictionaryDialog({
 
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                        <FormField label="Folder">
-                            <SelectInput
-                                value={folderId ? String(folderId) : ''}
-                                onChange={(v: string) => {
-                                    setFolderId(v ? Number(v) : undefined)
-                                    setModuleId(undefined)
-                                }}
-                                options={[
-                                    { value: '', label: 'None (orphan)' },
-                                    ...folders.map((f: DictionaryFolder) => ({ value: String(f.id), label: f.name })),
-                                ]}
-                            />
-                        </FormField>
-                        <FormField label="Module">
-                            <SelectInput
-                                value={moduleId ? String(moduleId) : ''}
-                                onChange={(v: string) => setModuleId(v ? Number(v) : undefined)}
-                                options={[
-                                    { value: '', label: folderId ? 'Pick a module…' : 'Pick folder first' },
-                                    ...modules.map((m: DictionaryModule) => ({ value: String(m.id), label: m.name })),
-                                ]}
-                            />
-                        </FormField>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-300">Folder</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setNewFolderName(newFolderName === null ? '' : null)}
+                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5"
+                                >
+                                    {newFolderName === null
+                                        ? <><Plus className="w-3 h-3" />New</>
+                                        : <><X className="w-3 h-3" />Cancel</>}
+                                </button>
+                            </div>
+                            {newFolderName === null ? (
+                                <SelectInput
+                                    value={folderId ? String(folderId) : ''}
+                                    onChange={(v: string) => {
+                                        setFolderId(v ? Number(v) : undefined)
+                                        setModuleId(undefined)
+                                    }}
+                                    options={[
+                                        { value: '', label: 'None (orphan)' },
+                                        ...folders.map((f: DictionaryFolder) => ({ value: String(f.id), label: f.name })),
+                                    ]}
+                                />
+                            ) : (
+                                <div className="flex gap-2">
+                                    <Input
+                                        autoFocus
+                                        value={newFolderName}
+                                        onChange={(e) => setNewFolderName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder() }}
+                                        placeholder="New folder name…"
+                                        className="bg-white/[0.04] border-white/10 text-white"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        onClick={handleCreateFolder}
+                                        disabled={!newFolderName.trim() || isCreatingFolder}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                    >
+                                        {isCreatingFolder ? '…' : 'Add'}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-gray-300">Module</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setNewModuleName(newModuleName === null ? '' : null)}
+                                    disabled={!folderId}
+                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    {newModuleName === null
+                                        ? <><Plus className="w-3 h-3" />New</>
+                                        : <><X className="w-3 h-3" />Cancel</>}
+                                </button>
+                            </div>
+                            {newModuleName === null ? (
+                                <SelectInput
+                                    value={moduleId ? String(moduleId) : ''}
+                                    onChange={(v: string) => setModuleId(v ? Number(v) : undefined)}
+                                    options={[
+                                        { value: '', label: folderId ? 'Pick a module…' : 'Pick folder first' },
+                                        ...modules.map((m: DictionaryModule) => ({ value: String(m.id), label: m.name })),
+                                    ]}
+                                />
+                            ) : (
+                                <div className="flex gap-2">
+                                    <Input
+                                        autoFocus
+                                        value={newModuleName}
+                                        onChange={(e) => setNewModuleName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreateModule() }}
+                                        placeholder="New module name…"
+                                        className="bg-white/[0.04] border-white/10 text-white"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        onClick={handleCreateModule}
+                                        disabled={!newModuleName.trim() || isCreatingModule}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                    >
+                                        {isCreatingModule ? '…' : 'Add'}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <FormField label="Your note (optional)" description="Becomes the dictionary definition placeholder — you can edit later from the Dictionary page.">
