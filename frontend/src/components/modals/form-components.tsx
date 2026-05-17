@@ -56,7 +56,7 @@ export function TextInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="bg-[#0f0f1a] border-[#2a2b36] text-white placeholder:text-gray-500"
+            className="bg-white/[0.04] border-white/10 text-white placeholder:text-gray-500"
             {...props}
         />
     )
@@ -76,7 +76,7 @@ export function TextareaInput({
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             rows={rows}
-            className="bg-[#0f0f1a] border-[#2a2b36] text-white placeholder:text-gray-500 resize-none"
+            className="bg-white/[0.04] border-white/10 text-white placeholder:text-gray-500 resize-none"
             {...props}
         />
     )
@@ -109,7 +109,7 @@ export function SelectInput({
     const decode = (v: string) => (v === EMPTY_VALUE_SENTINEL ? '' : v)
     return (
         <Select value={encode(value)} onValueChange={(v) => onChange(decode(v))}>
-            <SelectTrigger className={triggerClassName ?? "bg-[#0f0f1a] border-[#2a2b36] text-white"}>
+            <SelectTrigger className={triggerClassName ?? "bg-white/[0.04] border-white/10 text-white"}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent className="bg-[#1a1b26] border-[#2a2b36]">
@@ -141,7 +141,7 @@ export function DatePicker({
                 <Button
                     variant="outline"
                     className={cn(
-                        "w-full justify-start text-left font-normal bg-[#0f0f1a] border-[#2a2b36] text-white hover:bg-[#0f0f1a]",
+                        "w-full justify-start text-left font-normal bg-white/[0.04] border-white/10 text-white hover:bg-white/[0.06]",
                         !value && "text-gray-500"
                     )}
                 >
@@ -196,7 +196,7 @@ export function NumberInput({
             min={min}
             max={max}
             step={step}
-            className="bg-[#0f0f1a] border-[#2a2b36] text-white placeholder:text-gray-500"
+            className="bg-white/[0.04] border-white/10 text-white placeholder:text-gray-500"
             {...props}
         />
     )
