@@ -540,6 +540,7 @@ function Results({
 }) {
     const pct = total > 0 ? Math.round(correct / total * 100) : 0
     const emoji = pct >= 80 ? '🎉' : pct >= 50 ? '👍' : '📚'
+    const missed = mode === 'flashcard' ? learningCount : total - correct
 
     return (
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center space-y-6">
@@ -551,6 +552,11 @@ function Results({
                         ? `${correct} known · ${learningCount} still learning`
                         : `${correct} / ${total} correct`}
                 </p>
+                {missed > 0 && (
+                    <p className="text-xs text-amber-300/70 mt-2">
+                        The {missed} {missed === 1 ? 'word' : 'words'} you missed will come back at the top of your next session.
+                    </p>
+                )}
             </div>
             <div className="flex flex-wrap gap-3 justify-center">
                 {mode === 'flashcard' && learningCount > 0 && onReviewLearning && (

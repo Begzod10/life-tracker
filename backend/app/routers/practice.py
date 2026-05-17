@@ -111,7 +111,36 @@ def get_practice_words(
             pool += extra
         return [_serialize_practice_word(w, pool) for w in selected]
 
-    selected = random.sample(all_words, min(count, len(all_words)))
+    # "All words" sampling: replaced the old random.sample with a coverage
+    # strategy that guarantees the user actually walks through the whole
+    # scope across sessions, and that any word they just got wrong shows
+    # up in the very next session — even when they didn't pick the
+    # "Due for review" filter.
+    #
+    # Priority order:
+    #   1. Words due now (next_review_at <= now) — this includes the ones
+    #      the previous session marked wrong, since submit_result resets
+    #      interval_days to 0 and stamps next_review_at = now on misses.
+    #   2. Never-reviewed words (review_count == 0), oldest first by
+    #      created_at. Once a fresh import lands all 87 words here, they
+    #      get dealt out N per session until none remain.
+    #   3. Everything else by ascending review_count, then by oldest
+    #      last_reviewed_at — so well-known words are revisited last.
+    now = datetime.utcnow()
+
+    def priority_bucket(w: models.DictionaryWord) -> int:
+        if w.next_review_at is not None and w.next_review_at <= now:
+            return 0  # due (includes just-missed)
+        if w.review_count == 0:
+            return 1  # never seen
+        return 2      # known, revisit later
+
+    all_words.sort(key=lambda w: (
+        priority_bucket(w),
+        w.review_count,
+        w.last_reviewed_at or w.created_at,
+    ))
+    selected = all_words[:count]
     return [_serialize_practice_word(w, all_words) for w in selected]
 
 
