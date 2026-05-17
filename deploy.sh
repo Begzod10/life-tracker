@@ -12,6 +12,13 @@ cd /var/www/life_tracker/backend
 
 # Build frontend
 cd /var/www/life_tracker/frontend
+
+# Clear any stale build lock from a previously killed `next build`.
+# Next.js leaves .next/lock around if SIGTERM/OOM kills the process,
+# which blocks the next build with "Unable to acquire lock".
+pkill -f "next build" 2>/dev/null || true
+rm -f .next/lock
+
 npm install
 npm run build
 
