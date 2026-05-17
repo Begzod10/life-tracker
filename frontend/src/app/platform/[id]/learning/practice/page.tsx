@@ -649,8 +649,31 @@ const MODE_META: Record<Mode, { label: string; desc: string; icon: React.FC<{ cl
 }
 
 export default function PracticePage() {
+    return (
+        <Suspense fallback={null}>
+            <PracticePageInner />
+        </Suspense>
+    )
+}
+
+function PracticePageInner() {
     const params = useParams<{ id: string }>()
     const router = useRouter()
+    // Reading the scope from the URL lets entry points like "Practice this
+    // module" on a dictionary module page deep-link straight into a
+    // pre-scoped session. Parsed once at mount so subsequent in-page
+    // scope changes own the state — no fighting between the URL and clicks.
+    const searchParams = useSearchParams()
+    const initialFolderFromUrl = useMemo(() => {
+        const raw = searchParams?.get('folder')
+        const n = raw ? Number(raw) : NaN
+        return Number.isFinite(n) && n > 0 ? n : undefined
+    }, [searchParams])
+    const initialModuleFromUrl = useMemo(() => {
+        const raw = searchParams?.get('module')
+        const n = raw ? Number(raw) : NaN
+        return Number.isFinite(n) && n > 0 ? n : undefined
+    }, [searchParams])
 
     const [phase, setPhase] = useState<Phase>('pick')
     const [mode, setMode] = useState<Mode>('flashcard')
@@ -661,8 +684,8 @@ export default function PracticePage() {
     const [results, setResults] = useState<{ correct: number; total: number; learningIds: number[] } | null>(null)
     const [startError, setStartError] = useState<string | null>(null)
 
-    const [scopeFolderId, setScopeFolderId] = useState<number | undefined>(undefined)
-    const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(undefined)
+    const [scopeFolderId, setScopeFolderId] = useState<number | undefined>(initialFolderFromUrl)
+    const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(initialModuleFromUrl)
     const [dueOnly, setDueOnly] = useState(false)
     const [weakOnly, setWeakOnly] = useState(false)
     const { refetch: fetchWords, isFetching } = usePracticeWords({

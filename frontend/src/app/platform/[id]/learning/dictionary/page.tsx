@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, Plus, Search, Trash2, Edit2, X, ChevronDown,
     Folder as FolderIcon, BookOpen, Layers, AlertCircle, Target, BookMarked,
-    Sparkles,
+    Sparkles, Dumbbell,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -932,6 +932,8 @@ function AiModuleForm({ folderId, onSubmit, onCancel, isPending }: {
 // ─── Words view ──────────────────────────────────────────────────────────────
 
 function WordsView({ module: m }: { module: DictionaryModule }) {
+    const router = useRouter()
+    const params = useParams<{ id: string }>()
     const [search, setSearch] = useState('')
     const [filterDiff, setFilterDiff] = useState('')
     const [addOpen, setAddOpen] = useState(false)
@@ -944,6 +946,12 @@ function WordsView({ module: m }: { module: DictionaryModule }) {
     const { data: stats, isLoading: isStatsLoading } = useDictStats({ moduleId: m.id })
     const { mutate: create, isPending: isCreating, error: createError, reset: resetCreate } = useWordCreate()
 
+    // Module-scoped practice: take the user straight into a session that
+    // only uses this module's words. The practice page reads
+    // ?folder=…&module=… on mount and pre-selects the scope.
+    const practiceHref = `/platform/${params.id}/learning/practice?folder=${m.folder_id}&module=${m.id}`
+    const canPractice = (stats?.total ?? 0) >= 2
+
     return (
         <>
             <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel={`Module · ${m.name}`} />
@@ -955,9 +963,19 @@ function WordsView({ module: m }: { module: DictionaryModule }) {
                         {m.description && ` · ${m.description}`}
                     </p>
                 </div>
-                <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                    <Plus className="w-4 h-4" /> Add Word
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => router.push(practiceHref)}
+                        disabled={!canPractice}
+                        title={canPractice ? 'Practice this module' : 'Add at least 2 words to practice'}
+                        className="gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/30 disabled:cursor-not-allowed text-white"
+                    >
+                        <Dumbbell className="w-4 h-4" /> Practice
+                    </Button>
+                    <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+                        <Plus className="w-4 h-4" /> Add Word
+                    </Button>
+                </div>
             </div>
 
             <div className="flex gap-3 mb-6 flex-wrap">
