@@ -278,6 +278,8 @@ export const API_ENDPOINTS = {
         FILE: (id: number) => `${API_URL}/books/${id}/file`,
         HIGHLIGHTS: (id: number) => `${API_URL}/books/${id}/highlights`,
         HIGHLIGHT: (id: number, highlightId: number) => `${API_URL}/books/${id}/highlights/${highlightId}`,
+        HIGHLIGHT_REFRESH_DEFINITION: (id: number, highlightId: number) =>
+            `${API_URL}/books/${id}/highlights/${highlightId}/refresh-definition`,
         SESSIONS: (id: number) => `${API_URL}/books/${id}/sessions`,
         STATS: `${API_URL}/books/stats/overview`,
     },

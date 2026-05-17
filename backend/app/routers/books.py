@@ -90,7 +90,47 @@ def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]
 
     definition = str(data.get("definition") or "").strip()
     translation = str(data.get("translation") or "").strip()
+    if not definition:
+        # Tail-log so we can see why parsing landed on empty for a real
+        # English word like "hallmarks". Keeps the response trimmed.
+        logger.info(
+            "_ai_word_lookup: parsed but definition was empty for %r — raw=%r",
+            word,
+            text[:200],
+        )
     return (definition, translation)
+
+
+def _dictionary_api_lookup(word: str) -> str:
+    """Free English-only fallback when the AI returns nothing. Uses
+    dictionaryapi.dev (no auth, modest rate limits) so common nouns/verbs
+    like "hallmarks" still get a definition. Returns "" on any error or
+    if the API has nothing — never raises.
+    """
+    try:
+        import requests
+        clean = (word or "").strip().strip(_DEDUP_STRIP)
+        if len(clean) < 2:
+            return ""
+        resp = requests.get(
+            f"https://api.dictionaryapi.dev/api/v2/entries/en/{clean}",
+            timeout=4,
+        )
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        if not isinstance(data, list) or not data:
+            return ""
+        for entry in data:
+            for meaning in (entry.get("meanings") or []):
+                for d in (meaning.get("definitions") or []):
+                    text = (d.get("definition") or "").strip()
+                    if text:
+                        return text
+        return ""
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("_dictionary_api_lookup failed for %r: %s", word, exc)
+        return ""
 
 
 # ─── Storage ─────────────────────────────────────────────────────────────────
@@ -539,11 +579,15 @@ def create_highlight(
         if existing:
             dictionary_word_id = existing.id
         else:
-            # Try AI fill-in for definition + translation. If it returns empty
-            # we still create the word so the user can edit it manually.
+            # Try AI fill-in for definition + translation. If the AI didn't
+            # produce a definition (rate-limit, parse failure, etc.), fall
+            # back to dictionaryapi.dev so plain English words always get
+            # *something* readable rather than the placeholder.
             ai_definition, ai_translation = _ai_word_lookup(
                 token, context=payload.note or payload.text
             )
+            if not ai_definition:
+                ai_definition = _dictionary_api_lookup(token)
             word = models.DictionaryWord(
                 person_id=current_user.id,
                 module_id=payload.module_id,
@@ -611,6 +655,55 @@ def create_highlight(
             translation = word.translation
             definition = word.definition
     return _serialize_highlight(hl, translation, definition)
+
+
+@router.post("/{book_id}/highlights/{highlight_id}/refresh-definition")
+def refresh_highlight_definition(
+    book_id: int,
+    highlight_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Re-run the AI + dictionary lookup for an existing vocab highlight.
+    Useful when the original save landed on the placeholder definition
+    because the AI was rate-limited / returned junk. Only overwrites when
+    the new lookup actually produces something — never blanks a row.
+    """
+    _own_book_or_404(db, current_user.id, book_id)
+    hl = (
+        db.query(models.BookHighlight)
+        .filter(
+            models.BookHighlight.id == highlight_id,
+            models.BookHighlight.book_id == book_id,
+            models.BookHighlight.person_id == current_user.id,
+        )
+        .first()
+    )
+    if not hl or not hl.dictionary_word_id:
+        raise HTTPException(status_code=404, detail="Vocab highlight not found")
+
+    word = db.query(models.DictionaryWord).filter(
+        models.DictionaryWord.id == hl.dictionary_word_id
+    ).first()
+    if not word:
+        raise HTTPException(status_code=404, detail="Dictionary word not found")
+
+    ai_definition, ai_translation = _ai_word_lookup(word.word, context=hl.text)
+    if not ai_definition:
+        ai_definition = _dictionary_api_lookup(word.word)
+
+    placeholder = "(saved from reader — fill definition)"
+    changed = False
+    if ai_definition and (not word.definition or word.definition == placeholder):
+        word.definition = ai_definition
+        changed = True
+    if ai_translation and not word.translation:
+        word.translation = ai_translation
+        changed = True
+    if changed:
+        db.commit()
+        db.refresh(word)
+    return _serialize_highlight(hl, word.translation, word.definition)
 
 
 @router.patch("/{book_id}/highlights/{highlight_id}")

@@ -205,6 +205,22 @@ export function useHighlightCreate() {
     })
 }
 
+export function useHighlightRefreshDefinition() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ bookId, highlightId }: { bookId: number; highlightId: number }) =>
+            request<BookHighlight>(
+                API_ENDPOINTS.BOOKS.HIGHLIGHT_REFRESH_DEFINITION(bookId, highlightId),
+                { method: 'POST' },
+            ),
+        onSuccess: (_h, { bookId }) => {
+            qc.invalidateQueries({ queryKey: ['book-highlights', bookId] })
+            qc.invalidateQueries({ queryKey: ['dictionary'] })
+        },
+    })
+}
+
 export function useHighlightDelete() {
     const { request } = useHttp()
     const qc = useQueryClient()

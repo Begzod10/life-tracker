@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, ChevronLeft, ChevronRight, Loader2, Plus, Sparkles, X,
     BookOpen, Highlighter, Bookmark, ZoomIn, ZoomOut, Trash2, ListChecks,
-    MapPin, Languages,
+    MapPin, Languages, RefreshCw,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { fetchWithAuth } from '@/lib/api/fetch-with-auth'
 import {
-    useBook, useBookUpdate, useBookHighlights, useHighlightCreate, useHighlightDelete,
+    useBook, useBookUpdate, useBookHighlights, useHighlightCreate, useHighlightDelete, useHighlightRefreshDefinition,
     type BookHighlight,
 } from '@/lib/hooks/use-books'
 import {
@@ -80,6 +80,17 @@ function spansForText(layer: Element, target: string): HTMLElement[] {
     let idx = flat.indexOf(needle)
     let matchLen = needle.length
     if (idx < 0) {
+        // pdf.js often puts punctuation in its own span ("AGILITY" + ","),
+        // so the inter-span space separator gives us "agility , " in flat
+        // and the literal needle "agility," misses. Strip trailing
+        // punctuation from the needle and retry.
+        const trimmed = needle.replace(/[\p{P}\p{S}]+$/u, '').trim()
+        if (trimmed.length >= 2 && trimmed !== needle) {
+            idx = flat.indexOf(trimmed)
+            matchLen = trimmed.length
+        }
+    }
+    if (idx < 0) {
         const head = needle.slice(0, Math.min(40, needle.length))
         idx = flat.indexOf(head)
         matchLen = head.length
@@ -127,6 +138,7 @@ export default function ReaderPage() {
     const { data: highlights = [] } = useBookHighlights(bookId)
     const createHighlight = useHighlightCreate()
     const deleteHighlight = useHighlightDelete()
+    const refreshDefinition = useHighlightRefreshDefinition()
     // Vocab highlights are tracked behind the scenes to drive the inline
     // translation badge — they should not pollute the user-facing sidebar.
     const sidebarHighlights = useMemo(
@@ -826,6 +838,13 @@ export default function ReaderPage() {
                                                     onDelete={() =>
                                                         deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
                                                     }
+                                                    onRefresh={() =>
+                                                        refreshDefinition.mutate({ bookId: book.id, highlightId: h.id })
+                                                    }
+                                                    isRefreshing={
+                                                        refreshDefinition.isPending &&
+                                                        refreshDefinition.variables?.highlightId === h.id
+                                                    }
                                                 />
                                             ))}
                                         </div>
@@ -901,12 +920,14 @@ function PdfError({ message }: { message?: string } = {}) {
 }
 
 function VocabRow({
-    highlight, onCurrentPage, onJump, onDelete,
+    highlight, onCurrentPage, onJump, onDelete, onRefresh, isRefreshing,
 }: {
     highlight: BookHighlight
     onCurrentPage: boolean
     onJump: () => void
     onDelete: () => void
+    onRefresh: () => void
+    isRefreshing: boolean
 }) {
     const word = highlight.text.trim()
     // English definition is the primary subline. The placeholder string
@@ -915,6 +936,7 @@ function VocabRow({
     const placeholder = '(saved from reader — fill definition)'
     const hasDefinition = !!highlight.definition && highlight.definition.trim() !== placeholder
     const subline = hasDefinition ? highlight.definition : highlight.translation
+    const needsLookup = !hasDefinition && !highlight.translation
     return (
         <div
             className={`group relative px-2.5 py-2 rounded-lg border transition-colors ${
@@ -932,9 +954,13 @@ function VocabRow({
                     <p className={`text-sm font-medium leading-tight truncate ${onCurrentPage ? 'text-white' : 'text-white/90'}`}>
                         {word}
                     </p>
-                    {subline && (
+                    {subline ? (
                         <p className="text-xs text-white/55 leading-snug mt-0.5 line-clamp-2">
                             {subline}
+                        </p>
+                    ) : (
+                        <p className="text-xs text-amber-300/70 italic leading-snug mt-0.5">
+                            No definition yet — click ↻ to fetch.
                         </p>
                     )}
                 </button>
@@ -944,6 +970,14 @@ function VocabRow({
                     }`}>
                         p.{highlight.page}
                     </span>
+                    <button
+                        onClick={onRefresh}
+                        disabled={isRefreshing}
+                        className={`${needsLookup ? 'opacity-100 text-amber-300/80 hover:text-amber-200' : 'opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/70'} transition p-0.5 disabled:opacity-50`}
+                        title={needsLookup ? 'Look up definition' : 'Refresh definition'}
+                    >
+                        <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </button>
                     <button
                         onClick={onDelete}
                         className="opacity-0 group-hover:opacity-100 transition text-white/30 hover:text-red-300 p-0.5"
