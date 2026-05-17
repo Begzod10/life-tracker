@@ -114,7 +114,7 @@ export function Sidebar() {
     const sections = buildSections(String(id))
 
     return (
-        <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-[#0f1015]/95 border-r border-white/5 backdrop-blur-sm">
+        <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-white/[0.03] border-r border-white/5 backdrop-blur-xl">
             {/* Brand + back to hub */}
             <div className="flex flex-col gap-3 p-4 border-b border-white/5">
                 <Link href="/platform" className="flex items-center gap-2 group">
