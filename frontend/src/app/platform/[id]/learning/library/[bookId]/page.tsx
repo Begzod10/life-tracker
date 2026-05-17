@@ -949,14 +949,98 @@ function VocabRow({
     const hasDefinition = !!highlight.definition && highlight.definition.trim() !== placeholder
     const subline = hasDefinition ? highlight.definition : highlight.translation
     const needsLookup = !hasDefinition && !highlight.translation
+    const fullDef = hasDefinition ? highlight.definition!.trim() : ''
+    const fullTrans = (highlight.translation || '').trim()
+    // Open the full-text popover only when there's something worth showing
+    // beyond the truncated 2-line subline. A tiny delay keeps it from
+    // flickering as the cursor flies past the row.
+    const hasOverflow = fullDef.length > 80 || fullTrans.length > 0
+    const [hoverOpen, setHoverOpen] = useState(false)
+    const rowRef = useRef<HTMLDivElement | null>(null)
+    const openTimer = useRef<number | null>(null)
+    const closeTimer = useRef<number | null>(null)
+    const scheduleOpen = () => {
+        if (!hasOverflow) return
+        if (closeTimer.current) {
+            window.clearTimeout(closeTimer.current)
+            closeTimer.current = null
+        }
+        if (openTimer.current) return
+        openTimer.current = window.setTimeout(() => {
+            setHoverOpen(true)
+            openTimer.current = null
+        }, 200)
+    }
+    const scheduleClose = () => {
+        if (openTimer.current) {
+            window.clearTimeout(openTimer.current)
+            openTimer.current = null
+        }
+        if (closeTimer.current) return
+        closeTimer.current = window.setTimeout(() => {
+            setHoverOpen(false)
+            closeTimer.current = null
+        }, 100)
+    }
+    useEffect(() => () => {
+        if (openTimer.current) window.clearTimeout(openTimer.current)
+        if (closeTimer.current) window.clearTimeout(closeTimer.current)
+    }, [])
+
     return (
         <div
+            ref={rowRef}
+            onMouseEnter={scheduleOpen}
+            onMouseLeave={scheduleClose}
             className={`group relative px-2.5 py-2 rounded-lg border transition-colors ${
                 onCurrentPage
                     ? 'border-indigo-400/40 bg-indigo-500/[0.09]'
                     : 'border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]'
             }`}
         >
+            {hoverOpen && (
+                <div
+                    onMouseEnter={scheduleOpen}
+                    onMouseLeave={scheduleClose}
+                    className="absolute right-full top-0 mr-3 w-72 z-50 pointer-events-auto"
+                >
+                    <div className="rounded-xl border border-indigo-400/25 bg-[#0f1019]/95 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden">
+                        <div className="px-4 pt-3 pb-2 border-b border-white/5 flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-white truncate">{word}</p>
+                            <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded font-medium bg-indigo-500/20 text-indigo-200 shrink-0">
+                                p.{highlight.page}
+                            </span>
+                        </div>
+                        <div className="px-4 py-3 space-y-2.5">
+                            {fullDef && (
+                                <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300/70 mb-1">
+                                        Definition
+                                    </p>
+                                    <p className="text-sm text-white/85 leading-relaxed">
+                                        {fullDef}
+                                    </p>
+                                </div>
+                            )}
+                            {fullTrans && (
+                                <div>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-300/70 mb-1">
+                                        Translation
+                                    </p>
+                                    <p className="text-sm text-white/75 leading-relaxed">
+                                        {fullTrans}
+                                    </p>
+                                </div>
+                            )}
+                            {!fullDef && !fullTrans && (
+                                <p className="text-sm text-amber-300/80 italic">
+                                    No definition yet. Click ↻ on the row to fetch.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="flex items-start gap-2">
                 <button
                     onClick={onJump}
