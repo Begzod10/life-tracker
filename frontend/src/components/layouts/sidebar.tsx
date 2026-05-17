@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
 import {
@@ -29,6 +29,12 @@ type NavItem = {
     icon: React.ComponentType<{ className?: string }>
     /** active when current path starts with this prefix (in addition to exact match) */
     matchPrefix?: boolean
+    /**
+     * Hub-category items render under /platform with a ?category=… query.
+     * They never match by pathname alone (because the pathname is shared)
+     * so we activate them by query string instead.
+     */
+    hubCategory?: string
 }
 
 type NavSection = {
@@ -41,8 +47,8 @@ function buildSections(id: string): NavSection[] {
     return [
         {
             items: [
-                { name: 'Goals', href: '/platform?category=goals', icon: Target },
-                { name: 'Tasks', href: '/platform?category=tasks', icon: CheckSquare },
+                { name: 'Goals', href: '/platform?category=goals', icon: Target, hubCategory: 'goals' },
+                { name: 'Tasks', href: '/platform?category=tasks', icon: CheckSquare, hubCategory: 'tasks' },
                 { name: 'Timetable', href: `${base}/timetable`, icon: CalendarClock, matchPrefix: true },
             ],
         },
@@ -74,20 +80,26 @@ function buildSections(id: string): NavSection[] {
     ]
 }
 
-function isItemActive(pathname: string, item: NavItem): boolean {
-    // For hub-category links like /platform?category=tasks, treat the
-    // pathname-only portion as the comparison key — query-param matching
-    // would require useSearchParams, which forces a Suspense bailout we
-    // want to avoid here.
-    const itemPath = item.href.split('?')[0]
-    if (pathname === itemPath) return true
-    if (item.matchPrefix && pathname.startsWith(`${itemPath}/`)) return true
+function isItemActive(
+    pathname: string,
+    item: NavItem,
+    hubCategoryParam: string | null,
+): boolean {
+    // Hub-category items share the /platform pathname, so they must match
+    // by ?category=… instead of by path. Without this two items collide.
+    if (item.hubCategory) {
+        return pathname === '/platform' && hubCategoryParam === item.hubCategory
+    }
+    if (pathname === item.href) return true
+    if (item.matchPrefix && pathname.startsWith(`${item.href}/`)) return true
     return false
 }
 
 export function Sidebar() {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
+    const searchParams = useSearchParams()
+    const hubCategoryParam = searchParams?.get('category') ?? null
     const { data: user } = useUser()
 
     // Prefer URL param so the sidebar reflects the route you're already on;
@@ -132,7 +144,7 @@ export function Sidebar() {
                         )}
                         {section.items.map((item) => {
                             const Icon = item.icon
-                            const active = isItemActive(pathname, item)
+                            const active = isItemActive(pathname, item, hubCategoryParam)
                             return (
                                 <Link
                                     key={item.href}
