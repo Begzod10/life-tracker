@@ -54,6 +54,11 @@ jobs:
           # Same connection string conftest.py uses for the test DB.
           DATABASE_URL: postgresql://postgres:123@localhost:5432/life_tracker_test
           SECRET_KEY: ci-only-secret-key-not-used-for-anything-real
+          # Settings flags these as required at import-time even though the
+          # OAuth flow is not exercised by these tests. Feed dummy values so
+          # Pydantic stops short-circuiting the suite.
+          GOOGLE_CLIENT_ID: ci-dummy-client-id
+          GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
         run: |
           pytest tests/test_timetable_toggle.py \
                  tests/test_books_highlights.py \
