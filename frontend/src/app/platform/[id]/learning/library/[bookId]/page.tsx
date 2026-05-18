@@ -24,7 +24,10 @@ import {
     useFolders, useModules, useFolderCreate, useModuleCreate,
     type DictionaryFolder, type DictionaryModule,
 } from '@/lib/hooks/use-dictionary'
-import { readLastVocabTarget, rememberLastVocabTarget } from '@/lib/last-vocab-target'
+import {
+    readLastVocabTarget, readLastVocabTargetForBook,
+    rememberLastVocabTarget, rememberLastVocabTargetForBook,
+} from '@/lib/last-vocab-target'
 
 // react-pdf has heavy client-only deps (DOMMatrix, etc.) — only load on the client.
 const PdfDocument = dynamic(() => import('react-pdf').then(m => m.Document), { ssr: false })
@@ -1323,7 +1326,15 @@ function SaveToDictionaryDialog({
     // Seed folder/module from the last save so successive picks land in the
     // same target by default. Values are revalidated against the live data
     // below in case the stored folder/module has since been deleted.
-    const stored = useMemo(() => readLastVocabTarget(), [])
+    // Prefer the per-book record — if the user has saved from this book
+    // before, reopen the same folder/module they picked last time. Fall
+    // back to the global last-used pair only when this book has no
+    // history yet (first save into a freshly opened title).
+    const stored = useMemo(() => {
+        const perBook = readLastVocabTargetForBook(bookId)
+        if (perBook.folderId || perBook.moduleId) return perBook
+        return readLastVocabTarget()
+    }, [bookId])
     const [folderId, setFolderId] = useState<number | undefined>(stored.folderId)
     const [moduleId, setModuleId] = useState<number | undefined>(stored.moduleId)
     const [note, setNote] = useState('')
@@ -1382,6 +1393,7 @@ function SaveToDictionaryDialog({
             },
             {
                 onSuccess: () => {
+                    rememberLastVocabTargetForBook(bookId, folderId, moduleId)
                     rememberLastVocabTarget(folderId, moduleId)
                     onDone()
                 },
