@@ -24,6 +24,7 @@ import {
     useFolders, useModules, useFolderCreate, useModuleCreate,
     type DictionaryFolder, type DictionaryModule,
 } from '@/lib/hooks/use-dictionary'
+import { readLastVocabTarget, rememberLastVocabTarget } from '@/lib/last-vocab-target'
 
 // react-pdf has heavy client-only deps (DOMMatrix, etc.) — only load on the client.
 const PdfDocument = dynamic(() => import('react-pdf').then(m => m.Document), { ssr: false })
@@ -1307,8 +1308,12 @@ function SaveToDictionaryDialog({
     onClose: () => void
     onDone: () => void
 }) {
-    const [folderId, setFolderId] = useState<number | undefined>(undefined)
-    const [moduleId, setModuleId] = useState<number | undefined>(undefined)
+    // Seed folder/module from the last save so successive picks land in the
+    // same target by default. Values are revalidated against the live data
+    // below in case the stored folder/module has since been deleted.
+    const stored = useMemo(() => readLastVocabTarget(), [])
+    const [folderId, setFolderId] = useState<number | undefined>(stored.folderId)
+    const [moduleId, setModuleId] = useState<number | undefined>(stored.moduleId)
     const [note, setNote] = useState('')
     // Inline-create state: null = show the select, '' or string = show the
     // input. Matches the same affordance on the Reading page.
@@ -1319,6 +1324,20 @@ function SaveToDictionaryDialog({
     const createHighlight = useHighlightCreate()
     const { mutateAsync: createFolder, isPending: isCreatingFolder } = useFolderCreate()
     const { mutateAsync: createModule, isPending: isCreatingModule } = useModuleCreate()
+
+    // Drop stored IDs that no longer exist on the server (folder/module
+    // deleted on another device, etc.).
+    useEffect(() => {
+        if (folderId && folders.length > 0 && !folders.some(f => f.id === folderId)) {
+            setFolderId(undefined)
+            setModuleId(undefined)
+        }
+    }, [folders, folderId])
+    useEffect(() => {
+        if (moduleId && modules.length > 0 && !modules.some(m => m.id === moduleId)) {
+            setModuleId(undefined)
+        }
+    }, [modules, moduleId])
 
     const handleCreateFolder = async () => {
         const name = (newFolderName || '').trim()
@@ -1349,7 +1368,12 @@ function SaveToDictionaryDialog({
                     save_to_dictionary: true,
                 },
             },
-            { onSuccess: onDone },
+            {
+                onSuccess: () => {
+                    rememberLastVocabTarget(folderId, moduleId)
+                    onDone()
+                },
+            },
         )
     }
 

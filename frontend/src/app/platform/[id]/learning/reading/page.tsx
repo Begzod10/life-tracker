@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, FileText, Sparkles, Check, Plus, X } from 'lucide-react'
@@ -11,6 +11,7 @@ import {
 } from '@/lib/hooks/use-dictionary'
 import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-components'
 import { Input } from '@/components/ui/input'
+import { readLastVocabTarget, rememberLastVocabTarget } from '@/lib/last-vocab-target'
 
 const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const DIFF_COLOR: Record<string, string> = {
@@ -33,8 +34,11 @@ export default function ReadingPage() {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set())
 
-    const [folderId, setFolderId] = useState<number | undefined>(undefined)
-    const [moduleId, setModuleId] = useState<number | undefined>(undefined)
+    // Seed folder/module from the last save so successive picks land in the
+    // same target by default. IDs are revalidated against live data below.
+    const stored = useMemo(() => readLastVocabTarget(), [])
+    const [folderId, setFolderId] = useState<number | undefined>(stored.folderId)
+    const [moduleId, setModuleId] = useState<number | undefined>(stored.moduleId)
 
     // Inline create-on-the-fly. The user wants to create a new folder
     // or module without leaving the reading page when none of the existing
@@ -44,6 +48,19 @@ export default function ReadingPage() {
 
     const { data: folders = [] } = useFolders()
     const { data: modules = [] } = useModules(folderId)
+
+    // Drop stored IDs that no longer exist on the server.
+    useEffect(() => {
+        if (folderId && folders.length > 0 && !folders.some(f => f.id === folderId)) {
+            setFolderId(undefined)
+            setModuleId(undefined)
+        }
+    }, [folders, folderId])
+    useEffect(() => {
+        if (moduleId && modules.length > 0 && !modules.some(m => m.id === moduleId)) {
+            setModuleId(undefined)
+        }
+    }, [modules, moduleId])
 
     const { mutate: extract, isPending: isExtracting, error: extractError, reset: resetExtract } = useAiExtractVocab()
     const { mutate: createWord, isPending: isSaving } = useWordCreate()
@@ -107,6 +124,7 @@ export default function ReadingPage() {
         const items = candidates.filter(c => selected.has(candidateKey(c)))
         if (items.length === 0) return
 
+        rememberLastVocabTarget(folderId, moduleId)
         let remaining = items.length
         items.forEach(c => {
             createWord(
