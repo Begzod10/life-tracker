@@ -125,6 +125,48 @@ function spansForText(layer: Element, target: string): HTMLElement[] {
     return ranges.filter(r => r.end > idx && r.start < matchEnd).map(r => r.span)
 }
 
+// Find every word-boundary match of `target` across the whole text layer and
+// return a rect for each occurrence. Used by the vocab overlay so a saved
+// word marks every instance on the page, not only the first one the user
+// clicked. Word boundaries keep "innate" from also tagging "innately" / etc.
+function allWordRects(layer: Element, target: string): DOMRect[] {
+    const normGlyph = (s: string) => (s || '').normalize('NFKD').toLowerCase()
+    const needle = normGlyph(target).trim()
+    if (needle.length < 2) return []
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    let re: RegExp
+    try {
+        re = new RegExp(`\\b${escaped}\\b`, 'gi')
+    } catch {
+        return []
+    }
+    const rects: DOMRect[] = []
+    const spans = Array.from(layer.querySelectorAll('span')) as HTMLElement[]
+    for (const span of spans) {
+        const rawText = span.textContent || ''
+        if (!rawText) continue
+        const normText = normGlyph(rawText)
+        const node = span.firstChild
+        if (!node || node.nodeType !== Node.TEXT_NODE) continue
+        const nodeLen = (node.textContent || '').length
+        re.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = re.exec(normText)) !== null) {
+            const start = m.index
+            const end = start + m[0].length
+            try {
+                const range = document.createRange()
+                range.setStart(node, Math.min(start, nodeLen))
+                range.setEnd(node, Math.min(end, nodeLen))
+                const rect = range.getBoundingClientRect()
+                if (rect.width >= 2 && rect.height >= 2) rects.push(rect)
+            } catch {/* range failure — skip this match */}
+            if (m[0].length === 0) re.lastIndex++
+        }
+    }
+    return rects
+}
+
 // Return the exact pixel rectangle of `target` inside the given spans.
 // pdf.js often packs a whole line into one <span>, so a per-span bounding
 // rect would point at the left edge of the line rather than the actual
@@ -527,19 +569,20 @@ export default function ReaderPage() {
             }
             let anyHit = false
             for (const h of pageVocab) {
-                const hits = spansForText(layer, h.text)
-                if (hits.length === 0) continue
-                anyHit = true
                 const text = tooltipText(h)
-                // Strip trailing punctuation when measuring — same reason
-                // as in spansForText: the comma may live in a different
-                // run than the headword.
+                // Strip trailing punctuation — the comma may live in a
+                // different text run than the headword.
                 const wordText = h.text.trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
                 if (wordText.length < 2) continue
 
-                for (const span of hits) {
-                    const wordRect = rectForText([span], wordText)
-                    if (!wordRect || wordRect.width < 2 || wordRect.height < 2) continue
+                // Mark *every* occurrence of the word on this page, not
+                // only the instance the user originally selected. A single
+                // saved highlight therefore lights up the whole page's
+                // copies of "innate", "Bogues", etc.
+                const rects = allWordRects(layer, wordText)
+                if (rects.length === 0) continue
+                anyHit = true
+                for (const wordRect of rects) {
                     const overlay = document.createElement('span')
                     overlay.className = 'vocab-overlay-rect'
                     overlay.setAttribute('data-vocab-translation', text)

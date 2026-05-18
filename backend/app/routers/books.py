@@ -101,6 +101,49 @@ def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]
     return (definition, translation)
 
 
+# Wikimedia's REST APIs now reject requests with no User-Agent (HTTP 403),
+# per their robot policy at https://w.wiki/4wJS. Their guidance is to send
+# an identifying UA that includes a contact URL so they can reach you when
+# something breaks. dictionaryapi.dev doesn't require this but accepts it
+# fine, so we send the same UA to every upstream.
+_LOOKUP_USER_AGENT = (
+    "LifeTrackerDictionaryBot/1.0 "
+    "(+https://github.com/Begzod10/life-tracker; contact: rimefara22@gmail.com)"
+)
+
+
+def _http_get_json(url: str, *, timeout: float = 8.0, headers: Optional[dict] = None, attempts: int = 2):
+    """GET ``url`` with one retry on transient failure (timeout / connection
+    reset). Returns the parsed JSON body, or ``None`` if every attempt fails
+    or the body isn't valid JSON. Always sends a polite identifying
+    ``User-Agent`` so upstream filters (Wikimedia, etc.) don't 403 us.
+    Designed so the dictionary fallback chain can't silently drop a word
+    just because one upstream had a network blip.
+    """
+    import requests
+    merged_headers = {"User-Agent": _LOOKUP_USER_AGENT}
+    if headers:
+        merged_headers.update(headers)
+    last_exc: Optional[Exception] = None
+    for attempt in range(max(1, attempts)):
+        try:
+            resp = requests.get(url, timeout=timeout, headers=merged_headers)
+            if resp.status_code != 200:
+                logger.info(
+                    "_http_get_json: %s returned HTTP %s",
+                    url,
+                    resp.status_code,
+                )
+                return None
+            return resp.json()
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            continue
+    if last_exc is not None:
+        logger.warning("_http_get_json: all attempts failed for %s: %s", url, last_exc)
+    return None
+
+
 def _dictionary_api_lookup(word: str) -> str:
     """Free English-only fallback when the AI returns nothing. Uses
     dictionaryapi.dev (no auth, modest rate limits) so common nouns/verbs
@@ -108,17 +151,12 @@ def _dictionary_api_lookup(word: str) -> str:
     if the API has nothing — never raises.
     """
     try:
-        import requests
         clean = (word or "").strip().strip(_DEDUP_STRIP)
         if len(clean) < 2:
             return ""
-        resp = requests.get(
+        data = _http_get_json(
             f"https://api.dictionaryapi.dev/api/v2/entries/en/{clean}",
-            timeout=4,
         )
-        if resp.status_code != 200:
-            return ""
-        data = resp.json()
         if not isinstance(data, list) or not data:
             return ""
         for entry in data:
@@ -141,18 +179,15 @@ def _wiktionary_lookup(word: str) -> str:
     any error / unknown response shape.
     """
     try:
-        import requests
         clean = (word or "").strip().strip(_DEDUP_STRIP)
         if len(clean) < 2:
             return ""
-        resp = requests.get(
+        data = _http_get_json(
             f"https://en.wiktionary.org/api/rest_v1/page/definition/{clean}",
-            timeout=4,
             headers={"Accept": "application/json"},
         )
-        if resp.status_code != 200:
+        if data is None:
             return ""
-        data = resp.json()
         # Successful response is {lang_code: [entries]}. Errors come back
         # as a flat dict with "type"/"title"/"detail". We only want the
         # English ("en") entries.
@@ -170,9 +205,20 @@ def _wiktionary_lookup(word: str) -> str:
                 raw = (defn.get("definition") or "").strip()
                 if not raw:
                     continue
-                # Wiktionary embeds <a>/<i>/<b>/<span> tags in definitions.
-                # Strip them so the UI shows clean text.
-                text = re.sub(r"<[^>]+>", "", raw).strip()
+                # Wiktionary embeds inline HTML in definitions: <a>/<i>/<b>/
+                # <span> tags around linked words, and occasionally a whole
+                # <style>…CSS…</style> block injected by MediaWiki's
+                # TemplateStyles extension. Strip whole <style>/<script>
+                # blocks (contents and all), then strip any remaining tags,
+                # so what ships to the UI is clean prose.
+                cleaned = re.sub(
+                    r"<(style|script)[^>]*>.*?</\1>",
+                    "",
+                    raw,
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                cleaned = re.sub(r"<[^>]+>", "", cleaned)
+                text = re.sub(r"\s+", " ", cleaned).strip()
                 if text:
                     return text
         return ""
