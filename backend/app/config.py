@@ -55,7 +55,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"
-    # Optional outbound proxy for reaching api.openai.com from filtered networks.
+    # Override the OpenAI host — point at a Cloudflare Worker, OpenRouter,
+    # Azure OpenAI relay, or any other drop-in proxy. Required for VPSes
+    # whose egress IP is geo-blocked by api.openai.com (most CIS/Asia DCs).
+    # Format: https://<host>/v1 (no trailing slash needed).
+    OPENAI_BASE_URL: Optional[str] = None
+    # Optional outbound HTTP/SOCKS proxy. Used in addition to OPENAI_BASE_URL.
     # Format: socks5://user:pass@host:port  or  http://user:pass@host:port
     OPENAI_PROXY_URL: Optional[str] = None
 
