@@ -240,10 +240,19 @@ export default function ReaderPage() {
     // the first one filed weeks ago.
     const byCreatedDesc = (a: BookHighlight, b: BookHighlight) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    const pageVocab = useMemo(
-        () => allVocab.filter(h => h.page === page).slice().sort(byCreatedDesc),
-        [allVocab, page],
-    )
+    // IDs of vocab whose word visually appears on the *current* page. The
+    // overlay-paint effect (further below) populates this so the sidebar
+    // can include cross-page words too — e.g. "innate" saved on p.48 still
+    // shows up in the page-49 list when the same word is in p.49's text.
+    const [visibleVocabIds, setVisibleVocabIds] = useState<Set<number>>(new Set())
+    const pageVocab = useMemo(() => {
+        const onPage = allVocab.filter(h => h.page === page)
+        const onPageIds = new Set(onPage.map(h => h.id))
+        const crossPage = allVocab.filter(
+            h => h.page !== page && visibleVocabIds.has(h.id) && !onPageIds.has(h.id),
+        )
+        return [...onPage, ...crossPage].sort(byCreatedDesc)
+    }, [allVocab, page, visibleVocabIds])
     const sortedAllVocab = useMemo(
         () => [...allVocab].sort(byCreatedDesc),
         [allVocab],
@@ -587,6 +596,7 @@ export default function ReaderPage() {
                 return
             }
             let anyHit = false
+            const hitIds = new Set<number>()
             for (const h of bookVocab) {
                 const text = tooltipText(h)
                 // Strip trailing punctuation — the comma may live in a
@@ -601,6 +611,7 @@ export default function ReaderPage() {
                 const rects = allWordRects(layer, wordText)
                 if (rects.length === 0) continue
                 anyHit = true
+                hitIds.add(h.id)
                 for (const wordRect of rects) {
                     const overlay = document.createElement('span')
                     overlay.className = 'vocab-overlay-rect'
@@ -614,6 +625,18 @@ export default function ReaderPage() {
                     overlays.push(overlay)
                 }
             }
+            // Push the IDs that matched the current page into state so the
+            // sidebar can list cross-page words (e.g. "innate" saved on
+            // p.48 showing up while the user is on p.49). Compare by id
+            // set to skip no-op state updates.
+            setVisibleVocabIds(prev => {
+                if (prev.size === hitIds.size) {
+                    let same = true
+                    for (const id of hitIds) if (!prev.has(id)) { same = false; break }
+                    if (same) return prev
+                }
+                return hitIds
+            })
             if (!anyHit && ++attempts < 30) requestAnimationFrame(tryApply)
         }
         const id = setTimeout(tryApply, 120)
@@ -623,6 +646,13 @@ export default function ReaderPage() {
             overlays.forEach(el => el.remove())
         }
     }, [highlights, page, zoom, showTranslations, pageRenderTick])
+
+    // Clear the cross-page hit set whenever the page changes — otherwise
+    // the sidebar would briefly show last page's cross-page entries before
+    // the overlay effect re-runs against the new text layer.
+    useEffect(() => {
+        setVisibleVocabIds(new Set())
+    }, [page])
 
     // Hover tooltip for vocab markers. Event delegation on the page surface
     // so we don't re-bind on every render. The tooltip itself is rendered
@@ -919,7 +949,7 @@ export default function ReaderPage() {
                                 <p className="text-[11px] text-white/35 mb-3">
                                     {showAllVocab
                                         ? 'Every word saved from this book.'
-                                        : `Words saved on page ${page}.`}
+                                        : `Words on page ${page} (saved here or elsewhere).`}
                                 </p>
 
                                 {(() => {
