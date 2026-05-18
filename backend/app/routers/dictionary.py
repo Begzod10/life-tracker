@@ -163,7 +163,7 @@ def ai_generate_module(
     from app.config import settings
     from app.tasks import _generate_text
 
-    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
         raise HTTPException(status_code=503, detail="AI provider not configured.")
 
     folder = _own_folder_or_404(db, current_user.id, payload.folder_id)
@@ -242,7 +242,7 @@ def ai_extract_vocab(
     from app.config import settings
     from app.tasks import _generate_text
 
-    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
         raise HTTPException(status_code=503, detail="AI provider not configured.")
 
     prompt = _ai_extract_prompt(payload.text, payload.level, payload.max_words)
@@ -277,10 +277,10 @@ def ai_word_details(
     from app.config import settings
     from app.tasks import _generate_text
 
-    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
         raise HTTPException(
             status_code=503,
-            detail="AI provider not configured. Set OPENAI_API_KEY or GROQ_API_KEY.",
+            detail="AI provider not configured. Set GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.",
         )
 
     prompt = _ai_word_prompt(payload.word)

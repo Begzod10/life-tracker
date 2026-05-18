@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
 
     # AI providers
+    # Gemini is the primary provider — generously free, available in regions
+    # where OpenAI / Groq are blocked. Get a key at https://aistudio.google.com/apikey.
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-2.0-flash"
     GROQ_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o-mini"

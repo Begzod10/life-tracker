@@ -793,6 +793,56 @@ def send_daily_summary(self):
         db.close()
 
 
+def _call_gemini(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
+    """Call Google Gemini's generativelanguage REST endpoint and return the
+    generated text. Picked as the primary provider because its free tier is
+    generous (1500 req/day on gemini-2.0-flash) and the endpoint is
+    reachable from regions where OpenAI / Groq are blocked. Returns "" if
+    no key is configured; raises on HTTP errors so ``_generate_text`` can
+    fall back to the next provider.
+    """
+    import httpx
+    from app.config import settings
+
+    if not settings.GEMINI_API_KEY:
+        return ""
+
+    model = settings.GEMINI_MODEL or "gemini-2.0-flash"
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
+    with httpx.Client(timeout=30, trust_env=False) as client:
+        resp = client.post(
+            url,
+            headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "maxOutputTokens": max_tokens,
+                },
+            },
+        )
+    if resp.status_code >= 400:
+        logger.warning("Gemini %s: %s", resp.status_code, resp.text[:300])
+        resp.raise_for_status()
+    data = resp.json()
+    # Gemini response shape:
+    # {"candidates":[{"content":{"parts":[{"text":"..."}], "role":"model"}}, ...]}
+    # When the model is rate-limited or filters block the output the parts
+    # list can be missing, so guard against every layer.
+    candidates = data.get("candidates") or []
+    if not candidates:
+        return ""
+    content = (candidates[0] or {}).get("content") or {}
+    parts = content.get("parts") or []
+    if not parts:
+        return ""
+    text = (parts[0] or {}).get("text") or ""
+    return text.strip()
+
+
 def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
     """Call OpenAI Chat Completions API and return the generated text."""
     import httpx
@@ -849,8 +899,24 @@ def _call_groq(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) 
 
 
 def _generate_text(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
-    """Generate text using OpenAI, falling back to Groq if OpenAI is unavailable."""
+    """Run the AI provider chain in priority order:
+        1. Gemini  — primary; free tier + works where OpenAI/Groq are blocked
+        2. OpenAI  — secondary; falls back when Gemini is unconfigured / down
+        3. Groq    — last resort
+
+    Returns the first non-empty response. Each provider is independent — a
+    failure in one (timeout, 4xx, missing key) advances to the next without
+    raising, so a single dead key never breaks definition lookups.
+    """
     from app.config import settings
+
+    if settings.GEMINI_API_KEY:
+        try:
+            text = _call_gemini(prompt, max_tokens=max_tokens, temperature=temperature)
+            if text:
+                return text
+        except Exception as e:
+            logger.warning("_generate_text: Gemini failed, falling back to OpenAI: %s", e)
 
     if settings.OPENAI_API_KEY:
         try:
@@ -861,7 +927,10 @@ def _generate_text(prompt: str, *, max_tokens: int = 300, temperature: float = 0
             logger.warning("_generate_text: OpenAI failed, falling back to Groq: %s", e)
 
     if settings.GROQ_API_KEY:
-        return _call_groq(prompt, max_tokens=max_tokens, temperature=temperature)
+        try:
+            return _call_groq(prompt, max_tokens=max_tokens, temperature=temperature)
+        except Exception as e:
+            logger.warning("_generate_text: Groq failed, no more providers: %s", e)
 
     return ""
 
@@ -985,7 +1054,7 @@ def generate_daily_conclusion(self):
     """
     from app.config import settings
 
-    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
         logger.info("generate_daily_conclusion: no AI provider configured, skipping")
         return {"skipped": True}
 

@@ -172,10 +172,10 @@ def _own_essay_or_404(db: Session, user_id: int, essay_id: int) -> models.Essay:
 
 def _require_ai_provider():
     from app.config import settings
-    if not (settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
         raise HTTPException(
             status_code=503,
-            detail="AI provider not configured. Set OPENAI_API_KEY or GROQ_API_KEY.",
+            detail="AI provider not configured. Set GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.",
         )
 
 
