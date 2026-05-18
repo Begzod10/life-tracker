@@ -235,16 +235,19 @@ export default function ReaderPage() {
         () => highlights.filter(h => h.kind === 'vocab'),
         [highlights],
     )
+    // Newest-first ordering. The reader is incrementally saving while
+    // reading — the most useful row is the word they *just* picked, not
+    // the first one filed weeks ago.
+    const byCreatedDesc = (a: BookHighlight, b: BookHighlight) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     const pageVocab = useMemo(
-        () => allVocab.filter(h => h.page === page),
+        () => allVocab.filter(h => h.page === page).slice().sort(byCreatedDesc),
         [allVocab, page],
     )
-    const sortedAllVocab = useMemo(() => {
-        return [...allVocab].sort((a, b) => {
-            if (a.page !== b.page) return a.page - b.page
-            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        })
-    }, [allVocab])
+    const sortedAllVocab = useMemo(
+        () => [...allVocab].sort(byCreatedDesc),
+        [allVocab],
+    )
     const [pageInput, setPageInput] = useState('1')
     const [zoom, setZoom] = useState(1.1)
     const [showAllVocab, setShowAllVocab] = useState(false)
