@@ -545,10 +545,22 @@ export default function ReaderPage() {
             if (def && def !== placeholder) return def
             return (h.translation || '').trim()
         }
-        const pageVocab = highlights.filter(
-            h => h.page === page && h.kind === 'vocab' && tooltipText(h),
-        )
-        if (pageVocab.length === 0) return
+        // Mark every word ever saved from this book — not just words tied
+        // to the current page. A learner who saved "hallmarks" on p.46 then
+        // flips to p.50 should still see it underlined wherever it shows
+        // up. We dedupe by lowercased headword so multiple saves of the
+        // same word don't double-paint or stack tooltips.
+        const seen = new Set<string>()
+        const bookVocab: BookHighlight[] = []
+        for (const h of highlights) {
+            if (h.kind !== 'vocab') continue
+            if (!tooltipText(h)) continue
+            const key = (h.text || '').trim().replace(/[\p{P}\p{S}]+$/u, '').trim().toLowerCase()
+            if (key.length < 2 || seen.has(key)) continue
+            seen.add(key)
+            bookVocab.push(h)
+        }
+        if (bookVocab.length === 0) return
 
         let cancelled = false
         let attempts = 0
@@ -569,7 +581,7 @@ export default function ReaderPage() {
                 return
             }
             let anyHit = false
-            for (const h of pageVocab) {
+            for (const h of bookVocab) {
                 const text = tooltipText(h)
                 // Strip trailing punctuation — the comma may live in a
                 // different text run than the headword.
