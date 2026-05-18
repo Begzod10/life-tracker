@@ -42,19 +42,26 @@ def _norm_word_for_dedup(s: str) -> str:
 
 
 def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]:
-    """Return (definition, translation) for an English word using the same
-    AI provider chain as tasks.py. Best-effort — returns ("", "") if the
-    model is unconfigured, the call fails, or the response can't be parsed.
-    Translation format is "Uzbek / Russian" so it matches the rest of the app.
+    """Return (definition, translation) for an English word or phrase using
+    the AI provider chain in ``app.tasks``. Tries up to two passes — the
+    second pass strips trailing punctuation/quotes and asks the model for
+    just plain prose, which is what saves multi-word phrases like
+    "plow through water." when the first JSON attempt comes back empty.
+    Returns ("", "") if the model is unconfigured or every attempt fails.
     """
     try:
         from app.tasks import _generate_text  # local import to avoid cycle
     except Exception:
         return ("", "")
 
-    safe_word = (word or "").strip().replace('"', "'")
+    cleaned = (word or "").strip().strip(_DEDUP_STRIP)
+    safe_word = cleaned.replace('"', "'") or (word or "").strip()
+    if not safe_word:
+        return ("", "")
     ctx_line = f'\nContext: "{context.strip()}"' if context and context.strip() else ""
-    prompt = (
+
+    # ── Attempt 1: strict JSON ─────────────────────────────────────────
+    prompt_json = (
         f'Generate a dictionary entry for the English word/phrase: "{safe_word}"'
         f'{ctx_line}\n\n'
         'Rules:\n'
@@ -62,18 +69,55 @@ def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]
         '- If it is a proper noun (person, place, brand), the definition should '
         "name what it refers to in <= 12 words; translation should just be a "
         "transliteration in Uzbek + Russian (e.g. \"Bogues / Богус\").\n"
+        '- If it is a multi-word phrase, define the phrase itself, not the '
+        'first word — e.g. "plow through water" -> a definition for the '
+        'whole phrase.\n'
         '- Drop trailing punctuation from the headword when reasoning, but '
         'keep the answer concise.\n\n'
         'Return ONLY a single JSON object, no prose:\n'
         '{\n'
-        '  "definition": "<one short English sentence, under 18 words>",\n'
+        '  "definition": "<one short English sentence, under 22 words>",\n'
         '  "translation": "<Uzbek translation> / <Russian translation>"\n'
         '}'
     )
+    definition, translation = _try_ai_json(prompt_json, safe_word)
+    if definition:
+        return (definition, translation)
+
+    # ── Attempt 2: plain-prose fallback ────────────────────────────────
+    # Some models choke on phrases when forced to emit strict JSON. Asking
+    # for one short sentence with no formatting is much more reliable for
+    # multi-word inputs, and we still get a usable definition (translation
+    # may be empty but the placeholder bug — empty definition — is fixed).
+    prompt_plain = (
+        f'Define the English word or phrase "{safe_word}" in one short '
+        f'sentence, under 22 words. Reply with the definition only — '
+        f'no quotes, no labels, no JSON.{ctx_line}'
+    )
+    try:
+        plain = _generate_text(prompt_plain, max_tokens=80, temperature=0.2)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("_ai_word_lookup: plain-prose fallback failed: %s", exc)
+        return ("", "")
+    plain = (plain or "").strip().strip('"').strip("'").strip()
+    if plain and len(plain) >= 4:
+        return (plain, "")
+    return ("", "")
+
+
+def _try_ai_json(prompt: str, word: str) -> tuple[str, str]:
+    """Run one JSON-formatted AI call and parse the response. Centralized
+    so the retry path in :func:`_ai_word_lookup` doesn't duplicate the
+    parsing logic. Returns ("", "") on any failure.
+    """
+    try:
+        from app.tasks import _generate_text  # local import to avoid cycle
+    except Exception:
+        return ("", "")
     try:
         text = _generate_text(prompt, max_tokens=180, temperature=0.3)
-    except Exception as exc:
-        logger.warning("_ai_word_lookup: AI call failed: %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("_try_ai_json: AI call failed for %r: %s", word, exc)
         return ("", "")
     if not text:
         return ("", "")
@@ -85,16 +129,14 @@ def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]
         return ("", "")
     try:
         data = json.loads(match.group(0))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ("", "")
 
     definition = str(data.get("definition") or "").strip()
     translation = str(data.get("translation") or "").strip()
     if not definition:
-        # Tail-log so we can see why parsing landed on empty for a real
-        # English word like "hallmarks". Keeps the response trimmed.
         logger.info(
-            "_ai_word_lookup: parsed but definition was empty for %r — raw=%r",
+            "_try_ai_json: parsed but definition empty for %r — raw=%r",
             word,
             text[:200],
         )
