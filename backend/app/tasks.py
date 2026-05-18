@@ -844,12 +844,23 @@ def _call_gemini(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7
 
 
 def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7) -> str:
-    """Call OpenAI Chat Completions API and return the generated text."""
+    """Call the OpenAI-compatible Chat Completions endpoint and return the
+    generated text. Honours ``OPENAI_BASE_URL`` so requests can be routed
+    through a Cloudflare Worker, OpenRouter, Azure relay, or any other
+    drop-in OpenAI proxy — which is the only way to reach OpenAI from a
+    VPS whose IP is geo-blocked by ``api.openai.com``.
+    """
     import httpx
     from app.config import settings
 
     if not settings.OPENAI_API_KEY:
         return ""
+
+    # Default to OpenAI's own endpoint; override when OPENAI_BASE_URL is set.
+    # Strip any trailing slash so we always emit ".../v1/chat/completions"
+    # cleanly regardless of how the operator wrote the env var.
+    base = (settings.OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
+    url = f"{base}/chat/completions"
 
     # trust_env=False ignores HTTP_PROXY/HTTPS_PROXY env on the server so a
     # misconfigured corporate proxy can't intercept this request and return 407.
@@ -860,7 +871,7 @@ def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7
 
     with httpx.Client(**client_kwargs) as client:
         resp = client.post(
-            "https://api.openai.com/v1/chat/completions",
+            url,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
             json={
                 "model": settings.OPENAI_MODEL,
@@ -870,7 +881,7 @@ def _call_openai(prompt: str, *, max_tokens: int = 300, temperature: float = 0.7
             },
         )
     if resp.status_code >= 400:
-        logger.warning("OpenAI %s: %s", resp.status_code, resp.text[:300])
+        logger.warning("OpenAI %s (%s): %s", resp.status_code, url, resp.text[:300])
         resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
