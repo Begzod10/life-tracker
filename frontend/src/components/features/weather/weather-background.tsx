@@ -292,18 +292,13 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
     // top left a dead-dark slab at the bottom of any page taller than one
     // viewport (image 36).
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* Base gradient */}
-      {cfg.bg && <div className="absolute inset-0" style={{ background: cfg.bg }} />}
+      {/* No top-anchored bg radial — it was painting a dark halo across the
+          top of every page (image 58 feedback). The body background
+          (`bg-[#0a0a0f]`) shows through cleanly now; weather atmosphere
+          comes from the soft bottom glow + particles only. */}
 
-      {/* Top + bottom glows span the full viewport so the radial gradient
-          fades naturally instead of getting clipped by a fixed-height
-          container — clipping created a visible horizontal seam where the
-          glow div ended (image 55 feedback). The gradients are anchored
-          above/below the viewport, so most of the brightness sits at the
-          edges and the middle stays clear. */}
-      {cfg.glow && (
-        <div className="absolute inset-0 opacity-60" style={{ background: cfg.glow }} />
-      )}
+      {/* Bottom-anchored glow only — gives a faint tint at the very bottom
+          of the viewport (matches image 57) without darkening the top. */}
       {cfg.glow && (
         <div
           className="absolute inset-0 opacity-60"
