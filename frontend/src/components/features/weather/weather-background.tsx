@@ -292,13 +292,14 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
     // top left a dead-dark slab at the bottom of any page taller than one
     // viewport (image 36).
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* No top-anchored bg radial — it was painting a dark halo across the
-          top of every page (image 58 feedback). The body background
-          (`bg-[#0a0a0f]`) shows through cleanly now; weather atmosphere
-          comes from the soft bottom glow + particles only. */}
-
-      {/* Bottom-anchored glow only — gives a faint tint at the very bottom
-          of the viewport (matches image 57) without darkening the top. */}
+      {/* Soft glow at BOTH top and bottom — the user wants the top of the
+          viewport to feel as warm/lit as the bottom (image 59 vs 60). The
+          radial is anchored just outside the viewport so peak intensity sits
+          right at the edge and fades into the middle. No hard-cut height
+          containers; gradient spans `inset-0` so the falloff is smooth. */}
+      {cfg.glow && (
+        <div className="absolute inset-0 opacity-60" style={{ background: cfg.glow }} />
+      )}
       {cfg.glow && (
         <div
           className="absolute inset-0 opacity-60"
@@ -319,12 +320,9 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
       {/* 3D layer */}
       <Weather3D theme={theme} />
 
-      {/* Vignette to ground the content — lighter than before so the
-          bottom of the viewport doesn't read as dead-dark. */}
-      <div
-        className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse 110% 110% at 50% 50%, transparent 55%, rgba(10,10,15,0.35) 100%)' }}
-      />
+      {/* Vignette removed — it was darkening the corners (especially the
+          top corners) and made the upper viewport feel heavier than the
+          lower one (image 59 vs 60 feedback). */}
     </div>
   )
 }
