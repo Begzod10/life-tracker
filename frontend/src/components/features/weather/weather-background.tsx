@@ -20,50 +20,50 @@ const THEMES: Record<WeatherTheme, {
   snowCount: number
 }> = {
   clear: {
-    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(251,146,60,0.38) 0%, rgba(10,10,15,0) 70%)',
-    glow: 'radial-gradient(circle 400px at 50% -80px, rgba(251,191,36,0.55) 0%, transparent 65%)',
+    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(251,146,60,0.16) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 400px at 50% -80px, rgba(251,191,36,0.22) 0%, transparent 65%)',
     kind: 'sun',
     rainCount: 0,
     snowCount: 0,
   },
   'partly-cloudy': {
-    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(80,130,220,0.32) 0%, rgba(10,10,15,0) 70%)',
-    glow: 'radial-gradient(circle 350px at 50% -60px, rgba(147,197,253,0.45) 0%, transparent 65%)',
+    bg: 'radial-gradient(ellipse 130% 60% at 50% -10%, rgba(80,130,220,0.14) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 350px at 50% -60px, rgba(147,197,253,0.20) 0%, transparent 65%)',
     kind: 'clouds',
     rainCount: 0,
     snowCount: 0,
   },
   cloudy: {
-    bg: 'linear-gradient(180deg, rgba(55,65,81,0.55) 0%, rgba(10,10,15,0) 60%)',
-    glow: 'radial-gradient(circle 500px at 50% -100px, rgba(100,116,139,0.5) 0%, transparent 65%)',
+    bg: 'linear-gradient(180deg, rgba(55,65,81,0.22) 0%, rgba(10,10,15,0) 60%)',
+    glow: 'radial-gradient(circle 500px at 50% -100px, rgba(100,116,139,0.22) 0%, transparent 65%)',
     kind: 'clouds',
     rainCount: 0,
     snowCount: 0,
   },
   fog: {
-    bg: 'linear-gradient(180deg, rgba(100,110,130,0.45) 0%, rgba(10,10,15,0) 60%)',
-    glow: 'radial-gradient(circle 600px at 50% 20%, rgba(148,163,184,0.2) 0%, transparent 70%)',
+    bg: 'linear-gradient(180deg, rgba(100,110,130,0.20) 0%, rgba(10,10,15,0) 60%)',
+    glow: 'radial-gradient(circle 600px at 50% 20%, rgba(148,163,184,0.10) 0%, transparent 70%)',
     kind: 'fog',
     rainCount: 0,
     snowCount: 0,
   },
   rain: {
-    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(23,37,90,0.7) 0%, rgba(10,10,15,0) 70%)',
-    glow: 'radial-gradient(circle 450px at 50% -80px, rgba(59,130,246,0.45) 0%, transparent 65%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(23,37,90,0.30) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 450px at 50% -80px, rgba(59,130,246,0.20) 0%, transparent 65%)',
     kind: 'rain',
     rainCount: 120,
     snowCount: 0,
   },
   snow: {
-    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(96,165,250,0.35) 0%, rgba(10,10,15,0) 70%)',
-    glow: 'radial-gradient(circle 400px at 50% -70px, rgba(186,230,253,0.4) 0%, transparent 65%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(96,165,250,0.16) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 400px at 50% -70px, rgba(186,230,253,0.18) 0%, transparent 65%)',
     kind: 'snow',
     rainCount: 0,
     snowCount: 80,
   },
   thunder: {
-    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(76,29,149,0.65) 0%, rgba(10,10,15,0) 70%)',
-    glow: 'radial-gradient(circle 500px at 50% -90px, rgba(139,92,246,0.5) 0%, transparent 65%)',
+    bg: 'radial-gradient(ellipse 150% 70% at 50% -15%, rgba(76,29,149,0.28) 0%, rgba(10,10,15,0) 70%)',
+    glow: 'radial-gradient(circle 500px at 50% -90px, rgba(139,92,246,0.22) 0%, transparent 65%)',
     kind: 'thunder-rain',
     rainCount: 130,
     snowCount: 0,
@@ -295,12 +295,14 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
       {/* Base gradient */}
       {cfg.bg && <div className="absolute inset-0" style={{ background: cfg.bg }} />}
 
-      {/* Top glow */}
-      {cfg.glow && <div className="absolute inset-x-0 top-0 h-64" style={{ background: cfg.glow }} />}
+      {/* Top glow — matched to the bottom glow's intensity so the viewport
+          reads as one uniform atmosphere instead of a bright-top / dark-bottom
+          split (image 51-53 feedback). */}
+      {cfg.glow && (
+        <div className="absolute inset-x-0 top-0 h-64 opacity-60" style={{ background: cfg.glow }} />
+      )}
 
-      {/* Secondary glow anchored to the bottom — keeps the lower viewport
-          from going pitch-black on themes whose primary gradient only
-          covers the top portion. */}
+      {/* Secondary glow anchored to the bottom — same softness as the top. */}
       {cfg.glow && (
         <div
           className="absolute inset-x-0 bottom-0 h-72 opacity-60"
