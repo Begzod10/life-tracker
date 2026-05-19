@@ -16,7 +16,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
     useVoiceGreeting(user?.name)
 
     return (
-        <div className="dark bg-[#0a0a0f] relative min-h-screen">
+        <div className="dark relative min-h-screen">
             <WeatherBackground theme={activeTheme} />
 
             <Suspense fallback={null}>
