@@ -295,17 +295,18 @@ export function WeatherBackground({ theme }: { theme: WeatherTheme }) {
       {/* Base gradient */}
       {cfg.bg && <div className="absolute inset-0" style={{ background: cfg.bg }} />}
 
-      {/* Top glow — matched to the bottom glow's intensity so the viewport
-          reads as one uniform atmosphere instead of a bright-top / dark-bottom
-          split (image 51-53 feedback). */}
+      {/* Top + bottom glows span the full viewport so the radial gradient
+          fades naturally instead of getting clipped by a fixed-height
+          container — clipping created a visible horizontal seam where the
+          glow div ended (image 55 feedback). The gradients are anchored
+          above/below the viewport, so most of the brightness sits at the
+          edges and the middle stays clear. */}
       {cfg.glow && (
-        <div className="absolute inset-x-0 top-0 h-64 opacity-60" style={{ background: cfg.glow }} />
+        <div className="absolute inset-0 opacity-60" style={{ background: cfg.glow }} />
       )}
-
-      {/* Secondary glow anchored to the bottom — same softness as the top. */}
       {cfg.glow && (
         <div
-          className="absolute inset-x-0 bottom-0 h-72 opacity-60"
+          className="absolute inset-0 opacity-60"
           style={{ background: cfg.glow, transform: 'scaleY(-1)' }}
         />
       )}
