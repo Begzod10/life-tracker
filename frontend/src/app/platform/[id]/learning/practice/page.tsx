@@ -10,7 +10,7 @@ import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 
 type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening'
-type Phase = 'pick' | 'session' | 'results'
+type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -464,10 +464,11 @@ function Listening({ word, onAnswer }: {
 function LegacySession({ words, mode, onDone }: {
     words: PracticeWord[]
     mode: Exclude<Mode, 'flashcard'>
-    onDone: (correct: number, total: number) => void
+    onDone: (correctIds: number[], missedIds: number[]) => void
 }) {
     const [index, setIndex] = useState(0)
-    const [correct, setCorrect] = useState(0)
+    const [correctIds, setCorrectIds] = useState<number[]>([])
+    const [missedIds, setMissedIds] = useState<number[]>([])
     const { mutate: submitResult } = useSubmitResult()
 
     const word = words[index]
@@ -475,20 +476,23 @@ function LegacySession({ words, mode, onDone }: {
 
     const advance = useCallback((wasCorrect: boolean) => {
         submitResult({ wordId: word.id, wasCorrect })
-        if (wasCorrect) setCorrect(p => p + 1)
+        const nextCorrect = wasCorrect ? [...correctIds, word.id] : correctIds
+        const nextMissed = wasCorrect ? missedIds : [...missedIds, word.id]
+        if (wasCorrect) setCorrectIds(nextCorrect)
+        else setMissedIds(nextMissed)
         if (index + 1 >= words.length) {
-            onDone(wasCorrect ? correct + 1 : correct, words.length)
+            onDone(nextCorrect, nextMissed)
         } else {
             setIndex(p => p + 1)
         }
-    }, [word, index, correct, words.length, onDone, submitResult])
+    }, [word, index, correctIds, missedIds, words.length, onDone, submitResult])
 
     return (
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
                 <div className="flex justify-between text-xs text-white/40 mb-1.5">
                     <span>{index + 1} / {words.length}</span>
-                    <span>{correct} correct</span>
+                    <span>{correctIds.length} correct</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <motion.div
@@ -514,6 +518,76 @@ function LegacySession({ words, mode, onDone }: {
                 </motion.div>
             </AnimatePresence>
         </div>
+    )
+}
+
+// ── Chunk review (between batches when drilling a large scope) ──────────────
+
+function ChunkReview({
+    chunkSize,
+    correctCount,
+    missedWords,
+    remainingTotal,
+    onContinue,
+    onStop,
+}: {
+    chunkSize: number
+    correctCount: number
+    missedWords: PracticeWord[]
+    remainingTotal: number
+    onContinue: () => void
+    onStop: () => void
+}) {
+    const total = correctCount + missedWords.length
+    const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0
+    return (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="text-center">
+                <p className="text-4xl font-bold text-white">{pct}%</p>
+                <p className="text-white/50 mt-1">{correctCount} / {total} correct in this round</p>
+                <p className="text-xs text-white/30 mt-2">
+                    {remainingTotal > 0
+                        ? `${remainingTotal} word${remainingTotal === 1 ? '' : 's'} still to drill — mistakes carry into the next round.`
+                        : 'No more words queued — finish to see your results.'}
+                </p>
+            </div>
+
+            {missedWords.length > 0 ? (
+                <Card className="p-4 bg-amber-500/5 border border-amber-500/20">
+                    <p className="text-sm text-amber-300/80 mb-3 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" />
+                        {missedWords.length} word{missedWords.length === 1 ? '' : 's'} to review
+                    </p>
+                    <ul className="space-y-2">
+                        {missedWords.map(w => (
+                            <li key={w.id} className="flex items-start gap-3 text-sm">
+                                <span className="text-amber-300 font-medium min-w-[8rem]">{w.word}</span>
+                                <span className="text-white/60 flex-1">{w.definition}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            ) : (
+                <Card className="p-4 bg-emerald-500/5 border border-emerald-500/20 text-center text-sm text-emerald-300/80">
+                    Clean round — no mistakes this batch.
+                </Card>
+            )}
+
+            <div className="flex flex-wrap gap-3 justify-center">
+                {remainingTotal > 0 ? (
+                    <Button onClick={onContinue} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                        Next {Math.min(chunkSize, remainingTotal)} words
+                    </Button>
+                ) : (
+                    <Button onClick={onContinue} className="bg-blue-600 hover:bg-blue-700 text-white">
+                        See results
+                    </Button>
+                )}
+                <Button onClick={onStop} variant="outline" className="border-white/20 text-white/70 hover:bg-white/5">
+                    Stop here
+                </Button>
+            </div>
+        </motion.div>
     )
 }
 
@@ -683,19 +757,27 @@ function PracticePageInner() {
 
     const [phase, setPhase] = useState<Phase>('pick')
     const [mode, setMode] = useState<Mode>('flashcard')
-    const [wordCount, setWordCount] = useState(10)
+    const [chunkSize, setChunkSize] = useState(10)
     const [words, setWords] = useState<PracticeWord[]>([])
     const [originalWords, setOriginalWords] = useState<PracticeWord[]>([])
+    const [unseenQueue, setUnseenQueue] = useState<PracticeWord[]>([])
+    const [mistakesPool, setMistakesPool] = useState<PracticeWord[]>([])
     const [sessionId, setSessionId] = useState<number | null>(null)
     const [results, setResults] = useState<{ correct: number; total: number; learningIds: number[] } | null>(null)
+    const [lastChunk, setLastChunk] = useState<{ correctCount: number; missedWords: PracticeWord[] } | null>(null)
+    const [aggregate, setAggregate] = useState<{ correct: number; total: number; missedIds: Set<number> }>({
+        correct: 0, total: 0, missedIds: new Set<number>(),
+    })
     const [startError, setStartError] = useState<string | null>(null)
 
     const [scopeFolderId, setScopeFolderId] = useState<number | undefined>(initialFolderFromUrl)
     const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(initialModuleFromUrl)
     const [dueOnly, setDueOnly] = useState(false)
     const [weakOnly, setWeakOnly] = useState(false)
+    // Always pull the full scope so chunking + mistake carry-forward can
+    // walk the entire pool from a single fetch. Backend cap is 1000.
     const { refetch: fetchWords, isFetching } = usePracticeWords({
-        count: wordCount,
+        count: 1000,
         moduleId: scopeModuleId,
         folderId: scopeModuleId ? undefined : scopeFolderId,
         dueOnly,
@@ -711,10 +793,30 @@ function PracticePageInner() {
         return m
     }, [originalWords])
 
-    const startWith = (deck: PracticeWord[]) => {
-        setWords(deck)
-        setResults(null)
-        createSession(mode, { onSuccess: (session: { id: number }) => setSessionId(session.id) })
+    // Pull next chunk: mistakes from earlier rounds first (so they recur
+    // immediately), then fill remaining slots with fresh words.
+    const takeChunk = useCallback((
+        unseen: PracticeWord[],
+        pool: PracticeWord[],
+        size: number,
+    ): { chunk: PracticeWord[]; unseenRest: PracticeWord[]; poolRest: PracticeWord[] } => {
+        const fromPool = pool.slice(0, size)
+        const remaining = size - fromPool.length
+        const fromUnseen = remaining > 0 ? unseen.slice(0, remaining) : []
+        return {
+            chunk: [...fromPool, ...fromUnseen],
+            poolRest: pool.slice(fromPool.length),
+            unseenRest: unseen.slice(fromUnseen.length),
+        }
+    }, [])
+
+    const startChunk = (chunk: PracticeWord[]) => {
+        setWords(chunk)
+        // One backend "session" record per drill run is enough; only create
+        // it on the very first chunk so the completion stats roll up cleanly.
+        if (!sessionId) {
+            createSession(mode, { onSuccess: (session: { id: number }) => setSessionId(session.id) })
+        }
         setPhase('session')
     }
 
@@ -729,33 +831,140 @@ function PracticePageInner() {
             setStartError('Add at least 2 words to your dictionary first.')
             return
         }
-        const fresh = res.data
+        const fresh = shuffleArray(res.data)
         setOriginalWords(fresh)
-        startWith(fresh)
+        setSessionId(null)
+        setResults(null)
+        setLastChunk(null)
+        setAggregate({ correct: 0, total: 0, missedIds: new Set<number>() })
+        const { chunk, unseenRest, poolRest } = takeChunk(fresh, [], chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        startChunk(chunk)
     }
+
+    const finishRun = useCallback((finalAggregate: { correct: number; total: number; missedIds: Set<number> }) => {
+        const learningIds = Array.from(finalAggregate.missedIds)
+        setResults({
+            correct: finalAggregate.correct,
+            total: finalAggregate.total,
+            learningIds,
+        })
+        if (sessionId) completeSession({
+            sessionId,
+            total: finalAggregate.total,
+            correct: finalAggregate.correct,
+        })
+        setPhase('results')
+    }, [completeSession, sessionId])
+
+    const handleChunkComplete = useCallback((correctIds: number[], missedIds: number[]) => {
+        const correctSet = new Set(correctIds)
+        const missedSet = new Set(missedIds)
+
+        // Drop now-correct words from the carry-forward pool; add any new
+        // misses (deduped by id) so each word retries until it lands.
+        const trimmedPool = mistakesPool.filter(w => !correctSet.has(w.id))
+        const poolIds = new Set(trimmedPool.map(w => w.id))
+        const additions: PracticeWord[] = []
+        for (const id of missedIds) {
+            if (poolIds.has(id)) continue
+            const w = wordsById.get(id)
+            if (w) {
+                additions.push(w)
+                poolIds.add(id)
+            }
+        }
+        const nextPool = [...trimmedPool, ...additions]
+
+        // Aggregate run-wide stats. missedIds tracks any word that was
+        // wrong at least once across the whole drill — useful for the
+        // "review still learning" follow-up.
+        const nextAggregate = {
+            correct: aggregate.correct + correctIds.length,
+            total: aggregate.total + correctIds.length + missedIds.length,
+            missedIds: new Set(aggregate.missedIds),
+        }
+        for (const id of missedSet) nextAggregate.missedIds.add(id)
+        for (const id of correctSet) {
+            // A word answered correctly here exits the "still learning" set
+            // — it can re-enter only if missed again later.
+            nextAggregate.missedIds.delete(id)
+        }
+        setAggregate(nextAggregate)
+        setMistakesPool(nextPool)
+
+        const missedWords = missedIds
+            .map(id => wordsById.get(id))
+            .filter((w): w is PracticeWord => Boolean(w))
+        setLastChunk({ correctCount: correctIds.length, missedWords })
+
+        if (unseenQueue.length === 0 && nextPool.length === 0) {
+            finishRun(nextAggregate)
+            return
+        }
+        setPhase('chunk-review')
+    }, [aggregate, mistakesPool, unseenQueue, wordsById, finishRun])
+
+    const continueChunk = () => {
+        if (unseenQueue.length === 0 && mistakesPool.length === 0) {
+            finishRun(aggregate)
+            return
+        }
+        const { chunk, unseenRest, poolRest } = takeChunk(unseenQueue, mistakesPool, chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        setLastChunk(null)
+        startChunk(chunk)
+    }
+
+    const stopHere = () => finishRun(aggregate)
 
     const handleFlashcardDone = (knowIds: number[], learningIds: number[]) => {
-        const total = knowIds.length + learningIds.length
-        setResults({ correct: knowIds.length, total, learningIds })
-        if (sessionId) completeSession({ sessionId, total, correct: knowIds.length })
-        setPhase('results')
+        handleChunkComplete(knowIds, learningIds)
     }
 
-    const handleLegacyDone = (correct: number, total: number) => {
-        setResults({ correct, total, learningIds: [] })
-        if (sessionId) completeSession({ sessionId, total, correct })
-        setPhase('results')
+    const handleLegacyDone = (correctIds: number[], missedIds: number[]) => {
+        handleChunkComplete(correctIds, missedIds)
     }
 
-    const retry = () => startWith(originalWords)
-    const shuffle = () => startWith(shuffleArray(originalWords))
+    const retry = () => {
+        // Restart the whole drill from the original pool.
+        setSessionId(null)
+        setResults(null)
+        setLastChunk(null)
+        setAggregate({ correct: 0, total: 0, missedIds: new Set<number>() })
+        const { chunk, unseenRest, poolRest } = takeChunk(originalWords, [], chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        startChunk(chunk)
+    }
+    const shuffle = () => {
+        setSessionId(null)
+        setResults(null)
+        setLastChunk(null)
+        setAggregate({ correct: 0, total: 0, missedIds: new Set<number>() })
+        const reshuffled = shuffleArray(originalWords)
+        const { chunk, unseenRest, poolRest } = takeChunk(reshuffled, [], chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        startChunk(chunk)
+    }
     const reviewLearning = () => {
         if (!results) return
         const deck = results.learningIds
             .map(id => wordsById.get(id))
             .filter((w): w is PracticeWord => Boolean(w))
         if (deck.length === 0) return
-        startWith(shuffleArray(deck))
+        const shuffled = shuffleArray(deck)
+        setSessionId(null)
+        setResults(null)
+        setLastChunk(null)
+        setAggregate({ correct: 0, total: 0, missedIds: new Set<number>() })
+        const { chunk, unseenRest, poolRest } = takeChunk(shuffled, [], chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        startChunk(chunk)
     }
 
     return (
@@ -773,7 +982,13 @@ function PracticePageInner() {
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <h1 className="text-2xl font-bold text-white">
-                        {phase === 'pick' ? 'Practice' : phase === 'session' ? MODE_META[mode].label : 'Results'}
+                        {phase === 'pick'
+                            ? 'Practice'
+                            : phase === 'session'
+                                ? MODE_META[mode].label
+                                : phase === 'chunk-review'
+                                    ? 'Round review'
+                                    : 'Results'}
                     </h1>
                 </motion.div>
 
@@ -844,29 +1059,24 @@ function PracticePageInner() {
                                 </p>
                             </Card>
 
-                            {/* Word count */}
+                            {/* Words per round (chunk size — drill walks the full scope) */}
                             <Card className="p-4 bg-white/2.5 border border-white/5">
-                                <p className="text-sm text-white/60 mb-3">Words per session</p>
+                                <p className="text-sm text-white/60 mb-1">Words per round</p>
+                                <p className="text-xs text-white/30 mb-3">
+                                    The drill covers your full scope and pauses every round so you can review mistakes. Missed words carry into the next round.
+                                </p>
                                 <div className="flex gap-2 flex-wrap">
-                                    {[5, 10, 20, 30, 50, 100].map(n => (
+                                    {[5, 10, 20, 30, 50].map(n => (
                                         <button
                                             key={n}
-                                            onClick={() => setWordCount(n)}
+                                            onClick={() => setChunkSize(n)}
                                             className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
-                                                wordCount === n
+                                                chunkSize === n
                                                     ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
                                                     : 'border-white/10 text-white/50 hover:bg-white/5'
                                             }`}
                                         >{n}</button>
                                     ))}
-                                    <button
-                                        onClick={() => setWordCount(1000)}
-                                        className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
-                                            wordCount === 1000
-                                                ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
-                                                : 'border-white/10 text-white/50 hover:bg-white/5'
-                                        }`}
-                                    >All</button>
                                 </div>
                             </Card>
 
@@ -898,13 +1108,33 @@ function PracticePageInner() {
                         <motion.div key="session" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             {mode === 'flashcard' ? (
                                 <FlashcardSession
+                                    key={`fs-${words.map(w => w.id).join('-')}`}
                                     words={words}
                                     onCardDecided={(wordId, wasKnow) => submitResult({ wordId, wasCorrect: wasKnow })}
                                     onSessionEnd={handleFlashcardDone}
                                 />
                             ) : (
-                                <LegacySession words={words} mode={mode} onDone={handleLegacyDone} />
+                                <LegacySession
+                                    key={`ls-${words.map(w => w.id).join('-')}`}
+                                    words={words}
+                                    mode={mode}
+                                    onDone={handleLegacyDone}
+                                />
                             )}
+                        </motion.div>
+                    )}
+
+                    {/* Mid-drill review (between batches) */}
+                    {phase === 'chunk-review' && lastChunk && (
+                        <motion.div key="chunk-review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <ChunkReview
+                                chunkSize={chunkSize}
+                                correctCount={lastChunk.correctCount}
+                                missedWords={lastChunk.missedWords}
+                                remainingTotal={unseenQueue.length + mistakesPool.length}
+                                onContinue={continueChunk}
+                                onStop={stopHere}
+                            />
                         </motion.div>
                     )}
 
