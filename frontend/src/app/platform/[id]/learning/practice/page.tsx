@@ -847,8 +847,8 @@ function PracticePageInner() {
                             {/* Word count */}
                             <Card className="p-4 bg-white/2.5 border border-white/5">
                                 <p className="text-sm text-white/60 mb-3">Words per session</p>
-                                <div className="flex gap-2">
-                                    {[5, 10, 20, 30].map(n => (
+                                <div className="flex gap-2 flex-wrap">
+                                    {[5, 10, 20, 30, 50, 100].map(n => (
                                         <button
                                             key={n}
                                             onClick={() => setWordCount(n)}
@@ -859,6 +859,14 @@ function PracticePageInner() {
                                             }`}
                                         >{n}</button>
                                     ))}
+                                    <button
+                                        onClick={() => setWordCount(1000)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
+                                            wordCount === 1000
+                                                ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                                                : 'border-white/10 text-white/50 hover:bg-white/5'
+                                        }`}
+                                    >All</button>
                                 </div>
                             </Card>
 

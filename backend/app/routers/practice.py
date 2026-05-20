@@ -54,7 +54,7 @@ def _serialize_practice_word(word: models.DictionaryWord, all_words: list) -> di
 
 @router.get("/words")
 def get_practice_words(
-    count: int = Query(default=10, ge=1, le=50),
+    count: int = Query(default=10, ge=1, le=1000),
     difficulty: Optional[str] = Query(None),
     module_id: Optional[int] = Query(None),
     folder_id: Optional[int] = Query(None),
