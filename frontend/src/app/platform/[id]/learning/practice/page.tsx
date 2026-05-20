@@ -155,10 +155,14 @@ function FlashcardSession({
     words,
     onCardDecided,
     onSessionEnd,
+    drillStartIndex,
+    drillTotal,
 }: {
     words: PracticeWord[]
     onCardDecided: (wordId: number, wasKnow: boolean) => void
     onSessionEnd: (knowIds: number[], learningIds: number[]) => void
+    drillStartIndex: number
+    drillTotal: number
 }) {
     const [index, setIndex] = useState(0)
     const [flipped, setFlipped] = useState(false)
@@ -218,7 +222,10 @@ function FlashcardSession({
             {/* progress + pile counters */}
             <div className="w-full max-w-md">
                 <div className="flex justify-between items-center text-xs mb-1.5">
-                    <span className="text-white/50">{index + 1} / {words.length}</span>
+                    <span className="text-white/50">
+                        Round {index + 1} / {words.length}
+                        <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
+                    </span>
                     <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1 text-red-400">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
@@ -461,10 +468,12 @@ function Listening({ word, onAnswer }: {
 
 // ── Quiz/Spelling/Listening session wrapper (legacy correct-counter model) ──
 
-function LegacySession({ words, mode, onDone }: {
+function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
     words: PracticeWord[]
     mode: Exclude<Mode, 'flashcard'>
     onDone: (correctIds: number[], missedIds: number[]) => void
+    drillStartIndex: number
+    drillTotal: number
 }) {
     const [index, setIndex] = useState(0)
     const [correctIds, setCorrectIds] = useState<number[]>([])
@@ -491,7 +500,10 @@ function LegacySession({ words, mode, onDone }: {
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
                 <div className="flex justify-between text-xs text-white/40 mb-1.5">
-                    <span>{index + 1} / {words.length}</span>
+                    <span>
+                        Round {index + 1} / {words.length}
+                        <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
+                    </span>
                     <span>{correctIds.length} correct</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -1094,25 +1106,37 @@ function PracticePageInner() {
                     )}
 
                     {/* Active session */}
-                    {phase === 'session' && (
-                        <motion.div key="session" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            {mode === 'flashcard' ? (
-                                <FlashcardSession
-                                    key={`fs-${words.map(w => w.id).join('-')}`}
-                                    words={words}
-                                    onCardDecided={(wordId, wasKnow) => submitResult({ wordId, wasCorrect: wasKnow })}
-                                    onSessionEnd={handleFlashcardDone}
-                                />
-                            ) : (
-                                <LegacySession
-                                    key={`ls-${words.map(w => w.id).join('-')}`}
-                                    words={words}
-                                    mode={mode}
-                                    onDone={handleLegacyDone}
-                                />
-                            )}
-                        </motion.div>
-                    )}
+                    {phase === 'session' && (() => {
+                        // Drill counter aggregates the whole walk: prior answers
+                        // + this chunk + still-queued + carry-forward mistakes.
+                        // Stays stable for the duration of the current chunk so
+                        // the bar doesn't lurch as users answer.
+                        const drillStartIndex = aggregate.total
+                        const drillTotal = aggregate.total + words.length + unseenQueue.length + mistakesPool.length
+                        return (
+                            <motion.div key="session" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                {mode === 'flashcard' ? (
+                                    <FlashcardSession
+                                        key={`fs-${words.map(w => w.id).join('-')}`}
+                                        words={words}
+                                        onCardDecided={(wordId, wasKnow) => submitResult({ wordId, wasCorrect: wasKnow })}
+                                        onSessionEnd={handleFlashcardDone}
+                                        drillStartIndex={drillStartIndex}
+                                        drillTotal={drillTotal}
+                                    />
+                                ) : (
+                                    <LegacySession
+                                        key={`ls-${words.map(w => w.id).join('-')}`}
+                                        words={words}
+                                        mode={mode}
+                                        onDone={handleLegacyDone}
+                                        drillStartIndex={drillStartIndex}
+                                        drillTotal={drillTotal}
+                                    />
+                                )}
+                            </motion.div>
+                        )
+                    })()}
 
                     {/* Mid-drill review (between batches) */}
                     {phase === 'chunk-review' && lastChunk && (
