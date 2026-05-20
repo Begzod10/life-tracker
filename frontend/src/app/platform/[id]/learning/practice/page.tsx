@@ -755,9 +755,12 @@ function PracticePageInner() {
         return Number.isFinite(n) && n > 0 ? n : undefined
     }, [searchParams])
 
+    // Fixed: a round is always 10 words. The drill always covers the full
+    // chosen scope; "rounds" are just review checkpoints inside that drill.
+    const chunkSize = 10
+
     const [phase, setPhase] = useState<Phase>('pick')
     const [mode, setMode] = useState<Mode>('flashcard')
-    const [chunkSize, setChunkSize] = useState(10)
     const [words, setWords] = useState<PracticeWord[]>([])
     const [originalWords, setOriginalWords] = useState<PracticeWord[]>([])
     const [unseenQueue, setUnseenQueue] = useState<PracticeWord[]>([])
@@ -1059,25 +1062,12 @@ function PracticePageInner() {
                                 </p>
                             </Card>
 
-                            {/* Words per round (chunk size — drill walks the full scope) */}
+                            {/* Drill rules — full scope, 10-word review rounds */}
                             <Card className="p-4 bg-white/2.5 border border-white/5">
-                                <p className="text-sm text-white/60 mb-1">Words per round</p>
-                                <p className="text-xs text-white/30 mb-3">
-                                    The drill covers your full scope and pauses every round so you can review mistakes. Missed words carry into the next round.
+                                <p className="text-sm text-white/60 mb-1">How the drill runs</p>
+                                <p className="text-xs text-white/30">
+                                    Every session covers all words in your chosen scope. After each 10 words you see your mistakes; those words come back in the next round until you get them right.
                                 </p>
-                                <div className="flex gap-2 flex-wrap">
-                                    {[5, 10, 20, 30, 50].map(n => (
-                                        <button
-                                            key={n}
-                                            onClick={() => setChunkSize(n)}
-                                            className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${
-                                                chunkSize === n
-                                                    ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
-                                                    : 'border-white/10 text-white/50 hover:bg-white/5'
-                                            }`}
-                                        >{n}</button>
-                                    ))}
-                                </div>
                             </Card>
 
                             {startError && (
