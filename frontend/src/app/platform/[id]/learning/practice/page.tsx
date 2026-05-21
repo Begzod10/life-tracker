@@ -261,11 +261,8 @@ function FlashcardSession({
         setExit(wasKnow ? 1 : -1)
         // Audio feedback fires alongside the swipe-tint, so the cue lands
         // before the 320ms advance animation, not after it.
-        // Skip the voice affirmation here — the next card's auto-TTS will
-        // cancel any in-progress speech ~320ms later and chop the word
-        // mid-syllable; the chime alone is enough for flashcard pacing.
-        if (wasKnow) playCorrect({ voice: false })
-        else playWrong({ voice: false })
+        if (wasKnow) playCorrect()
+        else playWrong()
         onCardDecided(word.id, wasKnow)
         const nextKnow = wasKnow ? [...know, word.id] : know
         const nextLearning = wasKnow ? learning : [...learning, word.id]
