@@ -655,18 +655,28 @@ def _update_matching_budget_by_fields(person_id: int, category: str, expense_dat
 
 
 def _update_salary_month_totals(salary_month_id: int, db: Session):
-    """Update total_spent and remaining_amount for a salary month"""
+    """Update total_spent and remaining_amount for a salary month.
+
+    For Gennis-mirrored months we leave total_spent / remaining_amount alone
+    — those reflect what the company has paid you (Gennis taken_money /
+    remaining_salary) and would otherwise be clobbered by the sum of local
+    expenses (a different concept).
+    """
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id
     ).first()
 
-    if salary_month:
-        expenses = db.query(models.Expense).filter(
-            models.Expense.salary_month_id == salary_month_id,
-            models.Expense.deleted == False
-        ).all()
+    if not salary_month:
+        return
+    if salary_month.gennis_salary_location_id is not None:
+        return
 
-        total_spent = sum(expense.amount for expense in expenses)
-        salary_month.total_spent = total_spent
-        salary_month.remaining_amount = salary_month.net_amount - total_spent
-        db.commit()
+    expenses = db.query(models.Expense).filter(
+        models.Expense.salary_month_id == salary_month_id,
+        models.Expense.deleted == False
+    ).all()
+
+    total_spent = sum(expense.amount for expense in expenses)
+    salary_month.total_spent = total_spent
+    salary_month.remaining_amount = salary_month.net_amount - total_spent
+    db.commit()

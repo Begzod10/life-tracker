@@ -494,7 +494,12 @@ def recalculate_salary_month(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Recalculate total_spent and remaining_amount for a salary month"""
+    """Recalculate total_spent and remaining_amount for a salary month.
+
+    For Gennis-mirrored months this triggers a Gennis re-sync instead of the
+    local expense-sum derivation, because total_spent there reflects
+    company-paid (Gennis taken_money), not personal expense allocations.
+    """
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
         models.SalaryMonth.person_id == current_user.id,
@@ -507,7 +512,16 @@ def recalculate_salary_month(
             detail="Salary month not found"
         )
 
-    # Calculate total spent from expenses
+    if salary_month.gennis_salary_location_id is not None:
+        job = db.query(models.Job).filter(models.Job.id == salary_month.job_id).first()
+        if job is not None:
+            # Bypass the 5-min freshness guard since this is an explicit
+            # recalculate request.
+            gennis_sync.sync_job(job, db)
+            db.refresh(salary_month)
+        return salary_month
+
+    # Calculate total spent from expenses (non-Gennis months)
     expenses = db.query(models.Expense).filter(
         models.Expense.salary_month_id == salary_month_id,
         models.Expense.deleted == False

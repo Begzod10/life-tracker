@@ -534,39 +534,67 @@ function GennisPaymentsCard({ salaryMonthId }: { salaryMonthId: number }) {
                         <Skeleton className="h-10 w-full" />
                     </div>
                 ) : (
-                    <div className="overflow-x-auto -mx-2 sm:mx-0">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
-                                    <th className="text-left py-2 px-2 font-medium">Date</th>
-                                    <th className="text-left py-2 px-2 font-medium">Reason</th>
-                                    <th className="text-left py-2 px-2 font-medium">Type</th>
-                                    <th className="text-right py-2 px-2 font-medium">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {payments.map((p: GennisSalaryPayment) => {
-                                    const date = p.payment_date
-                                        ? format(parse(p.payment_date, 'yyyy-MM-dd', new Date()), 'MMM d')
-                                        : '—'
-                                    const typeClass = PAYMENT_TYPE_STYLE[p.payment_type ?? ''] ?? 'bg-white/5 text-white/60 border-white/10'
-                                    return (
-                                        <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                                            <td className="py-2.5 px-2 text-white/70 whitespace-nowrap">{date}</td>
-                                            <td className="py-2.5 px-2 text-white/80 truncate max-w-[14rem]" title={p.reason ?? ''}>{p.reason || '—'}</td>
-                                            <td className="py-2.5 px-2">
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider border ${typeClass}`}>
-                                                    {paymentTypeIcon(p.payment_type)}
-                                                    {p.payment_type ?? '—'}
-                                                </span>
-                                            </td>
-                                            <td className="py-2.5 px-2 text-right font-semibold text-white tabular-nums">{p.amount.toLocaleString()}</td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        {/* Mobile: stacked cards */}
+                        <div className="sm:hidden space-y-2">
+                            {payments.map((p: GennisSalaryPayment) => {
+                                const date = p.payment_date
+                                    ? format(parse(p.payment_date, 'yyyy-MM-dd', new Date()), 'MMM d')
+                                    : '—'
+                                const typeClass = PAYMENT_TYPE_STYLE[p.payment_type ?? ''] ?? 'bg-white/5 text-white/60 border-white/10'
+                                return (
+                                    <div key={p.id} className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-xs text-white/40">{date}</p>
+                                                <p className="text-sm text-white/90 truncate">{p.reason || '—'}</p>
+                                            </div>
+                                            <p className="text-sm font-semibold text-white tabular-nums shrink-0">{p.amount.toLocaleString()}</p>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 mt-2 rounded-full text-[10px] uppercase tracking-wider border ${typeClass}`}>
+                                            {paymentTypeIcon(p.payment_type)}
+                                            {p.payment_type ?? '—'}
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        {/* sm+ : table */}
+                        <div className="hidden sm:block overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
+                                        <th className="text-left py-2 px-2 font-medium">Date</th>
+                                        <th className="text-left py-2 px-2 font-medium">Reason</th>
+                                        <th className="text-left py-2 px-2 font-medium">Type</th>
+                                        <th className="text-right py-2 px-2 font-medium">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {payments.map((p: GennisSalaryPayment) => {
+                                        const date = p.payment_date
+                                            ? format(parse(p.payment_date, 'yyyy-MM-dd', new Date()), 'MMM d')
+                                            : '—'
+                                        const typeClass = PAYMENT_TYPE_STYLE[p.payment_type ?? ''] ?? 'bg-white/5 text-white/60 border-white/10'
+                                        return (
+                                            <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                                                <td className="py-2.5 px-2 text-white/70 whitespace-nowrap">{date}</td>
+                                                <td className="py-2.5 px-2 text-white/80 truncate max-w-[14rem]" title={p.reason ?? ''}>{p.reason || '—'}</td>
+                                                <td className="py-2.5 px-2">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider border ${typeClass}`}>
+                                                        {paymentTypeIcon(p.payment_type)}
+                                                        {p.payment_type ?? '—'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2.5 px-2 text-right font-semibold text-white tabular-nums">{p.amount.toLocaleString()}</td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </Card>
         </motion.div>
