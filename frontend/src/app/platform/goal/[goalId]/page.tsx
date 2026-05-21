@@ -286,7 +286,7 @@ function GoalRecurringStats({ goalId }: { goalId: string }) {
             transition={{ delay: 0.2 }}
         >
             <Card
-                className="p-6 border border-white/5 backdrop-blur-sm"
+                className="p-4 sm:p-6 border border-white/5 backdrop-blur-sm"
                 style={{ backgroundColor: 'rgba(255, 255, 255, 0.025)', borderColor: 'rgba(255, 255, 255, 0.06)' }}
             >
                 <div className="flex items-center justify-between mb-5">
@@ -777,9 +777,9 @@ export default function GoalPage() {
 
 
     return (
-        <div className="min-h-screen p-6">
+        <div className="min-h-screen p-3 sm:p-6">
             <motion.div
-                className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6"
+                className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-1 sm:px-6"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
@@ -789,25 +789,25 @@ export default function GoalPage() {
                 {/* Header Section */}
                 <motion.div
                     variants={itemVariants}
-                    className="flex flex-col md:flex-row md:items-start justify-between gap-6"
+                    className="flex flex-col md:flex-row md:items-start justify-between gap-4 sm:gap-6"
                 >
-                    <div className="flex-1 space-y-4">
+                    <div className="flex-1 min-w-0 space-y-4">
                         <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg bg-orange-500/10 text-orange-500`}>
                                 {getCategoryIcon(goalData.category)}
                             </div>
-                            <span className="text-sm font-medium text-orange-500/80 uppercase tracking-wider">{goalData.category}</span>
+                            <span className="text-xs sm:text-sm font-medium text-orange-500/80 uppercase tracking-wider truncate">{goalData.category}</span>
                         </div>
 
                         <div>
                             <h1
-                                className="text-4xl lg:text-5xl font-bold mb-3 tracking-tight"
+                                className="text-2xl sm:text-3xl lg:text-5xl font-bold mb-3 tracking-tight break-words"
                                 style={{ color: 'oklch(0.95 0.01 240)' }}
                             >
                                 {goalData.name}
                             </h1>
                             <p
-                                className="text-lg md:text-xl max-w-2xl leading-relaxed"
+                                className="text-sm sm:text-lg md:text-xl max-w-2xl leading-relaxed"
                                 style={{ color: 'oklch(0.7 0.02 240)' }}
                             >
                                 {goalData.description}
@@ -882,13 +882,13 @@ export default function GoalPage() {
                 </motion.div>
 
                 {/* Main Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                     {/* Left Column - Progress & Stats */}
-                    <div className="lg:col-span-2 space-y-8">
+                    <div className="lg:col-span-2 space-y-4 sm:space-y-8">
                         {/* Progress Overview Card */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-8 border border-white/5 backdrop-blur-sm overflow-hidden relative"
+                                className="p-4 sm:p-8 border border-white/5 backdrop-blur-sm overflow-hidden relative"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
@@ -901,7 +901,7 @@ export default function GoalPage() {
                                     Progress Overview
                                 </h2>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 items-center">
                                     {/* Circular Progress */}
                                     <div className="flex justify-center">
                                         <CircularProgress
@@ -956,7 +956,7 @@ export default function GoalPage() {
                         {/* Timeline Card */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-8 border border-white/5 backdrop-blur-sm"
+                                className="p-4 sm:p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
@@ -976,7 +976,7 @@ export default function GoalPage() {
                         {/* Progress Logs Section */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-8 border border-white/5 backdrop-blur-sm"
+                                className="p-4 sm:p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
@@ -1114,7 +1114,7 @@ export default function GoalPage() {
                         {/* Milestones Section */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-8 border border-white/5 backdrop-blur-sm"
+                                className="p-4 sm:p-8 border border-white/5 backdrop-blur-sm"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
@@ -1247,7 +1247,7 @@ export default function GoalPage() {
                         {/* Details Card */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-6 border border-white/5 backdrop-blur-sm"
+                                className="p-4 sm:p-6 border border-white/5 backdrop-blur-sm"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',
@@ -1297,7 +1297,7 @@ export default function GoalPage() {
                         {/* Tasks List */}
                         <motion.div variants={itemVariants}>
                             <Card
-                                className="p-6 border border-white/5 backdrop-blur-sm"
+                                className="p-4 sm:p-6 border border-white/5 backdrop-blur-sm"
                                 style={{
                                     backgroundColor: 'rgba(255, 255, 255, 0.025)',
                                     borderColor: 'oklch(0.25 0.02 240)',

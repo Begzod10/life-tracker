@@ -46,12 +46,13 @@ function StatCard({ icon, label, value, sub, color = 'text-white' }: {
 }) {
     return (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-white/8 bg-white/[0.03] p-5 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-white/40 text-xs font-semibold uppercase tracking-wider">
-                {icon}{label}
+            className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:p-5 flex flex-col gap-2 sm:gap-3 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-white/40 text-[10px] sm:text-xs font-semibold uppercase tracking-wider min-w-0">
+                <span className="shrink-0">{icon}</span>
+                <span className="truncate">{label}</span>
             </div>
-            <p className={`text-3xl font-bold ${color}`}>{value}</p>
-            {sub && <p className="text-xs text-white/35">{sub}</p>}
+            <p className={`text-2xl sm:text-3xl font-bold ${color} break-words`}>{value}</p>
+            {sub && <p className="text-[10px] sm:text-xs text-white/35 truncate">{sub}</p>}
         </motion.div>
     )
 }
@@ -254,30 +255,30 @@ export default function TimetableStatsPage() {
         <div className="min-h-screen text-white">
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/25 to-transparent pointer-events-none z-0" />
 
-            <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+            <div className="relative z-10 max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6 sm:mb-8">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                         <button onClick={() => router.back()}
-                            className="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/20 transition-all">
+                            className="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/20 transition-all shrink-0">
                             <ArrowLeft className="w-4 h-4" />
                         </button>
-                        <div>
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 sm:gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
                                     <BarChart2 className="w-4 h-4 text-indigo-400" />
                                 </div>
-                                <h1 className="text-2xl font-bold tracking-tight">Timetable Statistics</h1>
+                                <h1 className="text-lg sm:text-2xl font-bold tracking-tight truncate">Timetable Statistics</h1>
                             </div>
-                            <p className="text-xs text-white/35 mt-0.5 ml-[42px]">
+                            <p className="text-[11px] sm:text-xs text-white/35 mt-0.5 sm:ml-[42px] truncate">
                                 {stats ? `${stats.period.from} → ${stats.period.to}` : 'Loading…'}
                             </p>
                         </div>
                     </div>
 
                     {/* Period selector */}
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    <div className="flex items-center gap-1.5 flex-wrap lg:justify-end">
                         {/* Week presets */}
                         <div className="flex items-center gap-1 bg-white/4 border border-white/8 rounded-xl p-1">
                             {WEEK_OPTIONS.map(w => (
@@ -384,7 +385,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Daily Progress Line Chart ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4" />Daily Progress
@@ -408,7 +409,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Activity Heatmap ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
                                 <Calendar className="w-4 h-4" />
                                 Activity — {stats.period.from} → {stats.period.to}
@@ -454,7 +455,7 @@ export default function TimetableStatsPage() {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                             {/* ── Category Breakdown ── */}
-                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5">Category Breakdown</h2>
                                 {stats.by_category.length === 0
                                     ? <p className="text-white/25 text-sm text-center py-8">No data</p>
@@ -488,7 +489,7 @@ export default function TimetableStatsPage() {
                             </div>
 
                             {/* ── Weekday Pattern ── */}
-                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5">Weekday Pattern</h2>
                                 <div className="space-y-2.5">
                                     {stats.by_weekday.map(d => {
@@ -525,7 +526,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── AI Daily Conclusions ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <div className="flex items-center justify-between mb-5">
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
                                     <Sparkles className="w-4 h-4 text-indigo-400" />AI Daily Conclusions
@@ -583,7 +584,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Completion Rate Distribution ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
                                 <CheckCircle2 className="w-4 h-4" />Daily Completion Distribution
                             </h2>
@@ -627,7 +628,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Category Time Budgets ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <div className="flex items-center justify-between mb-5">
                                 <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider flex items-center gap-2">
                                     <Target className="w-4 h-4" />Weekly Time Budgets
@@ -737,7 +738,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Bulk Reschedule ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
                                 <MoveRight className="w-4 h-4" />Bulk Reschedule
                             </h2>
@@ -773,7 +774,7 @@ export default function TimetableStatsPage() {
                         </div>
 
                         {/* ── Peak Hours ── */}
-                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6">
+                        <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 sm:p-6">
                             <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-5 flex items-center gap-2">
                                 <TrendingUp className="w-4 h-4" />Peak Hours
                             </h2>

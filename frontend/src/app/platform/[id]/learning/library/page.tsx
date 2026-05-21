@@ -69,7 +69,7 @@ export default function LibraryPage() {
 
     return (
         <div
-            className="min-h-screen p-8 relative"
+            className="min-h-screen p-4 sm:p-6 lg:p-8 relative"
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => {
@@ -97,24 +97,25 @@ export default function LibraryPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center gap-3 mb-8"
+                    className="flex items-center gap-2 sm:gap-3 mb-6 sm:mb-8"
                 >
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning`)}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <div className="flex-1">
-                        <h1 className="text-3xl font-bold text-white tracking-tight">Library</h1>
-                        <p className="text-sm text-white/50 mt-1">Read PDFs, track pages, mine vocabulary as you go.</p>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Library</h1>
+                        <p className="text-xs sm:text-sm text-white/50 mt-1 hidden sm:block">Read PDFs, track pages, mine vocabulary as you go.</p>
                     </div>
                     <Button
                         onClick={() => setUploadOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shrink-0"
                     >
                         <Plus className="w-4 h-4" />
-                        Add book
+                        <span className="hidden sm:inline">Add book</span>
+                        <span className="sm:hidden">Add</span>
                     </Button>
                 </motion.div>
 
@@ -150,7 +151,7 @@ export default function LibraryPage() {
                             </button>
                         )
                     })}
-                    <div className="ml-auto relative w-full md:w-72">
+                    <div className="md:ml-auto relative w-full md:w-72 order-last md:order-none">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                         <input
                             value={search}
@@ -169,7 +170,7 @@ export default function LibraryPage() {
                 ) : filteredBooks.length === 0 ? (
                     <EmptyState onClick={() => setUploadOpen(true)} />
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                         {filteredBooks.map((b, i) => (
                             <BookCard
                                 key={b.id}
@@ -191,9 +192,9 @@ export default function LibraryPage() {
 
 function StatTile({ label, value, accent }: { label: string; value: number; accent: string }) {
     return (
-        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-            <p className={`text-2xl font-bold ${accent}`}>{value}</p>
-            <p className="text-xs text-white/40 mt-1 uppercase tracking-wider">{label}</p>
+        <div className="p-3 sm:p-4 rounded-xl bg-white/[0.02] border border-white/5">
+            <p className={`text-xl sm:text-2xl font-bold ${accent}`}>{value}</p>
+            <p className="text-[10px] sm:text-xs text-white/40 mt-1 uppercase tracking-wider">{label}</p>
         </div>
     )
 }
@@ -318,7 +319,7 @@ function UploadDialog({ open, onClose }: { open: boolean; onClose: () => void })
             <motion.div
                 initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md bg-[#0a0a14] border border-white/10 rounded-2xl p-6 shadow-2xl"
+                className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0a0a14] border border-white/10 rounded-2xl p-4 sm:p-6 shadow-2xl"
             >
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-semibold text-white">Add book to library</h2>

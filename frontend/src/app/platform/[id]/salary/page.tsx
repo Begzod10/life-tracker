@@ -94,9 +94,9 @@ function SalaryHeader({ data, job, onEdit }: { data: SalaryMonthData | null; job
     const isReceived = !!data.received_date
 
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between">
-            <div>
-                <h1 className="text-3xl font-bold text-white">{monthLabel}</h1>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">{monthLabel}</h1>
                 {job && (
                     <p className="text-sm text-white/60 mt-1">
                         {job.name} at {job.company}
@@ -128,7 +128,7 @@ function SalaryHeader({ data, job, onEdit }: { data: SalaryMonthData | null; job
 function JobInfoCard({ job }: { job: JobData | null | undefined }) {
     if (job === undefined) {
         return (
-            <Card className="p-6 bg-white/2.5 border border-white/5">
+            <Card className="p-4 sm:p-6 bg-white/2.5 border border-white/5">
                 <Skeleton className="h-40" />
             </Card>
         )
@@ -138,7 +138,7 @@ function JobInfoCard({ job }: { job: JobData | null | undefined }) {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <Card className="p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
+            <Card className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wide">Job Details</h3>
                     <Badge variant="outline" className={`text-xs ${job.active ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
@@ -209,7 +209,7 @@ function JobInfoCard({ job }: { job: JobData | null | undefined }) {
 function SpendingBreakdownCard({ data }: { data: SalaryMonthData | null }) {
     if (!data) {
         return (
-            <Card className="p-6 bg-white/2.5 border border-white/5">
+            <Card className="p-4 sm:p-6 bg-white/2.5 border border-white/5">
                 <Skeleton className="h-32" />
             </Card>
         )
@@ -225,7 +225,7 @@ function SpendingBreakdownCard({ data }: { data: SalaryMonthData | null }) {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="h-full">
-            <Card className="h-full p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
+            <Card className="h-full p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
                 <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wide mb-4">Spending Breakdown</h3>
                 <div className="space-y-3">
                     <div className="flex justify-between items-baseline">
@@ -491,7 +491,7 @@ function ExpensesListCard({ expenses, onAddExpense, salaryMonthId }: { expenses:
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="h-full">
-            <Card className="h-full flex flex-col p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
+            <Card className="h-full flex flex-col p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-white/10">
                 <div className="flex items-center justify-between mb-6 flex-none">
                     <h3 className="text-lg font-semibold text-white">Expenses</h3>
                     <div className="flex gap-2 items-center">
@@ -568,7 +568,7 @@ function ExpensesListCard({ expenses, onAddExpense, salaryMonthId }: { expenses:
 function SalaryStatsCard({ data }: { data: SalaryMonthData | null }) {
     if (!data) {
         return (
-            <Card className="p-6 bg-white/2.5 border border-white/5">
+            <Card className="p-4 sm:p-6 bg-white/2.5 border border-white/5">
                 <Skeleton className="h-48" />
             </Card>
         )
@@ -603,7 +603,7 @@ function SalaryStatsCard({ data }: { data: SalaryMonthData | null }) {
 function QuickActionsCard({ data, isReceived, onToggleReceived, onEdit, onDelete }: { data: SalaryMonthData | null; isReceived: boolean; onToggleReceived: () => void; onEdit: () => void; onDelete: () => void }) {
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Card className="p-6 bg-white/2.5 border border-white/5 hover:border-white/10 sticky top-6">
+            <Card className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-white/10 sticky top-6">
                 <div className="space-y-3">
                     <Button onClick={onToggleReceived} variant="outline" className="w-full text-white border-white/20 hover:border-white/40 hover:bg-white/5">
                         {isReceived ? 'Mark as Pending' : 'Mark as Received'}
@@ -920,8 +920,8 @@ function SalaryPage() {
 
     if (!data && !isLoading) {
         return (
-            <div className="min-h-screen p-8">
-                <Card className="p-8 text-center border border-red-500/50 bg-red-500/5">
+            <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+                <Card className="p-6 sm:p-8 text-center border border-red-500/50 bg-red-500/5">
                     <h2 className="text-xl font-semibold text-white mb-4">Salary Month Not Found</h2>
                     <p className="text-white/50 text-sm mb-4">The requested salary month could not be loaded.</p>
                     <Button onClick={() => router.push('/platform')} className="mt-4">
@@ -933,21 +933,21 @@ function SalaryPage() {
     }
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <SalaryHeader data={data} job={job ?? null} onEdit={() => setEditModalOpen(true)} />
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mt-6 sm:mt-8 items-start">
                     {/* Left Column */}
-                    <div className="lg:col-span-2 grid grid-rows-2 gap-6 h-[760px]">
+                    <div className="lg:col-span-2 grid grid-rows-2 gap-4 sm:gap-6 lg:h-[760px]">
                         <SpendingBreakdownCard data={data} />
                         <ExpensesListCard expenses={expenses} onAddExpense={() => setAddExpenseModalOpen(true)} salaryMonthId={data?.id ?? 0} />
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         <SalaryStatsCard data={data} />
                         <JobInfoCard job={isJobLoading ? undefined : (job ?? null)} />
                         <QuickActionsCard data={data} isReceived={isReceived} onToggleReceived={handleToggleReceived} onEdit={() => setEditModalOpen(true)} onDelete={() => setDeleteConfirmOpen(true)} />

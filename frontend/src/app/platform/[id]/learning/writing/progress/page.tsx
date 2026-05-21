@@ -56,7 +56,7 @@ export default function WritingProgressPage() {
     }, [stats?.error_counts])
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-6xl mx-auto">
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
@@ -66,13 +66,13 @@ export default function WritingProgressPage() {
                     <span className="text-sm">Back to Writing</span>
                 </button>
 
-                <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <TrendingUp className="w-8 h-8 text-amber-400" />
+                <div className="flex items-end justify-between mb-6 sm:mb-8 flex-wrap gap-4">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400 shrink-0" />
                             Writing progress
                         </h1>
-                        <p className="text-white/50 mt-1">
+                        <p className="text-xs sm:text-sm text-white/50 mt-1">
                             {stats?.total_essays ?? 0} essays · {stats?.total_attempts ?? 0} graded attempts
                         </p>
                     </div>
@@ -94,31 +94,31 @@ export default function WritingProgressPage() {
                 </div>
 
                 {/* Headline scores */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <Card className="p-5 bg-white/2.5 border border-amber-500/20">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-8">
+                    <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/20">
                         <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Avg deep score</p>
-                        <p className="text-4xl font-bold text-amber-400">
+                        <p className="text-3xl sm:text-4xl font-bold text-amber-400">
                             {stats?.avg_deep ?? '—'}
-                            {stats?.avg_deep !== null && stats?.avg_deep !== undefined && <span className="text-white/30 text-lg">/100</span>}
+                            {stats?.avg_deep !== null && stats?.avg_deep !== undefined && <span className="text-white/30 text-base sm:text-lg">/100</span>}
                         </p>
                     </Card>
-                    <Card className="p-5 bg-white/2.5 border border-white/10">
+                    <Card className="p-4 sm:p-5 bg-white/2.5 border border-white/10">
                         <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Avg quick score</p>
-                        <p className="text-4xl font-bold text-white/80">
+                        <p className="text-3xl sm:text-4xl font-bold text-white/80">
                             {stats?.avg_quick ?? '—'}
-                            {stats?.avg_quick !== null && stats?.avg_quick !== undefined && <span className="text-white/30 text-lg">/100</span>}
+                            {stats?.avg_quick !== null && stats?.avg_quick !== undefined && <span className="text-white/30 text-base sm:text-lg">/100</span>}
                         </p>
                     </Card>
-                    <Card className="p-5 bg-white/2.5 border border-white/10">
+                    <Card className="p-4 sm:p-5 bg-white/2.5 border border-white/10">
                         <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Total errors flagged</p>
-                        <p className="text-4xl font-bold text-rose-300">
+                        <p className="text-3xl sm:text-4xl font-bold text-rose-300">
                             {Object.values(stats?.error_counts || {}).reduce((a, b) => a + b, 0)}
                         </p>
                     </Card>
                 </div>
 
                 {/* Timeline */}
-                <Card className="p-6 mb-8 bg-white/2.5 border border-white/10">
+                <Card className="p-4 sm:p-6 mb-8 bg-white/2.5 border border-white/10 overflow-x-auto">
                     <h2 className="text-sm uppercase tracking-wider text-white/60 mb-4">Score timeline</h2>
                     {!stats || stats.timeline.length === 0 ? (
                         <p className="text-sm text-white/40">No attempts yet in this window.</p>

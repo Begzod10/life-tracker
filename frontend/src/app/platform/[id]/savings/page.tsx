@@ -499,10 +499,10 @@ function BalanceOverviewCard({ account }: { account: SavingsAccount }) {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
                 <div className="mb-6">
-                    <p className="text-gray-400 text-sm mb-2">Current Balance</p>
-                    <h2 className="text-4xl font-bold text-white">
+                    <p className="text-gray-400 text-xs sm:text-sm mb-2">Current Balance</p>
+                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white break-words">
                         {formatCurrency(account.current_balance || 0, account.currency)}
                     </h2>
                     <p className={`text-sm mt-2 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
@@ -561,7 +561,7 @@ function TransactionHistoryCard({ account, transactions, isLoading }: { account:
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold text-white">Transaction History</h3>
                     <AddTransactionModal account={account} />
@@ -665,7 +665,7 @@ function BalanceGrowthChart({ account, transactions }: { account: SavingsAccount
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
                 <h3 className="text-lg font-semibold text-white mb-4">Balance Growth</h3>
                 <svg width={width} height={height} className="w-full">
                     <defs>
@@ -696,7 +696,7 @@ function AccountDetailsCard({ account }: { account: SavingsAccount }) {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all space-y-4">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all space-y-4">
                 <h3 className="text-base font-semibold text-white">Account Details</h3>
                 <div>
                     <p className="text-gray-400 text-xs mb-1">Interest Rate</p>
@@ -757,7 +757,7 @@ function ProjectedValueCard({ account }: { account: SavingsAccount }) {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all">
                 <h3 className="text-base font-semibold text-white mb-4">Projected Value</h3>
                 <div className="space-y-3">
                     <div>
@@ -811,7 +811,7 @@ export default function SavingsProfilePage() {
 
     if (accountLoading || isLoading) {
         return (
-            <div className="min-h-screen p-6">
+            <div className="min-h-screen p-4 sm:p-6">
                 <div className="max-w-7xl mx-auto">
                     <Skeleton className="h-12 w-48 mb-4" />
                     <Skeleton className="h-6 w-32 mb-8" />
@@ -856,10 +856,10 @@ export default function SavingsProfilePage() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="mb-8"
+                    className="mb-6 sm:mb-8"
                 >
-                    <h1 className="text-4xl font-bold text-white mb-2">{account.account_name}</h1>
-                    <p className="text-gray-400 mb-4">{account.platform}</p>
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2 break-words">{account.account_name}</h1>
+                    <p className="text-sm sm:text-base text-gray-400 mb-4">{account.platform}</p>
                     <div className="flex gap-3 flex-wrap">
                         <Badge className={`bg-gradient-to-r ${typeConfig.color} text-white border-0`}>
                             <TypeIcon className="w-3 h-3 mr-1" />
@@ -871,18 +871,18 @@ export default function SavingsProfilePage() {
                     </div>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-3 gap-6">
+                <div className="grid lg:grid-cols-3 gap-4 sm:gap-6">
                     {/* Left column */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                         <BalanceOverviewCard account={account} />
                         <TransactionHistoryCard account={account} transactions={transactions} isLoading={isLoading} />
                         <BalanceGrowthChart account={account} transactions={transactions} />
                     </div>
 
                     {/* Right column */}
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="sticky top-4">
-                            <Card className="p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all space-y-3">
+                            <Card className="p-4 sm:p-6 border border-white/5 bg-white/[0.025] backdrop-blur-sm hover:border-white/10 transition-all space-y-3">
                                 <EditSavingsModal account={account} />
                                 <DeleteSavingsModal account={account} />
                             </Card>

@@ -164,31 +164,31 @@ function HealthProfilePage() {
 
     return (
         <div className="min-h-screen">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
                 {/* Header */}
                 <motion.div
                     initial="hidden"
                     animate="visible"
                     variants={headerVariants}
-                    className="mb-8"
+                    className="mb-6 sm:mb-8"
                 >
-                    <div className="flex items-center gap-4 mb-6">
+                    <div className="flex items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
                         <button
                             onClick={() => router.push('/platform')}
-                            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                            className="p-2 hover:bg-white/5 rounded-lg transition-colors shrink-0"
                         >
                             <ArrowLeft className="w-5 h-5 text-gray-400" />
                         </button>
-                        <div className="flex-1">
-                            <h1 className="text-4xl font-bold text-white mb-2">Health Record</h1>
-                            <p className="text-gray-400">
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-1 sm:mb-2 truncate">Health Record</h1>
+                            <p className="text-xs sm:text-base text-gray-400">
                                 {format(new Date(data.record_date), 'MMMM d, yyyy')}
                             </p>
                             {data.notes && (
-                                <p className="text-gray-400 text-sm mt-2">{data.notes}</p>
+                                <p className="text-gray-400 text-xs sm:text-sm mt-1 sm:mt-2 line-clamp-2">{data.notes}</p>
                             )}
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             <Badge className={`border ${bmiStatus.color}`}>
                                 {bmiStatus.label}
                             </Badge>
@@ -204,10 +204,10 @@ function HealthProfilePage() {
                     initial="hidden"
                     animate="visible"
                     variants={containerVariants}
-                    className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+                    className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6"
                 >
                     {/* Left Column */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                         {/* Body Metrics Card */}
                         <motion.div variants={itemVariants}>
                             <Card className="bg-white/[0.025] border-white/5 border border-white/5 hover:border-white/10 transition-all">

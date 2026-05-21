@@ -109,16 +109,16 @@ function TaskHeader({ task }: { task: TaskData }) {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-8"
+            className="mb-6 sm:mb-8"
         >
 
 
-            <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                    <h1 className="text-4xl font-bold text-foreground mb-3 text-balance">
+            <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2 sm:mb-3 text-balance break-words">
                         {task.name}
                     </h1>
-                    <p className="text-lg text-muted-foreground mb-4">
+                    <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-4">
                         {task.description}
                     </p>
 
@@ -172,7 +172,7 @@ function TaskDetailsCard({ task, goalName }: { task: TaskData; goalName?: string
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
                 <h2 className="text-xl font-semibold text-foreground mb-6 flex items-center gap-2">
                     <Flag className="w-5 h-5" />
                     Task Details
@@ -266,7 +266,7 @@ function ProgressTimelineCard({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                         <Repeat className="w-5 h-5" />
@@ -347,7 +347,7 @@ function ProgressLogsCard({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                         <TrendingUp className="w-5 h-5" />
@@ -434,7 +434,7 @@ function QuickActionsCard({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all sticky top-4">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all sticky top-4">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
 
                 <div className="space-y-3">
@@ -496,7 +496,7 @@ function StatisticsCard({ task, goalName }: { task: TaskData; goalName?: string 
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
                 <h2 className="text-lg font-semibold text-foreground mb-4">Statistics</h2>
 
                 <div className="space-y-4">
@@ -641,7 +641,7 @@ function StatsChartCard({ progressLogs, task, completionDates }: { progressLogs:
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45 }}
         >
-            <Card className="p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
+            <Card className="p-4 sm:p-6 border border-white/5 bg-white/2.5 backdrop-blur-sm hover:border-white/10 transition-all">
                 <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
                     <BarChart2 className="w-5 h-5" />
                     Statistics
@@ -956,16 +956,16 @@ export default function TaskProfilePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen bg-background p-6"
+            className="min-h-screen bg-background p-3 sm:p-6"
         >
             <div className="max-w-7xl mx-auto">
                 {/* Header Section */}
                 <TaskHeader task={taskData} />
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                     {/* Left Column */}
-                    <div className="lg:col-span-2 space-y-6">
+                    <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                         <TaskDetailsCard task={taskData} goalName={goalData?.name} />
                         <ProgressTimelineCard
                             task={taskData}
@@ -986,7 +986,7 @@ export default function TaskProfilePage() {
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         <QuickActionsCard
                             task={taskData}
                             onToggleComplete={handleToggleComplete}

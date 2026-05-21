@@ -25,38 +25,38 @@ export default function LearningPage() {
     const recentSessions = history.slice(0, 5)
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
-                    <h1 className="text-3xl font-bold text-white">Learning</h1>
-                    <p className="text-white/50 mt-1">English vocabulary and practice</p>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-10">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white">Learning</h1>
+                    <p className="text-sm text-white/50 mt-1">English vocabulary and practice</p>
                 </motion.div>
 
                 {/* Stats row */}
-                <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8">
                     {[
                         { label: 'Words', value: stats?.total ?? 0, icon: BookOpen, color: 'text-blue-400' },
                         { label: 'Reviewed', value: stats?.reviewed ?? 0, icon: Target, color: 'text-green-400' },
                         { label: 'Accuracy', value: `${stats?.accuracy ?? 0}%`, icon: Trophy, color: 'text-yellow-400' },
                     ].map((s, i) => (
                         <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                            <Card className="p-5 bg-white/2.5 border border-white/5 hover:border-white/10">
-                                <s.icon className={`w-5 h-5 ${s.color} mb-3`} />
-                                <p className="text-2xl font-bold text-white">{s.value}</p>
-                                <p className="text-xs text-white/50 mt-1">{s.label}</p>
+                            <Card className="p-3 sm:p-5 bg-white/2.5 border border-white/5 hover:border-white/10">
+                                <s.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${s.color} mb-2 sm:mb-3`} />
+                                <p className="text-xl sm:text-2xl font-bold text-white">{s.value}</p>
+                                <p className="text-[10px] sm:text-xs text-white/50 mt-1">{s.label}</p>
                             </Card>
                         </motion.div>
                     ))}
                 </div>
 
                 {/* Main sections */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 mb-8">
                     {/* Dictionary */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                         <Card
                             onClick={() => router.push(`/platform/${params.id}/learning/dictionary`)}
-                            className="p-6 bg-white/2.5 border border-white/5 hover:border-blue-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-blue-500/30 hover:bg-white/5 cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="p-2.5 rounded-lg bg-blue-500/10">
@@ -86,7 +86,7 @@ export default function LearningPage() {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
                         <Card
                             onClick={() => router.push(`/platform/${params.id}/learning/practice`)}
-                            className="p-6 bg-white/2.5 border border-white/5 hover:border-indigo-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-indigo-500/30 hover:bg-white/5 cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="p-2.5 rounded-lg bg-indigo-500/10">
@@ -121,7 +121,7 @@ export default function LearningPage() {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                         <Card
                             onClick={() => router.push(`/platform/${params.id}/learning/reading`)}
-                            className="p-6 bg-white/2.5 border border-white/5 hover:border-emerald-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-emerald-500/30 hover:bg-white/5 cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="p-2.5 rounded-lg bg-emerald-500/10">
@@ -140,7 +140,7 @@ export default function LearningPage() {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
                         <Card
                             onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
-                            className="p-6 bg-white/2.5 border border-white/5 hover:border-amber-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-amber-500/30 hover:bg-white/5 cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="p-2.5 rounded-lg bg-amber-500/10">
@@ -159,7 +159,7 @@ export default function LearningPage() {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                         <Card
                             onClick={() => router.push(`/platform/${params.id}/learning/library`)}
-                            className="p-6 bg-white/2.5 border border-white/5 hover:border-violet-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-violet-500/30 hover:bg-white/5 cursor-pointer transition-all group"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="p-2.5 rounded-lg bg-violet-500/10">

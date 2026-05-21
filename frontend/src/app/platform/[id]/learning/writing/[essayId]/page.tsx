@@ -252,14 +252,14 @@ export default function EssayEditorPage() {
 
     if (isLoading || !essay) {
         return (
-            <div className="min-h-screen p-8">
+            <div className="min-h-screen p-4 sm:p-6 lg:p-8">
                 <p className="text-white/40">Loading…</p>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-6xl mx-auto">
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
@@ -270,19 +270,19 @@ export default function EssayEditorPage() {
                 </button>
 
                 {/* Prompt header */}
-                <Card className="p-5 mb-6 bg-amber-500/5 border border-amber-500/20">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
+                <Card className="p-4 sm:p-5 mb-6 bg-amber-500/5 border border-amber-500/20">
+                    <div className="flex items-start justify-between gap-3 sm:gap-4">
+                        <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
                                 <span className={`text-xs font-semibold ${LEVEL_COLOR[essay.level]}`}>{essay.level}</span>
                                 <span className="text-xs text-white/30">•</span>
                                 <span className="text-xs text-white/50 capitalize">{essay.status}</span>
                             </div>
-                            <p className="text-white/90 leading-relaxed">{essay.prompt}</p>
+                            <p className="text-sm sm:text-base text-white/90 leading-relaxed">{essay.prompt}</p>
                         </div>
                         {target > 0 && (
                             <div className="text-right shrink-0">
-                                <p className="text-2xl font-bold text-white">{wordCount}<span className="text-white/30 text-sm">/{target}</span></p>
+                                <p className="text-xl sm:text-2xl font-bold text-white">{wordCount}<span className="text-white/30 text-xs sm:text-sm">/{target}</span></p>
                                 <p className="text-[10px] uppercase tracking-wider text-white/40">words</p>
                             </div>
                         )}
@@ -339,7 +339,7 @@ export default function EssayEditorPage() {
                             placeholder="Title (optional)"
                             value={title}
                             onChange={(e) => { setTitle(e.target.value); setDirty(true) }}
-                            className="w-full bg-transparent text-2xl font-semibold text-white placeholder:text-white/30 outline-none border-b border-transparent focus:border-amber-500/30 pb-2"
+                            className="w-full bg-transparent text-xl sm:text-2xl font-semibold text-white placeholder:text-white/30 outline-none border-b border-transparent focus:border-amber-500/30 pb-2"
                         />
 
                         {showHighlights ? (
@@ -452,14 +452,14 @@ export default function EssayEditorPage() {
 function QuickFeedbackPanel({ essay }: { essay: Essay }) {
     const fb = essay.quick_feedback!
     return (
-        <Card className="p-5 bg-white/2.5 border border-amber-500/20">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-amber-400" />
+        <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/20">
+            <div className="flex items-center justify-between mb-4 gap-3">
+                <h3 className="font-semibold text-white flex items-center gap-2 min-w-0">
+                    <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
                     Quick check
                 </h3>
-                <div className="text-right">
-                    <p className="text-3xl font-bold text-amber-400">{essay.quick_score}</p>
+                <div className="text-right shrink-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-amber-400">{essay.quick_score}</p>
                     {fb.level_estimate && (
                         <p className="text-[10px] text-white/40">est. {fb.level_estimate}</p>
                     )}
@@ -513,14 +513,14 @@ function DeepReviewPanel({ essay, items, orderByKey, missing, activeKey, onSelec
 
     return (
         <div className="space-y-4">
-            <Card className="p-5 bg-white/2.5 border border-amber-500/30">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-amber-400" />
+            <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/30">
+                <div className="flex items-center justify-between mb-4 gap-3">
+                    <h3 className="font-semibold text-white flex items-center gap-2 min-w-0">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                         Deep review
                     </h3>
-                    <div className="text-right">
-                        <p className="text-3xl font-bold text-amber-400">{essay.deep_score}</p>
+                    <div className="text-right shrink-0">
+                        <p className="text-2xl sm:text-3xl font-bold text-amber-400">{essay.deep_score}</p>
                         {review.level_estimate && (
                             <p className="text-[10px] text-white/40">est. {review.level_estimate}</p>
                         )}

@@ -86,7 +86,7 @@ function StatsPanel({
         <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/10 rounded-2xl p-5 space-y-5"
+            className="mb-6 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/10 rounded-2xl p-3 sm:p-5 space-y-4 sm:space-y-5"
         >
             <div className="flex items-baseline justify-between">
                 <h3 className="text-xs uppercase tracking-wider text-white/40 font-medium">{scopeLabel}</h3>
@@ -98,7 +98,7 @@ function StatsPanel({
                 )}
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 <Stat icon={BookMarked} label="Words" value={stats.total} accent="text-white" />
                 <Stat
                     icon={Target}
@@ -179,14 +179,14 @@ function Stat({
     accent: string
 }) {
     return (
-        <div>
-            <div className="flex items-center gap-1.5 text-white/40 text-xs mb-1">
-                <Icon className="w-3 h-3" />
-                {label}
+        <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-white/40 text-[10px] sm:text-xs mb-1">
+                <Icon className="w-3 h-3 shrink-0" />
+                <span className="truncate">{label}</span>
             </div>
             <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl font-bold tabular-nums ${accent}`}>{value}</span>
-                {sub && <span className="text-xs text-white/40">{sub}</span>}
+                <span className={`text-lg sm:text-2xl font-bold tabular-nums ${accent}`}>{value}</span>
+                {sub && <span className="text-[10px] sm:text-xs text-white/40">{sub}</span>}
             </div>
         </div>
     )
@@ -723,18 +723,22 @@ function ModulesView({
     return (
         <>
             <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel={`Folder · ${folder.name}`} />
-            <div className="flex items-center justify-between mb-6">
-                <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                <div className="min-w-0">
                     <h2 className="text-lg font-semibold text-white/80">Modules</h2>
-                    <p className="text-xs text-white/40 mt-0.5">in {folder.name}</p>
+                    <p className="text-xs text-white/40 mt-0.5 truncate">in {folder.name}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button onClick={() => setAiOpen(true)} variant="outline"
                         className="gap-2 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
-                        <Sparkles className="w-4 h-4" /> Generate with AI
+                        <Sparkles className="w-4 h-4" />
+                        <span className="hidden sm:inline">Generate with AI</span>
+                        <span className="sm:hidden">AI</span>
                     </Button>
                     <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                        <Plus className="w-4 h-4" /> New Module
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">New Module</span>
+                        <span className="sm:hidden">New</span>
                     </Button>
                 </div>
             </div>
@@ -955,10 +959,10 @@ function WordsView({ module: m }: { module: DictionaryModule }) {
     return (
         <>
             <StatsPanel stats={stats} isLoading={isStatsLoading} scopeLabel={`Module · ${m.name}`} />
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-lg font-semibold text-white/80">{m.name}</h2>
-                    <p className="text-xs text-white/40 mt-0.5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-white/80 truncate">{m.name}</h2>
+                    <p className="text-xs text-white/40 mt-0.5 line-clamp-2">
                         {words.length} word{words.length === 1 ? '' : 's'}
                         {m.description && ` · ${m.description}`}
                     </p>
@@ -973,13 +977,15 @@ function WordsView({ module: m }: { module: DictionaryModule }) {
                         <Dumbbell className="w-4 h-4" /> Practice
                     </Button>
                     <Button onClick={() => setAddOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
-                        <Plus className="w-4 h-4" /> Add Word
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add Word</span>
+                        <span className="sm:hidden">Add</span>
                     </Button>
                 </div>
             </div>
 
-            <div className="flex gap-3 mb-6 flex-wrap">
-                <div className="relative flex-1 min-w-48">
+            <div className="flex gap-2 sm:gap-3 mb-6 flex-wrap">
+                <div className="relative flex-1 min-w-[12rem]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
                     <input
                         value={search}
@@ -1080,15 +1086,15 @@ export default function DictionaryPage() {
             : 'Dictionary'
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-3xl mx-auto">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 mb-8">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8">
                     <button onClick={goBack}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all">
+                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all shrink-0">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-2xl font-bold text-white truncate">{breadcrumbTitle}</h1>
+                        <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{breadcrumbTitle}</h1>
                         <div className="flex items-center gap-1 text-xs text-white/40 mt-0.5">
                             <button onClick={() => setUrl({})} className="hover:text-white transition-colors">Dictionary</button>
                             {currentFolder && (

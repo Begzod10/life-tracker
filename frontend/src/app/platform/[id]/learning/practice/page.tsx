@@ -221,12 +221,12 @@ function FlashcardSession({
         <div className="flex flex-col items-center gap-7 w-full">
             {/* progress + pile counters */}
             <div className="w-full max-w-md">
-                <div className="flex justify-between items-center text-xs mb-1.5">
-                    <span className="text-white/50">
+                <div className="flex justify-between items-center text-[11px] sm:text-xs mb-1.5 gap-2">
+                    <span className="text-white/50 truncate">
                         Round {index + 1} / {words.length}
                         <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
                     </span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                         <span className="flex items-center gap-1 text-red-400">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
                             {learning.length}
@@ -269,26 +269,26 @@ function FlashcardSession({
             </div>
 
             {/* manual buttons (still useful on desktop) */}
-            <div className="flex gap-3 mt-2">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-2 w-full max-w-md">
                 <Button
                     onClick={() => decide(false)}
                     variant="outline"
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10 gap-2"
                 >
-                    <X className="w-4 h-4" /> Still learning <span className="text-white/30 text-[10px] ml-1">←</span>
+                    <X className="w-4 h-4" /> Still learning <span className="text-white/30 text-[10px] ml-1 hidden sm:inline">←</span>
                 </Button>
                 <Button
                     onClick={() => setFlipped(p => !p)}
                     variant="outline"
                     className="border-white/20 text-white/70 hover:bg-white/5 gap-2"
                 >
-                    Flip <span className="text-white/30 text-[10px] ml-1">space</span>
+                    Flip <span className="text-white/30 text-[10px] ml-1 hidden sm:inline">space</span>
                 </Button>
                 <Button
                     onClick={() => decide(true)}
                     className="bg-green-600 hover:bg-green-700 text-white gap-2"
                 >
-                    <Check className="w-4 h-4" /> Know <span className="text-white/60 text-[10px] ml-1">→</span>
+                    <Check className="w-4 h-4" /> Know <span className="text-white/60 text-[10px] ml-1 hidden sm:inline">→</span>
                 </Button>
             </div>
         </div>
@@ -499,12 +499,12 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
     return (
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
-                <div className="flex justify-between text-xs text-white/40 mb-1.5">
-                    <span>
+                <div className="flex justify-between text-[11px] sm:text-xs text-white/40 mb-1.5 gap-2">
+                    <span className="truncate">
                         Round {index + 1} / {words.length}
                         <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
                     </span>
-                    <span>{correctIds.length} correct</span>
+                    <span className="shrink-0">{correctIds.length} correct</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <motion.div
@@ -572,9 +572,9 @@ function ChunkReview({
                     </p>
                     <ul className="space-y-2">
                         {missedWords.map(w => (
-                            <li key={w.id} className="flex items-start gap-3 text-sm">
-                                <span className="text-amber-300 font-medium min-w-[8rem]">{w.word}</span>
-                                <span className="text-white/60 flex-1">{w.definition}</span>
+                            <li key={w.id} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 text-sm">
+                                <span className="text-amber-300 font-medium sm:min-w-[8rem] break-words">{w.word}</span>
+                                <span className="text-white/60 flex-1 break-words">{w.definition}</span>
                             </li>
                         ))}
                     </ul>
@@ -983,20 +983,20 @@ function PracticePageInner() {
     }
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-2xl mx-auto">
                 {/* Header */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 mb-10">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-10">
                     <button
                         onClick={() => phase === 'pick'
                             ? router.push(`/platform/${params.id}/learning`)
                             : setPhase('pick')
                         }
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <h1 className="text-2xl font-bold text-white">
+                    <h1 className="text-xl sm:text-2xl font-bold text-white truncate">
                         {phase === 'pick'
                             ? 'Practice'
                             : phase === 'session'

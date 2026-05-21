@@ -78,7 +78,7 @@ export default function WritingListPage() {
     }
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-5xl mx-auto">
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning`)}
@@ -88,15 +88,15 @@ export default function WritingListPage() {
                     <span className="text-sm">Back to Learning</span>
                 </button>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex items-end justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <PenLine className="w-8 h-8 text-amber-400" />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                            <PenLine className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />
                             Writing
                         </h1>
-                        <p className="text-white/50 mt-1">Write essays, get AI feedback at your CEFR level.</p>
+                        <p className="text-white/50 mt-1 text-sm">Write essays, get AI feedback at your CEFR level.</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Button
                             variant="ghost"
                             onClick={() => router.push(`/platform/${params.id}/learning/writing/drills`)}
@@ -131,7 +131,7 @@ export default function WritingListPage() {
                 {/* New essay panel */}
                 {showNew && (
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                        <Card className="p-6 mb-8 bg-white/2.5 border border-amber-500/20">
+                        <Card className="p-4 sm:p-6 mb-8 bg-white/2.5 border border-amber-500/20">
                             <h2 className="text-lg font-semibold text-white mb-4">Start a new essay</h2>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -339,16 +339,16 @@ function EssayRow({ essay, platformId, onDelete }: {
                         {essay.target_word_count ? ` / ${essay.target_word_count} target` : ''}
                     </p>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     {score !== null && (
                         <div className="text-right">
-                            <p className="text-2xl font-bold text-amber-400">{score}</p>
+                            <p className="text-xl sm:text-2xl font-bold text-amber-400">{score}</p>
                             <p className="text-[10px] uppercase tracking-wider text-white/40">{essay.deep_score !== null ? 'deep' : 'quick'}</p>
                         </div>
                     )}
                     <button
                         onClick={(e) => { e.stopPropagation(); onDelete() }}
-                        className="p-2 rounded text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-2 rounded text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>

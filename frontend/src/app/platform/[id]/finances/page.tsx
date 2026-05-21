@@ -180,9 +180,9 @@ const FinancesHeader: React.FC<{ id: string }> = ({ id }) => {
                 >
                     <ChevronLeft className="w-5 h-5 text-gray-400" />
                 </button>
-                <div className="flex items-center gap-2">
-                    <h1 className="text-3xl font-bold text-white">Finances</h1>
-                    <div className="text-2xl">💰</div>
+                <div className="flex items-center gap-2 min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">Finances</h1>
+                    <div className="text-xl sm:text-2xl shrink-0">💰</div>
                 </div>
             </div>
         </motion.div>
@@ -201,8 +201,8 @@ const OverviewCard: React.FC<{
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: delay * 0.05 }}
     >
-        <Card className="bg-white/[0.025] border border-white/5 p-6 rounded-xl hover:border-white/15 transition-all">
-            <p className="text-sm text-gray-400 mb-2">{label}</p>
+        <Card className="bg-white/[0.025] border border-white/5 p-4 sm:p-6 rounded-xl hover:border-white/15 transition-all">
+            <p className="text-xs sm:text-sm text-gray-400 mb-2">{label}</p>
             {isLoading ? (
                 <div className="space-y-2">
                     <Skeleton className="h-9 w-32 bg-[#2a2b36]" />
@@ -210,7 +210,7 @@ const OverviewCard: React.FC<{
                 </div>
             ) : (
                 <>
-                    <p className="text-3xl font-bold text-white mb-2">{value}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-white mb-2 break-words">{value}</p>
                     {trend !== undefined && (
                         <div className="flex items-center gap-1">
                             {trend >= 0 ? (
@@ -2844,7 +2844,7 @@ export default function FinancesPage() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
                 >
                     <OverviewCard
                         label="Net Balance"
@@ -2879,15 +2879,17 @@ export default function FinancesPage() {
                     transition={{ delay: 0.2 }}
                 >
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="bg-white/[0.025] border border-white/5 mb-8">
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="jobs">Jobs</TabsTrigger>
-                            <TabsTrigger value="salary">Salary</TabsTrigger>
-                            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-                            <TabsTrigger value="budgets">Budgets</TabsTrigger>
-                            <TabsTrigger value="income">Income Sources</TabsTrigger>
-                            <TabsTrigger value="savings">Savings</TabsTrigger>
-                        </TabsList>
+                        <div className="overflow-x-auto mb-6 sm:mb-8 -mx-1 px-1">
+                            <TabsList className="bg-white/[0.025] border border-white/5 w-max min-w-full">
+                                <TabsTrigger value="overview">Overview</TabsTrigger>
+                                <TabsTrigger value="jobs">Jobs</TabsTrigger>
+                                <TabsTrigger value="salary">Salary</TabsTrigger>
+                                <TabsTrigger value="expenses">Expenses</TabsTrigger>
+                                <TabsTrigger value="budgets">Budgets</TabsTrigger>
+                                <TabsTrigger value="income">Income Sources</TabsTrigger>
+                                <TabsTrigger value="savings">Savings</TabsTrigger>
+                            </TabsList>
+                        </div>
 
                         <AnimatePresence mode="wait">
                             <TabsContent value="overview" key="overview">

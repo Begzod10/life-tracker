@@ -198,10 +198,10 @@ function CategoriesGrid({ categories, onSelect }: {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="relative min-h-screen flex items-center justify-center p-8"
+            className="relative min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8"
         >
             <div className="relative z-10 w-full max-w-6xl">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {categories.map((category, index) => (
                         <CategoryCard
                             key={category.id}
@@ -239,22 +239,22 @@ const CategoryCard = memo(function CategoryCard({ category, index, onClick }: {
                 onMouseLeave={() => setIsHovered(false)}
                 onClick={onClick}
             >
-                <div className="relative h-full flex flex-col p-6">
+                <div className="relative h-full flex flex-col p-4 sm:p-6">
                     {/* Icon */}
                     <motion.div
-                        className={`inline-flex self-start p-4 rounded-2xl bg-gradient-to-br ${category.color} mb-auto`}
+                        className={`inline-flex self-start p-3 sm:p-4 rounded-2xl bg-gradient-to-br ${category.color} mb-auto`}
                         animate={{ scale: isHovered ? 1.1 : 1, y: isHovered ? -5 : 0 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     >
-                        <Icon className="h-8 w-8 text-white" />
+                        <Icon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                     </motion.div>
 
                     {/* Title & Description */}
                     <div>
-                        <h3 className="text-xl font-bold text-white mb-1">
+                        <h3 className="text-lg sm:text-xl font-bold text-white mb-1">
                             {category.title}
                         </h3>
-                        <p className="text-sm text-gray-400">
+                        <p className="text-xs sm:text-sm text-gray-400">
                             {category.description}
                         </p>
                     </div>
@@ -405,7 +405,7 @@ function StatsSection({ category, timeRange, overviewStats, isLoading, taskStats
         return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[0, 1, 2].map(i => (
-                    <Card key={i} className="bg-white/[0.025] border-white/5 p-6">
+                    <Card key={i} className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                         <Skeleton className="h-4 w-24 mb-3 bg-[#2a2b36]" />
                         <Skeleton className="h-9 w-16 mb-2 bg-[#2a2b36]" />
                         <Skeleton className="h-4 w-32 bg-[#2a2b36]" />
@@ -425,21 +425,21 @@ function StatsSection({ category, timeRange, overviewStats, isLoading, taskStats
 
         return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">Added — {periodLabel}</div>
-                    <div className="text-3xl font-bold text-white mb-1">{total}</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{total}</div>
                     <div className="text-sm text-gray-400">{taskStats?.addedThisWeek ?? 0} added this week</div>
                 </Card>
 
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">Completed</div>
-                    <div className="text-3xl font-bold text-white mb-1">{completed}</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{completed}</div>
                     <div className="text-sm text-green-400">{completionRate}% completion rate</div>
                 </Card>
 
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">In Progress</div>
-                    <div className="text-3xl font-bold text-white mb-1">{inProgress}</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{inProgress}</div>
                     <div className="text-sm text-gray-400">{inProgressPct}% of total</div>
                 </Card>
             </div>
@@ -449,19 +449,19 @@ function StatsSection({ category, timeRange, overviewStats, isLoading, taskStats
     if (category.id !== 'goals') {
         return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">Coming Soon</div>
-                    <div className="text-3xl font-bold text-white mb-1">—</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">—</div>
                     <div className="text-sm text-gray-400">Stats not yet available</div>
                 </Card>
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">Coming Soon</div>
-                    <div className="text-3xl font-bold text-white mb-1">—</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">—</div>
                     <div className="text-sm text-gray-400">Stats not yet available</div>
                 </Card>
-                <Card className="bg-white/[0.025] border-white/5 p-6">
+                <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                     <div className="text-sm text-gray-400 mb-2">Coming Soon</div>
-                    <div className="text-3xl font-bold text-white mb-1">—</div>
+                    <div className="text-2xl sm:text-3xl font-bold text-white mb-1">—</div>
                     <div className="text-sm text-gray-400">Stats not yet available</div>
                 </Card>
             </div>
@@ -470,23 +470,23 @@ function StatsSection({ category, timeRange, overviewStats, isLoading, taskStats
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-white/[0.025] border-white/5 p-6">
+            <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                 <div className="text-sm text-gray-400 mb-2">Total Goals</div>
-                <div className="text-3xl font-bold text-white mb-1">{overviewStats?.total_goals || 0}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{overviewStats?.total_goals || 0}</div>
                 <div className="text-sm text-gray-400">Target for this year</div>
             </Card>
 
-            <Card className="bg-white/[0.025] border-white/5 p-6">
+            <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                 <div className="text-sm text-gray-400 mb-2">Completed</div>
-                <div className="text-3xl font-bold text-white mb-1">{overviewStats?.by_status?.completed || 0}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{overviewStats?.by_status?.completed || 0}</div>
                 <div className="text-sm text-green-400">
                     {overviewStats?.total_goals ? Math.round((overviewStats.by_status.completed / overviewStats.total_goals) * 100) : 0}% completion rate
                 </div>
             </Card>
 
-            <Card className="bg-white/[0.025] border-white/5 p-6">
+            <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                 <div className="text-sm text-gray-400 mb-2">In Progress</div>
-                <div className="text-3xl font-bold text-white mb-1">{overviewStats?.by_status?.active || 0}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mb-1">{overviewStats?.by_status?.active || 0}</div>
                 <div className="text-sm text-gray-400">
                     {overviewStats?.total_goals ? Math.round((overviewStats.by_status.active / overviewStats.total_goals) * 100) : 0}% of total
                 </div>
@@ -629,7 +629,7 @@ function ItemsSection({ category, viewMode, setViewMode, userId }: {
 
     return (
         <>
-            <Card className="bg-white/[0.025] border-white/5 p-6">
+            <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-white">Your {category.title}</h2>
                     <div className="flex items-center gap-2">
@@ -829,7 +829,7 @@ function ProgressSection({ category, overviewStats, isLoading, taskStats }: {
 
     if (isLoading) {
         return (
-            <Card className="bg-white/[0.025] border-white/5 p-6">
+            <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
                 <Skeleton className="h-4 w-32 mb-4 bg-[#2a2b36]" />
                 <div className="flex justify-center mb-4">
                     <Skeleton className="h-32 w-32 rounded-full bg-[#2a2b36]" />
@@ -841,7 +841,7 @@ function ProgressSection({ category, overviewStats, isLoading, taskStats }: {
     }
 
     return (
-        <Card className="bg-white/[0.025] border-white/5 p-6">
+        <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
             <div className="text-sm text-gray-400 mb-4">Overall Progress</div>
 
             <div className="space-y-4">

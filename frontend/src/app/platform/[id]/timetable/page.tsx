@@ -802,26 +802,26 @@ export default function TimetablePage() {
             <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 
                 {/* ── Header ── */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-6 sm:mb-8">
                     {/* Left: title */}
-                    <div>
-                        <div className="flex items-center gap-3 mb-1">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
                                 <BarChart3 className="w-4 h-4 text-indigo-400" />
                             </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-white tracking-tight">Timetable</h1>
-                                <p className="text-xs text-white/35">Plan and track every hour of your day</p>
+                            <div className="min-w-0">
+                                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Timetable</h1>
+                                <p className="text-[11px] sm:text-xs text-white/35">Plan and track every hour of your day</p>
                             </div>
                             <button onClick={() => router.push(`/platform/${personId}/timetable/stats`)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-white/45 hover:text-white hover:border-white/20 text-xs font-medium transition-all ml-2">
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-white/45 hover:text-white hover:border-white/20 text-xs font-medium transition-all sm:ml-2">
                                 <BarChart2 className="w-3.5 h-3.5" />Stats
                             </button>
                         </div>
                     </div>
 
                     {/* Right: week nav */}
-                    <div className="flex flex-col items-end gap-3">
+                    <div className="flex flex-col sm:items-end gap-3">
                         <div className="flex items-center gap-2">
                             <button onClick={goPrev} className="w-8 h-8 rounded-xl border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/20 transition-all">
                                 <ChevronLeft className="w-4 h-4" />
@@ -857,18 +857,18 @@ export default function TimetablePage() {
                     {/* Timeline */}
                     <div className="rounded-2xl border border-white/8 bg-white/[0.02] backdrop-blur-sm overflow-hidden">
                         {/* Toolbar */}
-                        <div className="px-5 py-3.5 border-b border-white/6 flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-xs text-white/35">
-                                <Clock className="w-3.5 h-3.5" />
-                                <span>Click timeline to add a block</span>
+                        <div className="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-white/6 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs text-white/35 min-w-0">
+                                <Clock className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">Click timeline to add a block</span>
                             </div>
                             <button onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
-                                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shadow-indigo-500/20">
+                                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shadow-indigo-500/20 shrink-0">
                                 <Plus className="w-3.5 h-3.5" />Add
                             </button>
                         </div>
 
-                        <div className="px-4 py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
+                        <div className="px-2 sm:px-4 py-3 sm:py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
                             {isLoading
                                 ? <div className="flex items-center justify-center py-20"><Loader2 className="w-7 h-7 animate-spin text-indigo-400" /></div>
                                 : (

@@ -704,26 +704,26 @@ export default function ReaderPage() {
                 this reader-specific bar by its height to stack below it. Both
                 stay visible while scrolling the PDF. */}
             <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[68px] z-40">
-                <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-3">
+                <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-3 flex-wrap">
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning/library`)}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg"
+                        className="p-1.5 sm:p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="text-base font-medium text-white truncate">{book.title}</h1>
+                    <div className="flex-1 min-w-0 order-first sm:order-none basis-full sm:basis-auto">
+                        <h1 className="text-sm sm:text-base font-medium text-white truncate">{book.title}</h1>
                         {book.author && (
-                            <p className="text-xs text-white/40 truncate">{book.author}</p>
+                            <p className="text-[11px] sm:text-xs text-white/40 truncate">{book.author}</p>
                         )}
                     </div>
 
                     {/* Page nav */}
-                    <div className="flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1">
+                    <div className="flex items-center gap-0.5 sm:gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1 shrink-0">
                         <button
                             onClick={() => goToPage(page - 1)}
                             disabled={page <= 1}
-                            className="p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="p-1 sm:p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -732,20 +732,21 @@ export default function ReaderPage() {
                             onChange={(e) => setPageInput(e.target.value.replace(/[^0-9]/g, ''))}
                             onBlur={() => goToPage(Number(pageInput) || page)}
                             onKeyDown={(e) => { if (e.key === 'Enter') goToPage(Number(pageInput) || page) }}
-                            className="w-10 text-center bg-transparent text-white text-sm tabular-nums focus:outline-none"
+                            inputMode="numeric"
+                            className="w-8 sm:w-10 text-center bg-transparent text-white text-xs sm:text-sm tabular-nums focus:outline-none"
                         />
-                        <span className="text-xs text-white/30 tabular-nums pr-1">/ {totalPages || '?'}</span>
+                        <span className="text-[10px] sm:text-xs text-white/30 tabular-nums pr-1">/ {totalPages || '?'}</span>
                         <button
                             onClick={() => goToPage(page + 1)}
                             disabled={!!totalPages && page >= totalPages}
-                            className="p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded disabled:opacity-30 disabled:hover:bg-transparent"
+                            className="p-1 sm:p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded disabled:opacity-30 disabled:hover:bg-transparent"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
 
                     {/* Zoom */}
-                    <div className="hidden md:flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1">
+                    <div className="hidden md:flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1 shrink-0">
                         <button
                             onClick={() => setZoom(z => Math.max(0.6, +(z - 0.1).toFixed(2)))}
                             className="p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded"
@@ -773,10 +774,11 @@ export default function ReaderPage() {
                                 setResumeFlashTick(t => t + 1)
                             }}
                             title={`Resume here · "${book.resume_text.slice(0, 80)}${book.resume_text.length > 80 ? '…' : ''}"`}
-                            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border bg-emerald-500/10 border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/15 max-w-[200px]"
+                            className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs border bg-emerald-500/10 border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/15 max-w-[140px] sm:max-w-[200px] shrink-0"
                         >
                             <MapPin className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">Resume · p.{book.resume_page}</span>
+                            <span className="truncate hidden sm:inline">Resume · p.{book.resume_page}</span>
+                            <span className="sm:hidden tabular-nums">p.{book.resume_page}</span>
                             <span
                                 role="button"
                                 aria-label="Clear resume pointer"
@@ -792,7 +794,7 @@ export default function ReaderPage() {
                     <button
                         onClick={() => setShowHighlightOverlay(s => !s)}
                         title="Toggle yellow highlight marks on the page"
-                        className={`hidden md:flex items-center justify-center p-1.5 rounded-lg border transition-all ${
+                        className={`flex items-center justify-center p-1.5 rounded-lg border transition-all shrink-0 ${
                             showHighlightOverlay
                                 ? 'bg-amber-400/15 border-amber-400/30 text-amber-200'
                                 : 'bg-white/[0.04] border-white/10 text-white/40 hover:text-white'
@@ -803,7 +805,7 @@ export default function ReaderPage() {
                     <button
                         onClick={() => setShowTranslations(s => !s)}
                         title="Toggle inline translations for saved vocab words"
-                        className={`hidden md:flex items-center justify-center p-1.5 rounded-lg border transition-all ${
+                        className={`flex items-center justify-center p-1.5 rounded-lg border transition-all shrink-0 ${
                             showTranslations
                                 ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-200'
                                 : 'bg-white/[0.04] border-white/10 text-white/40 hover:text-white'
@@ -813,7 +815,8 @@ export default function ReaderPage() {
                     </button>
                     <button
                         onClick={() => setShowHighlights(s => !s)}
-                        className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-all ${
+                        title="Toggle highlights & dictionary panel"
+                        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs border transition-all shrink-0 ${
                             showHighlights
                                 ? 'bg-amber-500/15 border-amber-500/30 text-amber-200'
                                 : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white'
@@ -833,7 +836,7 @@ export default function ReaderPage() {
                 </div>
             </div>
 
-            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-4 py-6">
+            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-2 sm:px-4 py-3 sm:py-6">
                 {/* PDF column */}
                 <div ref={containerRef} className="flex-1 min-w-0 relative">
                     <div
@@ -901,10 +904,40 @@ export default function ReaderPage() {
                     </p>
                 </div>
 
-                {/* Highlights + Dictionary sidebar */}
+                {/* Mobile backdrop — only on <lg, only when panel open. */}
                 {showHighlights && (
-                    <aside className="hidden lg:flex flex-col w-80 shrink-0">
-                        <div className="sticky top-24 max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden">
+                    <button
+                        type="button"
+                        aria-label="Close panel"
+                        onClick={() => setShowHighlights(false)}
+                        className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+                    />
+                )}
+
+                {/* Highlights + Dictionary sidebar.
+                    Desktop ≥lg: inline column to the right of the PDF.
+                    Mobile <lg: fixed drawer sliding in from the right. */}
+                {showHighlights && (
+                    <aside
+                        className={
+                            // Mobile: fixed drawer pinned to right edge, above backdrop.
+                            // Desktop: regular flow column.
+                            'flex flex-col shrink-0 ' +
+                            'fixed top-[68px] right-0 bottom-0 z-50 w-[min(22rem,90vw)] ' +
+                            'bg-[#0a0a14] border-l border-white/10 p-3 ' +
+                            'lg:static lg:w-80 lg:bg-transparent lg:border-l-0 lg:p-0 lg:z-auto'
+                        }
+                    >
+                        <div className="flex items-center justify-between mb-2 lg:hidden">
+                            <span className="text-xs uppercase tracking-wider text-white/40">Panel</span>
+                            <button
+                                onClick={() => setShowHighlights(false)}
+                                className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded-lg"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
                             {/* Highlights card */}
                             <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
                                 <div className="flex items-center justify-between mb-3">
@@ -1296,7 +1329,15 @@ function SelectionPopover({
 }) {
     if (!selection || !selection.rect) return null
     const top = selection.rect.top + window.scrollY - 48
-    const left = selection.rect.left + window.scrollX + selection.rect.width / 2
+    // Clamp left so the popover stays inside the viewport even on narrow
+    // screens where the selection sits near an edge. Assume ~320px popover
+    // width as a safe minimum; the centered transform will still nudge it.
+    const POPOVER_HALF = 170
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1024
+    const rawLeft = selection.rect.left + window.scrollX + selection.rect.width / 2
+    const minLeft = window.scrollX + POPOVER_HALF + 8
+    const maxLeft = window.scrollX + viewportW - POPOVER_HALF - 8
+    const left = Math.min(Math.max(rawLeft, minLeft), Math.max(maxLeft, minLeft))
     return (
         <div
             data-selection-popover
@@ -1307,7 +1348,7 @@ function SelectionPopover({
                 transform: 'translateX(-50%)',
                 zIndex: 40,
             }}
-            className="flex items-center gap-1 bg-[#0a0a14] border border-white/15 rounded-lg shadow-xl p-1"
+            className="flex items-center gap-1 bg-[#0a0a14] border border-white/15 rounded-lg shadow-xl p-1 max-w-[calc(100vw-16px)] flex-wrap"
         >
             <button
                 onClick={onHighlight}
@@ -1445,7 +1486,7 @@ function SaveToDictionaryDialog({
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.96, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md bg-[#0a0a14] border border-white/10 rounded-2xl p-6 shadow-2xl"
+                className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0a0a14] border border-white/10 rounded-2xl p-4 sm:p-6 shadow-2xl"
             >
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -1463,7 +1504,7 @@ function SaveToDictionaryDialog({
                 </div>
 
                 <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <label className="text-sm font-medium text-gray-300">Folder</label>

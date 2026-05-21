@@ -138,69 +138,69 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-6xl mx-auto space-y-6"
+            className="max-w-6xl mx-auto space-y-4 sm:space-y-6 p-3 sm:p-0"
         >
             {/* Profile Hero */}
             <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 border-none relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
 
-                <div className="relative p-8">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-6">
-                            <div className="relative">
+                <div className="relative p-4 sm:p-8">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div className="flex items-center gap-4 sm:gap-6 min-w-0">
+                            <div className="relative shrink-0">
                                 {profile.profile_photo_url?.trim() ? (
                                     <img
                                         src={profile.profile_photo_url}
                                         alt={profile.name}
-                                        className="w-24 h-24 rounded-full object-cover"
+                                        className="w-16 h-16 sm:w-24 sm:h-24 rounded-full object-cover"
                                     />
                                 ) : (
-                                    <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-4xl font-bold text-white">
+                                    <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-2xl sm:text-4xl font-bold text-white">
                                         {initials}
                                     </div>
                                 )}
-                                <button className="absolute bottom-0 right-0 bg-white text-blue-600 rounded-full p-2 shadow-lg hover:bg-gray-100 transition">
-                                    <Camera size={16} />
+                                <button className="absolute bottom-0 right-0 bg-white text-blue-600 rounded-full p-1.5 sm:p-2 shadow-lg hover:bg-gray-100 transition">
+                                    <Camera size={14} />
                                 </button>
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <h1 className="text-3xl font-bold text-white">{profile.name}</h1>
+                                    <h1 className="text-xl sm:text-3xl font-bold text-white truncate">{profile.name}</h1>
                                     {profile.is_verified && (
-                                        <BadgeCheck size={24} className="text-white/90" />
+                                        <BadgeCheck size={20} className="text-white/90 shrink-0" />
                                     )}
                                 </div>
-                                <p className="text-white/80 flex items-center gap-2">
-                                    <Mail size={16} />
-                                    {profile.email}
+                                <p className="text-white/80 flex items-center gap-2 text-sm sm:text-base truncate">
+                                    <Mail size={14} className="shrink-0" />
+                                    <span className="truncate">{profile.email}</span>
                                 </p>
-                                <p className="text-white/60 text-sm mt-1">{profile.timezone}</p>
+                                <p className="text-white/60 text-xs sm:text-sm mt-1 truncate">{profile.timezone}</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 onClick={() => setIsEditMode(!isEditMode)}
                                 className="bg-white/20 backdrop-blur hover:bg-white/30 text-white border-none"
                             >
-                                <Settings size={18} className="mr-2" />
-                                {isEditMode ? 'Cancel' : 'Edit Profile'}
+                                <Settings size={16} className="mr-2" />
+                                {isEditMode ? 'Cancel' : 'Edit'}
                             </Button>
                             <Button
                                 onClick={() => logout()}
                                 disabled={isLoggingOut}
                                 className="bg-red-500/30 backdrop-blur hover:bg-red-500/50 text-white border-none"
                             >
-                                <LogOut size={18} className="mr-2" />
-                                {isLoggingOut ? 'Logging out...' : 'Log Out'}
+                                <LogOut size={16} className="mr-2" />
+                                {isLoggingOut ? 'Logging out…' : 'Log Out'}
                             </Button>
                         </div>
                     </div>
                 </div>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                 <div className="md:col-span-2 space-y-6">
                     {isEditMode && (
                         <Card className="bg-white/[0.025] border-white/5">

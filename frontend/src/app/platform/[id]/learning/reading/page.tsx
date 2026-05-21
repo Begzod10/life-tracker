@@ -156,16 +156,16 @@ export default function ReadingPage() {
     const currentModule = modules.find(m => m.id === moduleId)
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-3xl mx-auto">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-4 mb-8">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8">
                     <button onClick={() => router.push(`/platform/${params.id}/learning`)}
-                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all">
+                        className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all shrink-0">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <div className="flex-1">
-                        <h1 className="text-2xl font-bold text-white">Reading</h1>
-                        <p className="text-sm text-white/50">Paste a passage and AI extracts useful vocabulary at your level.</p>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-xl sm:text-2xl font-bold text-white">Reading</h1>
+                        <p className="text-xs sm:text-sm text-white/50">Paste a passage and AI extracts useful vocabulary at your level.</p>
                     </div>
                 </motion.div>
 
@@ -178,7 +178,7 @@ export default function ReadingPage() {
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <FormField label="Your level">
                             <SelectInput
                                 value={level}
@@ -215,7 +215,7 @@ export default function ReadingPage() {
                     <motion.div
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-4 bg-white/[0.02] border border-white/5 rounded-2xl p-5"
+                        className="space-y-4 bg-white/[0.02] border border-white/5 rounded-2xl p-3 sm:p-5"
                     >
                         <div className="flex items-center justify-between">
                             <h2 className="text-sm uppercase tracking-wider text-white/50 font-medium">
@@ -277,7 +277,7 @@ export default function ReadingPage() {
 
                         <div className="border-t border-white/5 pt-4 space-y-3">
                             <p className="text-xs text-white/40">Save selected words to:</p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <label className="text-sm font-medium text-gray-300">Folder</label>

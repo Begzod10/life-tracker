@@ -92,7 +92,7 @@ export default function ErrorDrillsPage() {
     const remaining = Math.max(0, drills.length - index)
 
     return (
-        <div className="min-h-screen p-8">
+        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-3xl mx-auto">
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
@@ -105,20 +105,20 @@ export default function ErrorDrillsPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mb-8 flex items-end justify-between gap-4"
+                    className="mb-6 sm:mb-8 flex items-end justify-between gap-4"
                 >
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <TargetIcon className="w-8 h-8 text-rose-400" />
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                            <TargetIcon className="w-6 h-6 sm:w-8 sm:h-8 text-rose-400 shrink-0" />
                             Error drills
                         </h1>
-                        <p className="text-white/50 mt-1">
+                        <p className="text-xs sm:text-sm text-white/50 mt-1">
                             Spaced repetition over the mistakes deep review caught — turn errors into reflexes.
                         </p>
                     </div>
                     {summary && (
-                        <div className="text-right">
-                            <p className="text-2xl font-bold text-rose-300">{summary.due}</p>
+                        <div className="text-right shrink-0">
+                            <p className="text-xl sm:text-2xl font-bold text-rose-300">{summary.due}</p>
                             <p className="text-[10px] uppercase tracking-wider text-white/40">due today</p>
                         </div>
                     )}
@@ -198,7 +198,7 @@ export default function ErrorDrillsPage() {
 function SummaryStrip({ summary }: { summary: { total: number; due: number; learned: number } | undefined }) {
     if (!summary) return null
     return (
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-6">
             <StatTile icon={<Layers className="w-4 h-4" />} label="Total cards" value={summary.total} accent="text-white/80" />
             <StatTile icon={<TargetIcon className="w-4 h-4" />} label="Due now" value={summary.due} accent="text-rose-300" />
             <StatTile icon={<Sparkles className="w-4 h-4" />} label="Mastering" value={summary.learned} accent="text-emerald-300" />
@@ -213,10 +213,13 @@ function StatTile({ icon, label, value, accent }: {
     accent: string
 }) {
     return (
-        <Card className="p-3 bg-white/2.5 border border-white/5">
-            <div className="flex items-center justify-between">
-                <span className="text-xs text-white/50 flex items-center gap-1.5">{icon} {label}</span>
-                <span className={`text-lg font-bold ${accent}`}>{value}</span>
+        <Card className="p-2.5 sm:p-3 bg-white/2.5 border border-white/5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
+                <span className="text-[10px] sm:text-xs text-white/50 flex items-center gap-1 sm:gap-1.5 min-w-0">
+                    <span className="shrink-0">{icon}</span>
+                    <span className="truncate">{label}</span>
+                </span>
+                <span className={`text-base sm:text-lg font-bold ${accent}`}>{value}</span>
             </div>
         </Card>
     )
