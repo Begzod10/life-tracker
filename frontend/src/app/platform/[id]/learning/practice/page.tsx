@@ -775,6 +775,122 @@ function ChunkReview({
     )
 }
 
+// ── Fireworks (celebratory particle burst over the Results screen) ──────────
+
+/**
+ * Lightweight, dependency-free particle burst rendered above the results
+ * card. Three bursts originating from the top half of the viewport, each
+ * spawning ~18 colored sparks that explode radially and fall under faux
+ * gravity. The whole show lasts ~2.4s then unmounts — we don't want a
+ * forever-running animation draining batteries on the Results screen.
+ *
+ * `intensity` scales burst count + particles so a perfect score reads as
+ * bigger than a so-so finish.
+ */
+function Fireworks({ intensity = 1 }: { intensity?: number }) {
+    const palette = [
+        '#fbbf24', // amber-400
+        '#34d399', // emerald-400
+        '#60a5fa', // blue-400
+        '#f472b6', // pink-400
+        '#a78bfa', // violet-400
+        '#f87171', // red-400
+    ]
+    const burstCount = Math.max(3, Math.round(3 * intensity))
+    const particlesPerBurst = Math.max(14, Math.round(18 * intensity))
+    // Pre-compute bursts so the random distribution is stable across the
+    // animation's lifetime (no flicker from re-rolling each frame).
+    const bursts = useMemo(() => (
+        Array.from({ length: burstCount }, (_, b) => {
+            const originX = 15 + Math.random() * 70   // 15% – 85% horizontally
+            const originY = 18 + Math.random() * 25   // 18% – 43% vertically
+            const delay = b * 0.18 + Math.random() * 0.12
+            const particles = Array.from({ length: particlesPerBurst }, () => {
+                const angle = Math.random() * Math.PI * 2
+                const speed = 90 + Math.random() * 120
+                return {
+                    color: palette[Math.floor(Math.random() * palette.length)],
+                    dx: Math.cos(angle) * speed,
+                    dy: Math.sin(angle) * speed,
+                    size: 4 + Math.random() * 4,
+                }
+            })
+            return { originX, originY, delay, particles }
+        })
+        // Recompute only when intensity meaningfully changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    ), [burstCount, particlesPerBurst])
+
+    return (
+        <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
+            {bursts.map((burst, bi) => (
+                <div
+                    key={bi}
+                    className="absolute"
+                    style={{ left: `${burst.originX}%`, top: `${burst.originY}%` }}
+                >
+                    {burst.particles.map((p, pi) => (
+                        <motion.span
+                            key={pi}
+                            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                            animate={{
+                                x: p.dx,
+                                // Add gravity — particles drift downward as they fly.
+                                y: p.dy + 180,
+                                opacity: 0,
+                                scale: 0.4,
+                            }}
+                            transition={{
+                                duration: 1.4 + Math.random() * 0.4,
+                                delay: burst.delay,
+                                ease: 'easeOut',
+                            }}
+                            className="absolute block rounded-full"
+                            style={{
+                                width: `${p.size}px`,
+                                height: `${p.size}px`,
+                                background: p.color,
+                                boxShadow: `0 0 8px ${p.color}, 0 0 14px ${p.color}80`,
+                            }}
+                        />
+                    ))}
+                </div>
+            ))}
+        </div>
+    )
+}
+
+/**
+ * Wrapper that mounts Fireworks for ~2.6s then unmounts so we aren't
+ * keeping a fixed-position overlay alive on the Results screen after
+ * the show is over (would block taps near top of screen otherwise,
+ * even though it's pointer-events-none — defensive). For perfect
+ * scores it relaunches a second wave for an extra beat.
+ */
+function CompletionFireworks({ pct }: { pct: number }) {
+    const intensity = pct >= 80 ? 1.4 : pct >= 50 ? 1 : 0.7
+    const [phase, setPhase] = useState<1 | 2 | 'done'>(1)
+
+    useEffect(() => {
+        // First wave runs ~2.4s.
+        const t1 = setTimeout(() => {
+            // Encore for high scores only — otherwise unmount.
+            setPhase(pct >= 80 ? 2 : 'done')
+        }, 2400)
+        return () => clearTimeout(t1)
+    }, [pct])
+
+    useEffect(() => {
+        if (phase !== 2) return
+        const t = setTimeout(() => setPhase('done'), 2200)
+        return () => clearTimeout(t)
+    }, [phase])
+
+    if (phase === 'done') return null
+    // key forces a fresh Fireworks mount for the encore wave.
+    return <Fireworks key={phase} intensity={intensity} />
+}
+
 // ── Results ───────────────────────────────────────────────────────────────────
 
 function Results({
@@ -1398,6 +1514,16 @@ function PracticePageInner() {
                     {/* Results */}
                     {phase === 'results' && results && (
                         <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            {/* Fireworks burst on completion — scales with
+                                score so a perfect drill feels meaningfully
+                                bigger than a 50% one. The pct is clamped at
+                                the floor so even low scores get a small
+                                celebration for finishing. */}
+                            <CompletionFireworks
+                                pct={results.total > 0
+                                    ? Math.round((results.correct / results.total) * 100)
+                                    : 0}
+                            />
                             <Results
                                 correct={results.correct}
                                 total={results.total}
