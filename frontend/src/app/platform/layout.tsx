@@ -20,7 +20,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
             <WeatherBackground theme={activeTheme} />
 
             <Suspense fallback={null}>
-                <Sidebar />
+                <Sidebar weather={weather} />
             </Suspense>
 
             <div className="relative z-10 lg:pl-60">
@@ -32,10 +32,12 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 </main>
             </div>
 
-            {/* Weather widget center-top — offset by half-sidebar on lg so
-                it stays optically centered above the content area. */}
+            {/* Weather widget center-top on desktop only — on mobile the
+                hamburger sits at top-left and the platform header occupies
+                that strip, so the widget is rendered inside the sidebar
+                drawer instead (see <Sidebar weather=… />). */}
             {weather && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 lg:left-[calc(50%+120px)] z-30">
+                <div className="hidden lg:block fixed top-4 left-[calc(50%+120px)] -translate-x-1/2 z-30">
                     <WeatherWidget data={weather} />
                 </div>
             )}

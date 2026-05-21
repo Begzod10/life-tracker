@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
+import type { WeatherData } from '@/lib/hooks/use-weather'
+import { WeatherWidget } from '@/components/features/weather/weather-background'
 import {
     BookOpen,
     Dumbbell,
@@ -103,11 +105,14 @@ function SidebarContent({
     pathname,
     hubCategoryParam,
     onNavigate,
+    weather,
 }: {
     sections: NavSection[]
     pathname: string
     hubCategoryParam: string | null
     onNavigate?: () => void
+    /** Only rendered when provided — used by the mobile drawer variant. */
+    weather?: WeatherData | null
 }) {
     return (
         <>
@@ -168,6 +173,15 @@ function SidebarContent({
                 ))}
             </nav>
 
+            {/* Weather widget — only shown in the mobile drawer (caller
+                passes `weather`). On desktop the layout renders the same
+                widget pinned top-center so it isn't duplicated here. */}
+            {weather && (
+                <div className="px-3 pb-3 pt-1">
+                    <WeatherWidget data={weather} />
+                </div>
+            )}
+
             {/* Footer */}
             <div className="border-t border-white/5 p-3">
                 <Link
@@ -183,7 +197,7 @@ function SidebarContent({
     )
 }
 
-export function Sidebar() {
+export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
     const searchParams = useSearchParams()
@@ -260,10 +274,13 @@ export function Sidebar() {
                     pathname={pathname}
                     hubCategoryParam={hubCategoryParam}
                     onNavigate={() => setMobileOpen(false)}
+                    weather={weather ?? null}
                 />
             </aside>
 
-            {/* Desktop sidebar — unchanged behaviour. */}
+            {/* Desktop sidebar — unchanged behaviour. Weather is rendered
+                pinned top-right in the platform layout on desktop, so we
+                don't repeat it inside this aside. */}
             <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-white/[0.03] border-r border-white/5 backdrop-blur-xl">
                 <SidebarContent
                     sections={sections}
