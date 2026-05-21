@@ -1568,12 +1568,12 @@ function SaveToDictionaryDialog({
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                                 <label className="text-sm font-medium text-gray-300">Folder</label>
                                 <button
                                     type="button"
                                     onClick={() => setNewFolderName(newFolderName === null ? '' : null)}
-                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5"
+                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5 px-2 py-1 -mx-2 -my-1 rounded touch-manipulation"
                                 >
                                     {newFolderName === null
                                         ? <><Plus className="w-3 h-3" />New</>
@@ -1614,13 +1614,13 @@ function SaveToDictionaryDialog({
                             )}
                         </div>
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                                 <label className="text-sm font-medium text-gray-300">Module</label>
                                 <button
                                     type="button"
                                     onClick={() => setNewModuleName(newModuleName === null ? '' : null)}
                                     disabled={!folderId}
-                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    className="text-xs text-indigo-300 hover:text-indigo-200 flex items-center gap-0.5 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-1 -mx-2 -my-1 rounded touch-manipulation"
                                 >
                                     {newModuleName === null
                                         ? <><Plus className="w-3 h-3" />New</>

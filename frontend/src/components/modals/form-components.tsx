@@ -27,13 +27,16 @@ export function FormField({
 }) {
     return (
         <div className="space-y-2">
-            <div className="flex justify-between items-center">
-                <Label className="text-sm font-medium text-gray-300">
+            {/* On mobile the description stacks below the label so the
+                label never has to wrap mid-word. From sm: it returns to
+                the inline layout where the help text sits to the right. */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-3">
+                <Label className="text-sm font-medium text-gray-300 shrink-0">
                     {label}
                     {required && <span className="text-red-400 ml-1">*</span>}
                 </Label>
                 {description && (
-                    <span className="text-xs text-muted-foreground text-gray-400">{description}</span>
+                    <span className="text-xs text-muted-foreground text-gray-400 sm:text-right">{description}</span>
                 )}
             </div>
             {children}
