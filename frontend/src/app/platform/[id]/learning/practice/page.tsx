@@ -673,6 +673,15 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
     const subIndex = (isQuizPlus && subMode === 'spelling' ? words.length : 0) + index
     const progress = (subIndex / totalSubQuestions) * 100
 
+    // Drill-wide counter — in quiz+ mode each word generates two
+    // sub-questions, so 31 words means 62 drill items. Scale both the
+    // total and the running index so the user sees "Drill 17 / 62"
+    // instead of a count that jumps backward when the spelling pass
+    // restarts at the top of the chunk.
+    const drillMultiplier = isQuizPlus ? 2 : 1
+    const displayedDrillTotal = drillTotal * drillMultiplier
+    const displayedDrillIndex = drillStartIndex * drillMultiplier + subIndex + 1
+
     const finish = useCallback((finalQuiz: Set<number>, finalSpell: Set<number>) => {
         // A word is "correct" only when both passes passed (or in non-
         // quiz-plus modes, when the single pass passed — finalSpell is
@@ -729,7 +738,7 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
                                 {' '}· {subMode === 'quiz' ? 'Choose' : 'Type'}
                             </span>
                         )}
-                        <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
+                        <span className="text-white/30"> · Drill {displayedDrillIndex} / {displayedDrillTotal}</span>
                     </span>
                     <span className="shrink-0">{correctCount} correct</span>
                 </div>
