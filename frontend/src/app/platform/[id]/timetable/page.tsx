@@ -491,14 +491,14 @@ function TimelineRuler() {
                 const hour = HOUR_START + i
                 const label = hour === 0 || hour === 24 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`
                 return (
-                    <div key={hour} className="absolute left-0 right-0 flex items-center gap-3" style={{ top: i * PX_PER_HOUR }}>
-                        <span className="text-[11px] text-white/25 w-14 text-right shrink-0 font-medium">{label}</span>
+                    <div key={hour} className="absolute left-0 right-0 flex items-center gap-1.5 sm:gap-3" style={{ top: i * PX_PER_HOUR }}>
+                        <span className="text-[11px] text-white/25 w-9 sm:w-14 text-right shrink-0 font-medium">{label}</span>
                         <div className="flex-1 h-px bg-white/6" />
                     </div>
                 )
             })}
             {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                <div key={`h-${i}`} className="absolute left-[74px] right-0 h-px bg-white/3" style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }} />
+                <div key={`h-${i}`} className="absolute left-[48px] sm:left-[74px] right-0 h-px bg-white/3" style={{ top: i * PX_PER_HOUR + PX_PER_HOUR / 2 }} />
             ))}
         </div>
     )
@@ -799,7 +799,7 @@ export default function TimetablePage() {
             {/* Top gradient glow */}
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/30 to-transparent pointer-events-none z-0" />
 
-            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+            <div className="relative z-10 max-w-7xl mx-auto px-2 sm:px-6 py-6 sm:py-8">
 
                 {/* ── Header ── */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -868,17 +868,17 @@ export default function TimetablePage() {
                             </button>
                         </div>
 
-                        <div className="px-2 sm:px-4 py-3 sm:py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
+                        <div className="px-1.5 sm:px-4 py-3 sm:py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
                             {isLoading
                                 ? <div className="flex items-center justify-center py-20"><Loader2 className="w-7 h-7 animate-spin text-indigo-400" /></div>
                                 : (
                                     <div className="relative" style={{ height: TOTAL_HOURS * PX_PER_HOUR }}>
                                         <TimelineRuler />
-                                        <div ref={timelineRef} className="absolute inset-0 ml-[74px] cursor-crosshair" onClick={handleTimelineClick} />
-                                        <div className="absolute inset-0 ml-[74px] pointer-events-none">
+                                        <div ref={timelineRef} className="absolute inset-0 ml-[48px] sm:ml-[74px] cursor-crosshair" onClick={handleTimelineClick} />
+                                        <div className="absolute inset-0 ml-[48px] sm:ml-[74px] pointer-events-none">
                                             <CurrentTimeIndicator day={currentDay} />
                                         </div>
-                                        <div className="absolute inset-0 ml-[74px] mr-1 pointer-events-none">
+                                        <div className="absolute inset-0 ml-[48px] sm:ml-[74px] mr-1 pointer-events-none">
                                             <AnimatePresence>
                                                 {blocks.map(block => (
                                                     <div key={block.id} className="pointer-events-auto">
