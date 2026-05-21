@@ -365,6 +365,8 @@ class JobUpdate(BaseModel):
     employment_type: Optional[str] = Field(None)
     active: Optional[bool] = Field(None)
     notes: Optional[str] = Field(None)
+    gennis_username: Optional[str] = Field(None, max_length=120)
+    gennis_sync_enabled: Optional[bool] = Field(None)
 
 
 class Job(JobBase):
@@ -374,6 +376,9 @@ class Job(JobBase):
     id: int
     person_id: int
     deleted: bool = False
+    gennis_username: Optional[str] = None
+    gennis_sync_enabled: bool = False
+    gennis_last_synced_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

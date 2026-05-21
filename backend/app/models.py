@@ -338,6 +338,12 @@ class Job(Base):
     deleted = Column(Boolean, default=False)
 
     notes = Column(Text)
+    # Gennis sync — when set, salary_months for this job mirror the external
+    # Gennis CRM. teachersalary rows become SalaryMonth rows, teachersalaries
+    # rows become GennisSalaryPayment rows attached to the matching month.
+    gennis_username = Column(String(120), nullable=True, index=True)
+    gennis_sync_enabled = Column(Boolean, default=False, nullable=False)
+    gennis_last_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -375,6 +381,13 @@ class SalaryMonth(Base):
 
     deleted = Column(Boolean, default=False)
 
+    # Gennis mirror — Gennis teachersalary.id (the per-location monthly row).
+    # Used to dedupe when re-syncing and to resolve per-payment FKs.
+    gennis_salary_location_id = Column(Integer, nullable=True, unique=True, index=True)
+    gennis_debt = Column(Float, nullable=True)
+    gennis_fine = Column(Float, nullable=True)
+    gennis_status = Column(Boolean, nullable=True)  # Gennis closed-month flag
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -385,6 +398,11 @@ class SalaryMonth(Base):
         "Expense",
         back_populates="salary_month",
         cascade="all, delete-orphan"
+    )
+    gennis_payments = relationship(
+        "GennisSalaryPayment",
+        back_populates="salary_month",
+        cascade="all, delete-orphan",
     )
 
 
@@ -525,6 +543,39 @@ class SavingTransaction(Base):
 
     # Relationships
     saving = relationship("Saving", back_populates="transactions")
+
+
+class GennisSalaryPayment(Base):
+    """A single payment (avans / final) that came from Gennis teachersalaries.
+
+    One row per Gennis teachersalaries.id. Re-syncing replaces rows by upsert
+    on gennis_payment_id — the table is a cache, not a source of truth.
+    """
+    __tablename__ = "gennis_salary_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    salary_month_id = Column(
+        Integer,
+        ForeignKey("salary_months.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+
+    gennis_payment_id = Column(Integer, nullable=False, unique=True, index=True)
+    gennis_salary_location_id = Column(Integer, nullable=False, index=True)
+
+    amount = Column(Float, nullable=False)
+    reason = Column(String(300), nullable=True)
+    payment_date = Column(Date, nullable=True, index=True)
+    payment_type_id = Column(Integer, nullable=True)
+    payment_type = Column(String(20), nullable=True)  # cash | click | bank
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    salary_month = relationship("SalaryMonth", back_populates="gennis_payments")
+    person = relationship("Person")
 
 
 class Budget(Base):

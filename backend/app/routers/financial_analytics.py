@@ -7,6 +7,7 @@ from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.routers.savings import _sync_balance
+from app.services import gennis_sync
 
 router = APIRouter(
     prefix="/financial-analytics",
@@ -36,6 +37,10 @@ def get_monthly_summary(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid month format. Use YYYY-MM"
         )
+
+    # Refresh Gennis-synced jobs before computing the summary so external
+    # salary changes show up without waiting for a cron.
+    gennis_sync.ensure_fresh_for_person(current_user.id, db)
 
     # Calculate total salary income
     salary_months = db.query(models.SalaryMonth).filter(

@@ -1612,3 +1612,5 @@ def send_word_of_the_day(self):
         raise self.retry(exc=exc, countdown=60 * 5)
     finally:
         db.close()
+
+

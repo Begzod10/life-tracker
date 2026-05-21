@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
 
+    # External Gennis CRM database (read-only). Required to mirror teacher
+    # salary data into SalaryMonth + GennisSalaryPayment. Leave unset to
+    # disable the sync entirely.
+    GENNIS_DB_URL: Optional[str] = None
+
     # Security
     SECRET_KEY: str
     ALGORITHM: str = "HS256"

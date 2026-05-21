@@ -13,6 +13,7 @@ from app import models
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.config import settings
+from app.services import gennis_sync
 
 router = APIRouter(prefix="/ai", tags=["ai-coach"])
 
@@ -128,6 +129,10 @@ def _build_user_context(user: models.Person, db: Session) -> str:
         lines.append("")
 
     # ─── Finances: income ────────────────────────────────────────────────
+    # Refresh Gennis-mirrored jobs before reading their SalaryMonth rows so
+    # advice reflects the latest external CRM state.
+    gennis_sync.ensure_fresh_for_person(user.id, db)
+
     active_jobs = db.query(models.Job).filter(
         models.Job.person_id == user.id,
         models.Job.active == True,

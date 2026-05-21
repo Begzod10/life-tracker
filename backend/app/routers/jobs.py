@@ -7,6 +7,7 @@ from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.services.job_service import JobService
+from app.services import gennis_sync
 
 router = APIRouter(
     prefix="/jobs",
@@ -194,8 +195,12 @@ def get_job_salary_months(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Get all salary months for a specific job"""
-    # Verify job ownership
+    """Get all salary months for a specific job.
+
+    For Gennis-synced jobs, refreshes the local mirror first if it's older
+    than the freshness window (5 min). Stale Gennis lookups never block the
+    response — failures fall back to whatever is already cached locally.
+    """
     job = db.query(models.Job).filter(
         models.Job.id == job_id,
         models.Job.person_id == current_user.id,
@@ -207,6 +212,8 @@ def get_job_salary_months(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found"
         )
+
+    gennis_sync.ensure_fresh(job, db)
 
     return db.query(models.SalaryMonth).filter(
         models.SalaryMonth.job_id == job_id,
@@ -277,3 +284,46 @@ def generate_salary_months(
         created=created,
         skipped_months=skipped,
     )
+
+
+@router.post('/{job_id}/sync-gennis')
+def sync_job_from_gennis(
+        job_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user),
+):
+    """Pull this job's salary data from the Gennis CRM right now.
+
+    Mirrors teachersalary → SalaryMonth and teachersalaries → GennisSalaryPayment.
+    Requires `gennis_username` to be set on the job.
+    """
+    job = db.query(models.Job).filter(
+        models.Job.id == job_id,
+        models.Job.person_id == current_user.id,
+        models.Job.deleted == False,
+    ).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    if not job.gennis_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Set gennis_username on the job first.",
+        )
+
+    report = gennis_sync.sync_job(job, db)
+    if report.skipped_reason:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Sync skipped: {report.skipped_reason}",
+        )
+
+    return {
+        "job_id": report.job_id,
+        "months_inserted": report.months_inserted,
+        "months_updated": report.months_updated,
+        "payments_inserted": report.payments_inserted,
+        "payments_updated": report.payments_updated,
+        "payments_deleted": report.payments_deleted,
+        "last_synced_at": job.gennis_last_synced_at.isoformat() if job.gennis_last_synced_at else None,
+    }
