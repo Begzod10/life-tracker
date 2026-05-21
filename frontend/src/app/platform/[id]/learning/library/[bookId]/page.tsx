@@ -708,13 +708,17 @@ export default function ReaderPage() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-[#070710] overflow-x-hidden">
+        // overflow-x-clip clips horizontal overflow without creating a new
+        // scroll container — using overflow-x-hidden here breaks the sticky
+        // positioning of the reader bar relative to the viewport.
+        <div className="min-h-screen flex flex-col bg-[#070710] overflow-x-clip">
             {/* Header */}
             {/* The platform-wide <Header> is sticky top-0 z-50, so we offset
-                this reader-specific bar by its height to stack below it. Both
-                stay visible while scrolling the PDF. */}
-            <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[68px] z-40">
-                <div className="max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-3 flex-wrap">
+                this reader-specific bar by its height to stack below it.
+                Header height: ~52px mobile (py-2 + button), ~68px desktop
+                (py-4 + button). Both stay visible while scrolling the PDF. */}
+            <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[52px] sm:top-[68px] z-40">
+                <div className="max-w-7xl mx-auto px-2 sm:px-4 py-1.5 sm:py-3 flex items-center gap-1.5 sm:gap-3 flex-wrap">
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning/library`)}
                         className="p-1.5 sm:p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg shrink-0"
@@ -854,7 +858,7 @@ export default function ReaderPage() {
                 </div>
             </div>
 
-            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-2 sm:px-4 py-3 sm:py-6 min-w-0">
+            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-2 sm:px-4 py-2 sm:py-6 min-w-0">
                 {/* PDF column. overflow-x-auto lets the user pan a zoomed-in
                     page horizontally inside this column without making the
                     whole reader page scroll sideways. */}
@@ -949,7 +953,7 @@ export default function ReaderPage() {
                             // Mobile: fixed drawer pinned to right edge, above backdrop.
                             // Desktop: regular flow column.
                             'flex flex-col shrink-0 ' +
-                            'fixed top-[68px] right-0 bottom-0 z-50 w-[min(22rem,90vw)] ' +
+                            'fixed top-[52px] sm:top-[68px] right-0 bottom-0 z-50 w-[min(22rem,90vw)] ' +
                             'bg-[#0a0a14] border-l border-white/10 p-3 ' +
                             'lg:static lg:w-80 lg:bg-transparent lg:border-l-0 lg:p-0 lg:z-auto'
                         }

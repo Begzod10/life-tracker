@@ -19,7 +19,7 @@ export function Header() {
             animate={{ y: 0, opacity: 1 }}
             className="sticky top-0 z-50 bg-white/[0.03] backdrop-blur-xl border-b border-white/5"
         >
-            <div className="container mx-auto px-4 sm:px-6 py-4">
+            <div className="container mx-auto px-4 sm:px-6 py-2 sm:py-4">
                 <div className="flex items-center justify-between gap-4">
                     {/* Left - Back Button or Logo.
                         On mobile <lg the sidebar renders its own hamburger
