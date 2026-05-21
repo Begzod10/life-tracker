@@ -258,7 +258,10 @@ export default function ReaderPage() {
         [allVocab],
     )
     const [pageInput, setPageInput] = useState('1')
-    const [zoom, setZoom] = useState(1.1)
+    // Default to fit-width (1.0). The user can zoom in/out from the toolbar
+    // on desktop. Anything above 1.0 causes the page to exceed the column
+    // width, which is then absorbed by overflow-x-auto on the column.
+    const [zoom, setZoom] = useState(1)
     const [showAllVocab, setShowAllVocab] = useState(false)
     const [selection, setSelection] = useState<Selection | null>(null)
     const [showHighlights, setShowHighlights] = useState(true)
@@ -276,7 +279,10 @@ export default function ReaderPage() {
     // in their dep array so they re-run with valid coordinates, not the
     // pre-layout zero-size rects.
     const [pageRenderTick, setPageRenderTick] = useState(0)
-    const [containerWidth, setContainerWidth] = useState(720)
+    // Start small so the very first render on a narrow viewport doesn't flash
+    // a 720px-wide PDF while the ResizeObserver hasn't measured the column
+    // yet. The observer will bump it to the real width on the next tick.
+    const [containerWidth, setContainerWidth] = useState(320)
     const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
     const [fileError, setFileError] = useState<string | null>(null)
 
@@ -348,12 +354,16 @@ export default function ReaderPage() {
     }, [book])
 
     // ResizeObserver — keep the page width tied to the container so the
-    // PDF fills nicely without horizontal scroll.
+    // PDF fills nicely without horizontal scroll. On narrow viewports we
+    // reserve less internal gutter so the rendered text isn't squeezed
+    // into a tiny strip.
     useEffect(() => {
         if (!containerRef.current) return
         const obs = new ResizeObserver(entries => {
             for (const entry of entries) {
-                setContainerWidth(Math.max(280, entry.contentRect.width - 32))
+                const w = entry.contentRect.width
+                const gutter = w < 480 ? 8 : 32
+                setContainerWidth(Math.max(280, w - gutter))
             }
         })
         obs.observe(containerRef.current)
@@ -698,7 +708,7 @@ export default function ReaderPage() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-[#070710]">
+        <div className="min-h-screen flex flex-col bg-[#070710] overflow-x-hidden">
             {/* Header */}
             {/* The platform-wide <Header> is sticky top-0 z-50, so we offset
                 this reader-specific bar by its height to stack below it. Both
@@ -836,14 +846,20 @@ export default function ReaderPage() {
                 </div>
             </div>
 
-            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-2 sm:px-4 py-3 sm:py-6">
-                {/* PDF column */}
-                <div ref={containerRef} className="flex-1 min-w-0 relative">
+            <div className="flex-1 max-w-7xl mx-auto w-full flex gap-4 px-2 sm:px-4 py-3 sm:py-6 min-w-0">
+                {/* PDF column. overflow-x-auto lets the user pan a zoomed-in
+                    page horizontally inside this column without making the
+                    whole reader page scroll sideways. */}
+                <div ref={containerRef} className="flex-1 min-w-0 relative overflow-x-auto">
                     <div
                         ref={pageRef}
                         onMouseUp={handleMouseUp}
                         className="relative bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
-                        style={{ maxWidth: containerWidth + 32 }}
+                        // Wrapper expands with the rendered PDF so zoomed pages
+                        // don't get clipped by the rounded border. Column has
+                        // overflow-x-auto so any excess scrolls inside the
+                        // column rather than spilling onto the viewport.
+                        style={{ width: Math.round(containerWidth * zoom) }}
                     >
                         {fileError ? (
                             <PdfError message={fileError} />
