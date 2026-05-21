@@ -4,14 +4,14 @@ import React, { useState, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { format, parse } from 'date-fns'
-import { Edit, Edit2, Trash2, Repeat, Star, Plus, LayoutGrid, LayoutList, Briefcase, Building2, Calendar, DollarSign, Loader2 } from 'lucide-react'
+import { Edit, Edit2, Trash2, Repeat, Star, Plus, LayoutGrid, LayoutList, Briefcase, Building2, Calendar, DollarSign, Loader2, Banknote, CreditCard, Landmark, ArrowDownToLine } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { useSalaryMonth, useSalaryMonthDelete, useSalaryMonthUpdate } from '@/lib/hooks/use-salary'
+import { useSalaryMonth, useSalaryMonthDelete, useSalaryMonthUpdate, useGennisPayments, type GennisSalaryPayment } from '@/lib/hooks/use-salary'
 import { useExpensesBySalaryMonth, useExpenseCreate, useExpenseUpdate, useExpenseDelete } from '@/lib/hooks/use-expenses'
 import { useJob } from '@/lib/hooks/use-jobs'
 import { FormField, TextInput, TextareaInput, SelectInput, NumberInput, DatePicker, SubmitButton, CancelButton } from '@/components/modals/form-components'
@@ -486,6 +486,93 @@ function ExpenseCard({ expense, salaryMonthId }: { expense: Expense; salaryMonth
     )
 }
 
+function paymentTypeIcon(kind: string | null) {
+    if (kind === 'cash') return <Banknote className="w-3.5 h-3.5" />
+    if (kind === 'click') return <CreditCard className="w-3.5 h-3.5" />
+    if (kind === 'bank') return <Landmark className="w-3.5 h-3.5" />
+    return <ArrowDownToLine className="w-3.5 h-3.5" />
+}
+
+const PAYMENT_TYPE_STYLE: Record<string, string> = {
+    cash: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    click: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+    bank: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+}
+
+function GennisPaymentsCard({ salaryMonthId }: { salaryMonthId: number }) {
+    const { data: payments = [], isLoading } = useGennisPayments(salaryMonthId)
+
+    // Render nothing if this isn't a Gennis-mirrored month and never will be.
+    if (!isLoading && payments.length === 0) return null
+
+    const total = payments.reduce((sum, p) => sum + p.amount, 0)
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <Card className="p-4 sm:p-6 bg-gradient-to-br from-emerald-500/[0.06] to-transparent border border-emerald-500/15 hover:border-emerald-500/25 transition-colors">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <Banknote className="w-4 h-4 text-emerald-300" />
+                            <h3 className="text-base sm:text-lg font-semibold text-white">Gennis Payouts</h3>
+                            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] uppercase tracking-wider">
+                                synced
+                            </Badge>
+                        </div>
+                        <p className="text-xs text-white/40 mt-0.5">Mirrored from Gennis CRM · {payments.length} payment{payments.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs text-white/40">Total paid</p>
+                        <p className="text-lg sm:text-xl font-bold text-emerald-300">{total.toLocaleString()}</p>
+                    </div>
+                </div>
+
+                {isLoading ? (
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto -mx-2 sm:mx-0">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/40">
+                                    <th className="text-left py-2 px-2 font-medium">Date</th>
+                                    <th className="text-left py-2 px-2 font-medium">Reason</th>
+                                    <th className="text-left py-2 px-2 font-medium">Type</th>
+                                    <th className="text-right py-2 px-2 font-medium">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {payments.map((p: GennisSalaryPayment) => {
+                                    const date = p.payment_date
+                                        ? format(parse(p.payment_date, 'yyyy-MM-dd', new Date()), 'MMM d')
+                                        : '—'
+                                    const typeClass = PAYMENT_TYPE_STYLE[p.payment_type ?? ''] ?? 'bg-white/5 text-white/60 border-white/10'
+                                    return (
+                                        <tr key={p.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                                            <td className="py-2.5 px-2 text-white/70 whitespace-nowrap">{date}</td>
+                                            <td className="py-2.5 px-2 text-white/80 truncate max-w-[14rem]" title={p.reason ?? ''}>{p.reason || '—'}</td>
+                                            <td className="py-2.5 px-2">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider border ${typeClass}`}>
+                                                    {paymentTypeIcon(p.payment_type)}
+                                                    {p.payment_type ?? '—'}
+                                                </span>
+                                            </td>
+                                            <td className="py-2.5 px-2 text-right font-semibold text-white tabular-nums">{p.amount.toLocaleString()}</td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </Card>
+        </motion.div>
+    )
+}
+
 function ExpensesListCard({ expenses, onAddExpense, salaryMonthId }: { expenses: Expense[]; onAddExpense: () => void; salaryMonthId: number }) {
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
@@ -941,8 +1028,9 @@ function SalaryPage() {
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mt-6 sm:mt-8 items-start">
                     {/* Left Column */}
-                    <div className="lg:col-span-2 grid grid-rows-2 gap-4 sm:gap-6 lg:h-[760px]">
+                    <div className="lg:col-span-2 space-y-4 sm:space-y-6">
                         <SpendingBreakdownCard data={data} />
+                        {data && <GennisPaymentsCard salaryMonthId={data.id} />}
                         <ExpensesListCard expenses={expenses} onAddExpense={() => setAddExpenseModalOpen(true)} salaryMonthId={data?.id ?? 0} />
                     </div>
 

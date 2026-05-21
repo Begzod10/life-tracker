@@ -163,6 +163,7 @@ export const API_ENDPOINTS = {
         UPDATE: (id: string | number) => `${API_URL}/salary-months/${id}`,
         DELETE: (id: string | number) => `${API_URL}/salary-months/${id}`,
         EXPENSES: (id: string | number) => `${API_URL}/salary-months/${id}/expenses`,
+        GENNIS_PAYMENTS: (id: string | number) => `${API_URL}/salary-months/${id}/gennis-payments`,
     },
     PROGRESSLOG_TASK: {
         CREATE: `${API_URL}/progresslog_task/`,

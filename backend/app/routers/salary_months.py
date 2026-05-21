@@ -6,6 +6,7 @@ from datetime import datetime
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services import gennis_sync
 
 router = APIRouter(
     prefix="/salary-months",
@@ -345,7 +346,11 @@ def get_salary_month(
         db: Session = Depends(get_db),
         current_user: models.Person = Depends(get_current_user)
 ):
-    """Get a specific salary month by ID"""
+    """Get a specific salary month by ID.
+
+    If the parent job is Gennis-synced, refresh the mirror first when stale
+    so the page never shows yesterday's numbers.
+    """
     salary_month = db.query(models.SalaryMonth).filter(
         models.SalaryMonth.id == salary_month_id,
         models.SalaryMonth.person_id == current_user.id,
@@ -357,6 +362,12 @@ def get_salary_month(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Salary month not found"
         )
+
+    job = db.query(models.Job).filter(models.Job.id == salary_month.job_id).first()
+    if job is not None:
+        gennis_sync.ensure_fresh(job, db)
+        # Re-read after potential mirror update.
+        db.refresh(salary_month)
 
     return salary_month
 
@@ -441,6 +452,40 @@ def get_salary_month_expenses(
         models.Expense.salary_month_id == salary_month_id,
         models.Expense.deleted == False
     ).order_by(models.Expense.date.desc()).all()
+
+
+@router.get(
+    '/{salary_month_id}/gennis-payments',
+    response_model=List[schemas.GennisSalaryPayment],
+)
+def get_salary_month_gennis_payments(
+        salary_month_id: int,
+        db: Session = Depends(get_db),
+        current_user: models.Person = Depends(get_current_user)
+):
+    """List Gennis CRM payouts mirrored against this salary month.
+
+    Read-only. Most recent first by payment_date; payments with no resolved
+    date (rare) fall to the end.
+    """
+    salary_month = db.query(models.SalaryMonth).filter(
+        models.SalaryMonth.id == salary_month_id,
+        models.SalaryMonth.person_id == current_user.id,
+        models.SalaryMonth.deleted == False
+    ).first()
+
+    if not salary_month:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Salary month not found"
+        )
+
+    return db.query(models.GennisSalaryPayment).filter(
+        models.GennisSalaryPayment.salary_month_id == salary_month_id,
+    ).order_by(
+        models.GennisSalaryPayment.payment_date.desc().nullslast(),
+        models.GennisSalaryPayment.gennis_payment_id.desc(),
+    ).all()
 
 
 @router.post('/{salary_month_id}/recalculate', response_model=schemas.SalaryMonth)

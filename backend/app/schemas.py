@@ -553,6 +553,24 @@ class Expense(ExpenseBase):
     updated_at: Optional[datetime] = None
 
 
+# ==================== GENNIS SALARY PAYMENT SCHEMAS ====================
+
+class GennisSalaryPayment(BaseModel):
+    """A single Gennis CRM payment mirrored into life_tracker. Read-only."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    salary_month_id: int
+    gennis_payment_id: int
+    gennis_salary_location_id: int
+    amount: float
+    reason: Optional[str] = None
+    payment_date: Optional[date] = None
+    payment_type_id: Optional[int] = None
+    payment_type: Optional[str] = None  # cash | click | bank
+    created_at: datetime
+
+
 # ==================== INCOME SOURCE SCHEMAS ====================
 
 class IncomeSourceBase(BaseModel):
