@@ -285,6 +285,33 @@ export const API_ENDPOINTS = {
         STATS: `${API_URL}/books/stats/overview`,
     },
 
+    EXERCISES: {
+        WORDS: (args: {
+            count?: number
+            difficulty?: string
+            moduleId?: number
+            folderId?: number
+            dueOnly?: boolean
+            weakOnly?: boolean
+        } = {}) => {
+            const p = new URLSearchParams({ count: String(args.count ?? 5) })
+            if (args.difficulty) p.append('difficulty', args.difficulty)
+            if (args.moduleId) p.append('module_id', String(args.moduleId))
+            if (args.folderId) p.append('folder_id', String(args.folderId))
+            if (args.dueOnly) p.append('due_only', 'true')
+            if (args.weakOnly) p.append('weak_only', 'true')
+            return `${API_URL}/exercises/words?${p}`
+        },
+        START: `${API_URL}/exercises/start`,
+        GRADE: `${API_URL}/exercises/grade`,
+        HISTORY: (limit = 20, wordId?: number) => {
+            const p = new URLSearchParams({ limit: String(limit) })
+            if (wordId) p.append('word_id', String(wordId))
+            return `${API_URL}/exercises/history?${p}`
+        },
+        STATS: `${API_URL}/exercises/stats`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate

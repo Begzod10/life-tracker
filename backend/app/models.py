@@ -122,6 +122,11 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan"
     )
+    exercise_attempts = relationship(
+        "ExerciseAttempt",
+        back_populates="person",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
@@ -935,3 +940,35 @@ class BookHighlight(Base):
 
     book = relationship("Book", back_populates="highlights")
     person = relationship("Person", back_populates="book_highlights")
+
+
+class ExerciseAttempt(Base):
+    """One sentence a learner wrote using a target dictionary word, with the
+    AI's grade. Persisted so the learner can review past attempts and so the
+    Exercises section can show real progress over time. Sessions reuse
+    PracticeSession with mode='exercise' for streak + history continuity."""
+    __tablename__ = "exercise_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    session_id = Column(
+        Integer,
+        ForeignKey("practice_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    word_id = Column(
+        Integer,
+        ForeignKey("dictionary_words.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sentence = Column(Text, nullable=False)
+    is_correct = Column(Boolean, nullable=False, default=False)
+    usage_score = Column(Integer, nullable=True)        # 0..100
+    feedback = Column(Text, nullable=True)
+    suggested_revision = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    person = relationship("Person", back_populates="exercise_attempts")
+    word = relationship("DictionaryWord")

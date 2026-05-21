@@ -2,11 +2,12 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine, Library, Flame, Clock } from 'lucide-react'
+import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine, Library, Flame, Clock, Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useDictStats } from '@/lib/hooks/use-dictionary'
 import { usePracticeHistory, useDueCounts, useDailyStreak } from '@/lib/hooks/use-practice'
 import { useLibraryStats } from '@/lib/hooks/use-books'
+import { useExerciseStats } from '@/lib/hooks/use-exercises'
 
 const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const DIFF_COLOR: Record<string, string> = {
@@ -22,6 +23,7 @@ export default function LearningPage() {
     const { data: history = [] } = usePracticeHistory()
     const { data: libraryStats } = useLibraryStats()
     const { data: dueCounts } = useDueCounts()
+    const { data: exerciseStats } = useExerciseStats()
     const { streak, practicedToday } = useDailyStreak()
 
     const recentSessions = history.slice(0, 5)
@@ -53,7 +55,7 @@ export default function LearningPage() {
                 </div>
 
                 {/* Main sections */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-6 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3 sm:gap-6 mb-8">
                     {/* Dictionary */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                         <Card
@@ -185,6 +187,43 @@ export default function LearningPage() {
                             <p className="text-sm text-white/50">
                                 AI-graded essays. Quick check or deep review.
                             </p>
+                        </Card>
+                    </motion.div>
+
+                    {/* Exercises */}
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
+                        <Card
+                            onClick={() => router.push(`/platform/${params.id}/learning/exercises`)}
+                            className="p-4 sm:p-6 bg-white/2.5 border border-white/5 hover:border-amber-500/30 hover:bg-white/5 cursor-pointer transition-all group"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="p-2.5 rounded-lg bg-amber-500/10">
+                                    <Sparkles className="w-6 h-6 text-amber-300" />
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" />
+                            </div>
+                            <h2 className="text-lg font-semibold text-white mb-1">Exercises</h2>
+                            <p className="text-sm text-white/50">
+                                {stats && stats.total >= 1
+                                    ? 'Write sentences with your dictionary words'
+                                    : 'Add words to unlock writing exercises'}
+                            </p>
+
+                            {exerciseStats && exerciseStats.total > 0 && (
+                                <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-white/15 bg-white/5 text-white/70">
+                                        {exerciseStats.total} sentences
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
+                                        {exerciseStats.accuracy}% acc
+                                    </span>
+                                    {exerciseStats.last_7d_total > 0 && (
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-200">
+                                            +{exerciseStats.last_7d_total} · 7d
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </Card>
                     </motion.div>
 
