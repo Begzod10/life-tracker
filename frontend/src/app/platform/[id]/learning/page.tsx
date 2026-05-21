@@ -2,10 +2,10 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine, Library } from 'lucide-react'
+import { BookOpen, Dumbbell, ArrowRight, Trophy, Target, Zap, FileText, PenLine, Library, Flame, Clock } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useDictStats } from '@/lib/hooks/use-dictionary'
-import { usePracticeHistory } from '@/lib/hooks/use-practice'
+import { usePracticeHistory, useDueCounts, useDailyStreak } from '@/lib/hooks/use-practice'
 import { useLibraryStats } from '@/lib/hooks/use-books'
 
 const DIFFICULTIES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
@@ -21,6 +21,8 @@ export default function LearningPage() {
     const { data: stats } = useDictStats()
     const { data: history = [] } = usePracticeHistory()
     const { data: libraryStats } = useLibraryStats()
+    const { data: dueCounts } = useDueCounts()
+    const { streak, practicedToday } = useDailyStreak()
 
     const recentSessions = history.slice(0, 5)
 
@@ -96,8 +98,39 @@ export default function LearningPage() {
                             </div>
                             <h2 className="text-lg font-semibold text-white mb-1">Practice</h2>
                             <p className="text-sm text-white/50">
-                                {stats && stats.total >= 2 ? 'Flashcard, Quiz, Spelling' : 'Add 2+ words to start'}
+                                {stats && stats.total >= 2 ? 'Flashcard, Quiz, Spelling, Cloze' : 'Add 2+ words to start'}
                             </p>
+
+                            {/* Streak + due chips — primary motivator on this card.
+                                Hidden until the user has at least started practicing. */}
+                            {(streak > 0 || (dueCounts && dueCounts.due > 0)) && (
+                                <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                                    {streak > 0 && (
+                                        <span
+                                            title={practicedToday
+                                                ? `${streak}-day streak`
+                                                : `${streak}-day streak — practice today to keep it`}
+                                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                                practicedToday
+                                                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                                                    : 'border-white/15 bg-white/5 text-white/60'
+                                            }`}
+                                        >
+                                            <Flame className={`w-3 h-3 ${practicedToday ? 'text-amber-300' : 'text-white/40'}`} />
+                                            {streak}
+                                        </span>
+                                    )}
+                                    {dueCounts && dueCounts.due > 0 && (
+                                        <span
+                                            title="Words whose review interval has elapsed"
+                                            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                                        >
+                                            <Clock className="w-3 h-3" />
+                                            {dueCounts.due} due
+                                        </span>
+                                    )}
+                                </div>
+                            )}
 
                             {recentSessions.length > 0 && (
                                 <div className="mt-4">

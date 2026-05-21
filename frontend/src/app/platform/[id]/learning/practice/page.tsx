@@ -3,13 +3,13 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
-import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, type PracticeWord } from '@/lib/hooks/use-practice'
+import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, useDueCounts, useDailyStreak, type PracticeWord } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 
-type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening'
+type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening' | 'cloze'
 type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -32,6 +32,76 @@ function speak(text: string) {
     window.speechSynthesis.speak(u)
 }
 
+/** Levenshtein distance — cheap dynamic-programming, fine for short words. */
+function levenshtein(a: string, b: string): number {
+    if (a === b) return 0
+    if (a.length === 0) return b.length
+    if (b.length === 0) return a.length
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => i)
+    for (let j = 1; j <= b.length; j++) {
+        let prev = dp[0]
+        dp[0] = j
+        for (let i = 1; i <= a.length; i++) {
+            const tmp = dp[i]
+            dp[i] = b[j - 1] === a[i - 1]
+                ? prev
+                : 1 + Math.min(prev, dp[i], dp[i - 1])
+            prev = tmp
+        }
+    }
+    return dp[a.length]
+}
+
+/**
+ * "Close enough" tolerance for typed answers — exact match always wins;
+ * for 5+ character words a single off-by-one typo is forgiven.
+ */
+function isCloseSpelling(input: string, target: string): { ok: boolean; exact: boolean } {
+    const a = input.trim().toLowerCase()
+    const b = target.toLowerCase()
+    if (!a) return { ok: false, exact: false }
+    if (a === b) return { ok: true, exact: true }
+    // Off-by-one only counts when the word is long enough that a typo is
+    // distinguishable from "wrong word" — guard short words to avoid
+    // letting "cat" pass as "bat".
+    if (b.length >= 5 && levenshtein(a, b) <= 1) return { ok: true, exact: false }
+    return { ok: false, exact: false }
+}
+
+/**
+ * Find the first example containing the target word (any case) and return
+ * the prompt with that occurrence replaced by an underline blank.
+ * Returns null when no usable example exists.
+ */
+function buildCloze(word: PracticeWord): { sentence: string; blank: string } | null {
+    if (!word.examples) return null
+    for (const ex of word.examples) {
+        if (!ex) continue
+        const rx = new RegExp(`\\b(${word.word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})\\b`, 'i')
+        if (!rx.test(ex)) continue
+        const blank = '_'.repeat(Math.max(word.word.length, 4))
+        return { sentence: ex.replace(rx, blank), blank }
+    }
+    return null
+}
+
+const AUTO_TTS_KEY = 'practice:auto_tts'
+function readAutoTts(): boolean {
+    if (typeof window === 'undefined') return true
+    try {
+        const v = window.localStorage.getItem(AUTO_TTS_KEY)
+        return v === null ? true : v === '1'
+    } catch {
+        return true
+    }
+}
+function writeAutoTts(v: boolean) {
+    if (typeof window === 'undefined') return
+    try {
+        window.localStorage.setItem(AUTO_TTS_KEY, v ? '1' : '0')
+    } catch { /* ignore quota / disabled storage */ }
+}
+
 // ── Flashcard (single card with drag + flip + TTS) ──────────────────────────
 
 const SWIPE_THRESHOLD = 110
@@ -42,17 +112,26 @@ function Flashcard({
     onFlipToggle,
     onSwipe,
     exitDirection,
+    autoTts,
 }: {
     word: PracticeWord
     flipped: boolean
     onFlipToggle: () => void
     onSwipe: (dir: 1 | -1) => void
     exitDirection: 0 | 1 | -1
+    autoTts: boolean
 }) {
     const x = useMotionValue(0)
     const rotateZ = useTransform(x, [-220, 0, 220], [-14, 0, 14])
     const knowOpacity = useTransform(x, [40, 140], [0, 1])
     const learnOpacity = useTransform(x, [-140, -40], [1, 0])
+
+    // Auto-pronounce when the card is revealed. Track flipped state so we
+    // don't re-speak when the user manually toggles back (only on the
+    // front→back transition).
+    useEffect(() => {
+        if (autoTts && flipped) speak(word.word)
+    }, [autoTts, flipped, word.id, word.word])
 
     const exitTarget =
         exitDirection === 1 ? { x: 700, rotate: 30, opacity: 0 } :
@@ -157,12 +236,14 @@ function FlashcardSession({
     onSessionEnd,
     drillStartIndex,
     drillTotal,
+    autoTts,
 }: {
     words: PracticeWord[]
     onCardDecided: (wordId: number, wasKnow: boolean) => void
     onSessionEnd: (knowIds: number[], learningIds: number[]) => void
     drillStartIndex: number
     drillTotal: number
+    autoTts: boolean
 }) {
     const [index, setIndex] = useState(0)
     const [flipped, setFlipped] = useState(false)
@@ -263,6 +344,7 @@ function FlashcardSession({
                             onFlipToggle={() => setFlipped(p => !p)}
                             onSwipe={(d) => decide(d === 1)}
                             exitDirection={exit}
+                            autoTts={autoTts}
                         />
                     </motion.div>
                 </AnimatePresence>
@@ -349,11 +431,14 @@ function Spelling({ word, onAnswer }: {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
 
+    // Re-derived each render so the input border + "Close" hint use the same
+    // verdict the submit handler will use.
+    const verdict = isCloseSpelling(input, word.word)
+
     const submit = () => {
         if (!input.trim() || submitted) return
         setSubmitted(true)
-        const correct = input.trim().toLowerCase() === word.word.toLowerCase()
-        setTimeout(() => onAnswer(correct), 900)
+        setTimeout(() => onAnswer(verdict.ok), 900)
     }
 
     return (
@@ -377,14 +462,101 @@ function Spelling({ word, onAnswer }: {
                     placeholder="Type the word…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
                         submitted
-                            ? input.trim().toLowerCase() === word.word.toLowerCase()
-                                ? 'border-green-500/50 bg-green-500/5'
+                            ? verdict.ok
+                                ? (verdict.exact
+                                    ? 'border-green-500/50 bg-green-500/5'
+                                    : 'border-amber-400/50 bg-amber-400/5')
                                 : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
                 />
-                {submitted && input.trim().toLowerCase() !== word.word.toLowerCase() && (
-                    <p className="text-center text-sm text-white/50">Correct: <span className="text-green-400 font-medium">{word.word}</span></p>
+                {submitted && verdict.ok && !verdict.exact && (
+                    <p className="text-center text-sm text-amber-300/90">
+                        Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !verdict.ok && (
+                    <p className="text-center text-sm text-white/50">
+                        Correct: <span className="text-green-400 font-medium">{word.word}</span>
+                    </p>
+                )}
+                {!submitted && (
+                    <Button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={!input.trim()}>
+                        Check
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ── Cloze (fill-the-blank using the word's example sentence) ────────────────
+
+function Cloze({ word, onAnswer }: {
+    word: PracticeWord
+    onAnswer: (correct: boolean) => void
+}) {
+    const [input, setInput] = useState('')
+    const [submitted, setSubmitted] = useState(false)
+
+    // Build the cloze prompt once per word. If the word has no example
+    // containing it, we degrade to a plain spelling prompt rather than
+    // skipping — the caller already filters words without examples, but a
+    // defensive fallback keeps the session from dead-ending.
+    const built = useMemo(() => buildCloze(word), [word.id, word.word, word.examples])
+    const verdict = isCloseSpelling(input, word.word)
+
+    const submit = () => {
+        if (!input.trim() || submitted) return
+        setSubmitted(true)
+        setTimeout(() => onAnswer(verdict.ok), 900)
+    }
+
+    return (
+        <div className="w-full max-w-md space-y-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <p className="text-white/50 text-xs mb-3 text-center">Fill in the blank</p>
+                {built ? (
+                    <p className="text-white text-base leading-relaxed text-center">
+                        &ldquo;{built.sentence}&rdquo;
+                    </p>
+                ) : (
+                    <p className="text-white text-base leading-relaxed text-center">
+                        {word.definition}
+                    </p>
+                )}
+                {word.translation && (
+                    <p className="text-blue-300/60 text-sm mt-3 text-center">{word.translation}</p>
+                )}
+            </div>
+
+            <div className="space-y-3">
+                <input
+                    autoFocus
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    disabled={submitted}
+                    placeholder="Type the missing word…"
+                    className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
+                        submitted
+                            ? verdict.ok
+                                ? (verdict.exact
+                                    ? 'border-green-500/50 bg-green-500/5'
+                                    : 'border-amber-400/50 bg-amber-400/5')
+                                : 'border-red-500/50 bg-red-500/5'
+                            : 'border-white/10 focus:border-white/25'
+                    }`}
+                />
+                {submitted && verdict.ok && !verdict.exact && (
+                    <p className="text-center text-sm text-amber-300/90">
+                        Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !verdict.ok && (
+                    <p className="text-center text-sm text-white/50">
+                        Correct: <span className="text-green-400 font-medium">{word.word}</span>
+                    </p>
                 )}
                 {!submitted && (
                     <Button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={!input.trim()}>
@@ -527,6 +699,7 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
                     {mode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
                     {mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
                     {mode === 'listening' && <Listening word={word} onAnswer={advance} />}
+                    {mode === 'cloze' && <Cloze word={word} onAnswer={advance} />}
                 </motion.div>
             </AnimatePresence>
         </div>
@@ -738,6 +911,7 @@ const MODE_META: Record<Mode, { label: string; desc: string; icon: React.FC<{ cl
     quiz: { label: 'Multiple Choice', desc: 'Pick the correct word for the definition', icon: Brain },
     spelling: { label: 'Spelling', desc: 'Type the word from its definition', icon: Keyboard },
     listening: { label: 'Listening', desc: 'Hear the word, type what you hear', icon: Headphones },
+    cloze: { label: 'Cloze (fill blank)', desc: 'Type the missing word in an example sentence', icon: Type },
 }
 
 export default function PracticePage() {
@@ -789,6 +963,15 @@ function PracticePageInner() {
     const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(initialModuleFromUrl)
     const [dueOnly, setDueOnly] = useState(false)
     const [weakOnly, setWeakOnly] = useState(false)
+    const [autoTts, setAutoTts] = useState<boolean>(() => readAutoTts())
+    useEffect(() => { writeAutoTts(autoTts) }, [autoTts])
+
+    // Surface motivational signals on the entry screen.
+    const { streak, practicedToday } = useDailyStreak()
+    const { data: dueCounts } = useDueCounts({
+        folderId: scopeModuleId ? undefined : scopeFolderId,
+        moduleId: scopeModuleId,
+    })
     // Always pull the full scope so chunking + mistake carry-forward can
     // walk the entire pool from a single fetch. Backend cap is 1000.
     const { refetch: fetchWords, isFetching } = usePracticeWords({
@@ -846,7 +1029,19 @@ function PracticePageInner() {
             setStartError('Add at least 2 words to your dictionary first.')
             return
         }
-        const fresh = shuffleArray(res.data)
+        // Cloze needs an example sentence that actually contains the word.
+        // Pre-filter so we don't dead-end mid-drill on words that have no
+        // usable example — and surface a clear message when the scope has
+        // too few cloze-ready words.
+        let pool = res.data
+        if (mode === 'cloze') {
+            pool = pool.filter(w => buildCloze(w) !== null)
+            if (pool.length < 2) {
+                setStartError('Cloze needs example sentences. Add examples to at least 2 words in this scope.')
+                return
+            }
+        }
+        const fresh = shuffleArray(pool)
         setOriginalWords(fresh)
         setSessionId(null)
         setResults(null)
@@ -1005,6 +1200,37 @@ function PracticePageInner() {
                                     ? 'Round review'
                                     : 'Results'}
                     </h1>
+
+                    {/* Motivational chips — only on the entry screen so they
+                        don't compete with in-session focus. */}
+                    {phase === 'pick' && (
+                        <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            {streak > 0 && (
+                                <span
+                                    title={practicedToday
+                                        ? `${streak}-day streak — keep it alive`
+                                        : `${streak}-day streak — practice today to keep it`}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border ${
+                                        practicedToday
+                                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                                            : 'border-white/15 bg-white/5 text-white/60'
+                                    }`}
+                                >
+                                    <Flame className={`w-3.5 h-3.5 ${practicedToday ? 'text-amber-300' : 'text-white/40'}`} />
+                                    {streak}
+                                </span>
+                            )}
+                            {dueCounts && dueCounts.due > 0 && (
+                                <span
+                                    title="Words whose review interval has elapsed"
+                                    className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                                >
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {dueCounts.due} due
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </motion.div>
 
                 <AnimatePresence mode="wait">
@@ -1057,7 +1283,14 @@ function PracticePageInner() {
                                                 ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
                                                 : 'border-white/10 text-white/50 hover:bg-white/5'
                                         }`}
-                                    ><Clock className="w-3 h-3" /> Due for review</button>
+                                    >
+                                        <Clock className="w-3 h-3" /> Due for review
+                                        {dueCounts && dueCounts.due > 0 && (
+                                            <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums ${
+                                                dueOnly ? 'bg-emerald-500/20 text-emerald-200' : 'bg-white/10 text-white/60'
+                                            }`}>{dueCounts.due}</span>
+                                        )}
+                                    </button>
                                     <button
                                         onClick={() => { setWeakOnly(true); setDueOnly(false) }}
                                         className={`px-3 py-1.5 rounded-lg text-xs border transition-all flex items-center gap-1.5 ${
@@ -1081,6 +1314,37 @@ function PracticePageInner() {
                                     Every session covers all words in your chosen scope. After each 10 words you see your mistakes; those words come back in the next round until you get them right.
                                 </p>
                             </Card>
+
+                            {/* Audio preference. Only meaningful in flashcard
+                                mode today; hidden in others to reduce noise. */}
+                            {mode === 'flashcard' && (
+                                <Card className="p-4 bg-white/2.5 border border-white/5">
+                                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                                        <span className="flex items-center gap-2 text-sm text-white/70">
+                                            <Volume2 className="w-4 h-4 text-blue-300" />
+                                            Pronounce on reveal
+                                        </span>
+                                        <button
+                                            type="button"
+                                            role="switch"
+                                            aria-checked={autoTts}
+                                            onClick={() => setAutoTts(v => !v)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                                autoTts ? 'bg-blue-500' : 'bg-white/10'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                                    autoTts ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </label>
+                                    <p className="text-[11px] text-white/30 mt-2">
+                                        Plays the word automatically when you flip the card.
+                                    </p>
+                                </Card>
+                            )}
 
                             {startError && (
                                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-3">
@@ -1123,6 +1387,7 @@ function PracticePageInner() {
                                         onSessionEnd={handleFlashcardDone}
                                         drillStartIndex={drillStartIndex}
                                         drillTotal={drillTotal}
+                                        autoTts={autoTts}
                                     />
                                 ) : (
                                     <LegacySession

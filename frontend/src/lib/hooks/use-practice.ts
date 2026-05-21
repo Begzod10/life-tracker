@@ -74,10 +74,58 @@ export function useCompleteSession() {
     })
 }
 
-export function usePracticeHistory() {
+export function usePracticeHistory(limit = 10) {
     const { request } = useHttp()
     return useQuery<PracticeSession[]>({
-        queryKey: ['practice', 'history'],
-        queryFn: () => request(API_ENDPOINTS.PRACTICE.HISTORY(10)),
+        queryKey: ['practice', 'history', limit],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.HISTORY(limit)),
     })
+}
+
+/**
+ * Daily streak — number of consecutive days with at least one practice
+ * session ending in today (or yesterday if you haven't practiced yet today,
+ * so the count doesn't flicker to zero until you've actually missed a day).
+ */
+export function useDailyStreak() {
+    // Pull a wide window so long streaks survive a 10-row default.
+    const history = usePracticeHistory(120)
+    const sessions = history.data ?? []
+
+    const streak = (() => {
+        if (sessions.length === 0) return 0
+        // Local-day key so a 11pm session and a 1am session count as
+        // separate days rather than same-UTC-day.
+        const dayKey = (iso: string) => {
+            const d = new Date(iso)
+            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+        }
+        const days = new Set(sessions.map(s => dayKey(s.started_at)))
+        const cursor = new Date()
+        // Grace period: if no session today, start counting from yesterday so
+        // the streak survives until the user has actually skipped a full day.
+        if (!days.has(`${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`)) {
+            cursor.setDate(cursor.getDate() - 1)
+        }
+        let count = 0
+        while (days.has(`${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`)) {
+            count++
+            cursor.setDate(cursor.getDate() - 1)
+        }
+        return count
+    })()
+
+    return {
+        streak,
+        practicedToday: (() => {
+            if (sessions.length === 0) return false
+            const now = new Date()
+            const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
+            return sessions.some(s => {
+                const d = new Date(s.started_at)
+                return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === todayKey
+            })
+        })(),
+        isLoading: history.isLoading,
+    }
 }
