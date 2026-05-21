@@ -365,7 +365,7 @@ export function TaskList({
         <div className="w-full space-y-6">
             {/* Header */}
             <div className="space-y-4">
-                <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Tasks</h1>
 
                 {/* Search */}
                 <div className="relative">

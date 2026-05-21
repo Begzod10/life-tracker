@@ -630,9 +630,9 @@ function ItemsSection({ category, viewMode, setViewMode, userId }: {
     return (
         <>
             <Card className="bg-white/[0.025] border-white/5 p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-white">Your {category.title}</h2>
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                    <h2 className="text-lg font-semibold text-white shrink-0">Your {category.title}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex bg-[#0f0f1a] rounded-lg p-1 border border-[#2a2b36]">
                             <button
                                 onClick={() => setIsDeletedView(false)}
@@ -669,11 +669,12 @@ function ItemsSection({ category, viewMode, setViewMode, userId }: {
                         </Button>
                         <Button
                             size="sm"
-                            className="gap-2"
+                            className="gap-2 ml-auto sm:ml-0"
                             onClick={() => setIsCreateModalOpen(true)}
                         >
                             <Plus className="h-4 w-4" />
-                            Add New
+                            <span className="hidden sm:inline">Add New</span>
+                            <span className="sm:hidden">Add</span>
                         </Button>
                     </div>
                 </div>
