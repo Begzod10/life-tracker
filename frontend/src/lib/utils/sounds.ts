@@ -114,9 +114,14 @@ export function playCorrect() {
     blip(783.99, 0.20, 'sine', 0.22, 0.12)
 }
 
-/** Two-note descending dud — softer minor second, more "uh oh" than alarm. */
+/**
+ * Two-note descending "wah-wah" dud. Sits in the mid range because phone
+ * speakers roll off hard below ~300 Hz, so the earlier sub-bass version
+ * was effectively silent on mobile. Sawtooth gives it a buzzy "wrong"
+ * texture that doesn't blend with the success arpeggio.
+ */
 export function playWrong() {
     if (!isSoundEnabled()) return
-    blip(220.00, 0.12, 'triangle', 0.16, 0)
-    blip(174.61, 0.22, 'triangle', 0.14, 0.07)
+    blip(392.00, 0.14, 'sawtooth', 0.22, 0)      // G4
+    blip(311.13, 0.26, 'sawtooth', 0.22, 0.09)   // Eb4
 }
