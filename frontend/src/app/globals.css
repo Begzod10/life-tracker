@@ -131,6 +131,14 @@ body {
 .react-pdf__Page__textContent span {
   -webkit-text-fill-color: transparent;
   color: transparent;
+  /* Mobile browsers default touch-action on text-bearing nodes is fine,
+     but the wrapper element may inherit `none` from a scroll container.
+     Explicitly enable pinch-zoom + selection here so long-press still
+     triggers the OS selection handles on the PDF text layer. */
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: manipulation;
 }
 .react-pdf__Page__textContent span::selection {
   -webkit-text-fill-color: transparent;

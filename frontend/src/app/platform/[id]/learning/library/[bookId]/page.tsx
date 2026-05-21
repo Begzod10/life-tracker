@@ -413,7 +413,13 @@ export default function ReaderPage() {
     }, [page, goToPage, saveDialogOpen])
 
     // ─── Text selection inside the rendered page ────────────────────────────
-    const handleMouseUp = useCallback(() => {
+    // captureSelection is invoked from three places:
+    //   1. onMouseUp     — desktop drag-to-select
+    //   2. onTouchEnd    — mobile long-press / drag handle release
+    //   3. selectionchange listener — catches mobile cases where the browser
+    //      shows the native selection handles before any mouse/touch event
+    //      fires on our DOM (e.g. iOS Safari after long-press magnifier).
+    const captureSelection = useCallback(() => {
         const sel = window.getSelection()
         if (!sel || sel.rangeCount === 0) return setSelection(null)
         const text = sel.toString().trim()
@@ -424,6 +430,31 @@ export default function ReaderPage() {
         const rect = sel.getRangeAt(0).getBoundingClientRect()
         setSelection({ text, rect })
     }, [])
+
+    const handleMouseUp = captureSelection
+    const handleTouchEnd = useCallback(() => {
+        // On touch devices the selection isn't finalised until the touch
+        // ends and the OS shows the selection handles. Defer one tick so
+        // window.getSelection() returns the populated range, not an empty
+        // one from the moment the finger lifted.
+        setTimeout(captureSelection, 50)
+    }, [captureSelection])
+
+    // selectionchange is the most reliable signal on mobile — it fires
+    // whenever the user adjusts the selection handles. Debounced so we
+    // only react once the user pauses dragging.
+    useEffect(() => {
+        let timer: ReturnType<typeof setTimeout> | null = null
+        const onChange = () => {
+            if (timer) clearTimeout(timer)
+            timer = setTimeout(captureSelection, 150)
+        }
+        document.addEventListener('selectionchange', onChange)
+        return () => {
+            document.removeEventListener('selectionchange', onChange)
+            if (timer) clearTimeout(timer)
+        }
+    }, [captureSelection])
 
     // ─── Save selection to highlights (and optionally dictionary) ──────────
     const handleQuickHighlight = () => {
@@ -866,6 +897,7 @@ export default function ReaderPage() {
                     <div
                         ref={pageRef}
                         onMouseUp={handleMouseUp}
+                        onTouchEnd={handleTouchEnd}
                         className="relative bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
                         // Wrapper expands with the rendered PDF so zoomed pages
                         // don't get clipped by the rounded border. Column has
