@@ -722,9 +722,12 @@ export default function ReaderPage() {
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="flex-1 min-w-0 order-first sm:order-none basis-full sm:basis-auto">
-                        <h1 className="text-sm sm:text-base font-medium text-white truncate">{book.title}</h1>
+                        <h1 className="text-sm sm:text-base font-medium text-white truncate" title={book.author ? `${book.title} — ${book.author}` : book.title}>{book.title}</h1>
+                        {/* Author line takes a whole row on mobile and the
+                            title already conveys the book. Reserve the
+                            vertical space for the PDF instead. */}
                         {book.author && (
-                            <p className="text-[11px] sm:text-xs text-white/40 truncate">{book.author}</p>
+                            <p className="hidden sm:block text-xs text-white/40 truncate">{book.author}</p>
                         )}
                     </div>
 
@@ -755,20 +758,25 @@ export default function ReaderPage() {
                         </button>
                     </div>
 
-                    {/* Zoom */}
-                    <div className="hidden md:flex items-center gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1 shrink-0">
+                    {/* Zoom — visible on every viewport; mobile readers
+                        especially need it to push tiny PDF text up to a
+                        comfortable size without forcing a pinch-zoom on
+                        the whole page. */}
+                    <div className="flex items-center gap-0.5 sm:gap-1 bg-white/[0.04] border border-white/10 rounded-lg px-1 py-1 shrink-0">
                         <button
                             onClick={() => setZoom(z => Math.max(0.6, +(z - 0.1).toFixed(2)))}
-                            className="p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded"
+                            className="p-1 sm:p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded"
+                            aria-label="Zoom out"
                         >
                             <ZoomOut className="w-4 h-4" />
                         </button>
-                        <span className="text-xs text-white/40 tabular-nums w-10 text-center">
+                        <span className="text-[10px] sm:text-xs text-white/40 tabular-nums w-8 sm:w-10 text-center">
                             {Math.round(zoom * 100)}%
                         </span>
                         <button
                             onClick={() => setZoom(z => Math.min(2.5, +(z + 0.1).toFixed(2)))}
-                            className="p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded"
+                            className="p-1 sm:p-1.5 text-white/60 hover:text-white hover:bg-white/5 rounded"
+                            aria-label="Zoom in"
                         >
                             <ZoomIn className="w-4 h-4" />
                         </button>
@@ -914,8 +922,10 @@ export default function ReaderPage() {
                         )}
                     </div>
 
-                    {/* Footer hint */}
-                    <p className="text-center text-[11px] text-white/30 mt-3">
+                    {/* Footer hint — desktop only. The arrow-key reference
+                        is meaningless on touch and the tip steals vertical
+                        space that mobile readers want for the next page. */}
+                    <p className="hidden sm:block text-center text-[11px] text-white/30 mt-3">
                         Tip — select text to save a highlight or push it to your dictionary. Use ← → keys to flip pages.
                     </p>
                 </div>
