@@ -409,7 +409,7 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                 <Button type="button" variant="ghost" onClick={onCancel}
                     className="flex-1 text-white/50 hover:text-white border border-white/10 rounded-xl">Cancel</Button>
                 <Button type="submit" disabled={isLoading || !canSave}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                    className="flex-1 bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white rounded-xl shadow-lg shadow-violet-500/30 disabled:opacity-40 disabled:cursor-not-allowed">
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save block'}
                 </Button>
             </div>
@@ -534,7 +534,7 @@ function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d:
                 return (
                     <button key={key} onClick={() => onSelect(key)}
                         className={`flex flex-col items-center px-3 py-2 rounded-xl transition-all text-center min-w-[46px]
-                            ${isAct ? 'bg-indigo-600 shadow-lg shadow-indigo-500/25 text-white' : isTod ? 'bg-white/8 text-white border border-white/15' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
+                            ${isAct ? 'bg-gradient-to-br from-violet-500 to-sky-400 shadow-lg shadow-violet-500/30 text-white' : isTod ? 'bg-white/8 text-white border border-white/15' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
                         <span className="text-[10px] font-semibold uppercase tracking-wider">{format(d, 'EEE')}</span>
                         <span className={`text-base font-bold leading-tight mt-0.5 ${isAct || isTod ? 'text-white' : ''}`}>{format(d, 'd')}</span>
                     </button>
@@ -586,7 +586,7 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
                             <span className={`font-semibold ${pct === 100 ? 'text-emerald-400' : pct > 50 ? 'text-indigo-400' : 'text-white/60'}`}>{pct}%</span>
                         </div>
                         <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
-                            <motion.div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full"
+                            <motion.div className="h-full bg-gradient-to-r from-violet-500 to-emerald-500 rounded-full"
                                 initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, ease: 'easeOut' }} />
                         </div>
                     </div>
@@ -649,7 +649,7 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
             </div>
 
             <button onClick={onAddNew}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30">
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white font-semibold text-sm transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40">
                 <Plus className="w-4 h-4" />Add Block
             </button>
         </div>
@@ -806,8 +806,8 @@ export default function TimetablePage() {
                     {/* Left: title */}
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
-                            <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-                                <BarChart3 className="w-4 h-4 text-indigo-400" />
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30">
+                                <BarChart3 className="w-4 h-4 text-white" />
                             </div>
                             <div className="min-w-0">
                                 <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Timetable</h1>
@@ -863,7 +863,7 @@ export default function TimetablePage() {
                                 <span className="truncate">Click timeline to add a block</span>
                             </div>
                             <button onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
-                                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shadow-indigo-500/20 shrink-0">
+                                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white text-xs font-semibold transition-all shadow-md shadow-violet-500/30 shrink-0">
                                 <Plus className="w-3.5 h-3.5" />Add
                             </button>
                         </div>
