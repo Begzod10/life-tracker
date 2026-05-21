@@ -106,22 +106,79 @@ export function primeAudio() {
     }
 }
 
-/** Bright ascending major arpeggio: C5 → E5 → G5. */
-export function playCorrect() {
+// ── Spoken affirmations ─────────────────────────────────────────────────────
+//
+// A short word from a human-ish synthesised voice layered on top of the
+// chime makes the feedback feel like a friendly tutor instead of a game
+// arcade. Pools are tiny + memorable; we avoid the same phrase twice in a
+// row so the loop doesn't feel robotic.
+
+const CORRECT_PHRASES = ['Nice', 'Great', 'Well done', 'Excellent', 'Perfect', 'Good job', 'Awesome']
+const WRONG_PHRASES = ['Almost', 'Not quite', 'Close one', 'Try again', 'Keep going']
+
+let lastCorrectIdx = -1
+let lastWrongIdx = -1
+
+function pickPhrase(pool: string[], lastIdx: number): { text: string; idx: number } {
+    if (pool.length === 1) return { text: pool[0], idx: 0 }
+    let i: number
+    do {
+        i = Math.floor(Math.random() * pool.length)
+    } while (i === lastIdx)
+    return { text: pool[i], idx: i }
+}
+
+function speakAffirmation(text: string, pitch: number, rate: number) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = 'en-US'
+    u.pitch = pitch
+    u.rate = rate
+    u.volume = 0.85
+    // Don't cancel here — the chime is web-audio, the voice is its own
+    // queue. Cancelling would also kill the flashcard's word pronunciation
+    // that fires when the next card advances.
+    window.speechSynthesis.speak(u)
+}
+
+type FeedbackOpts = {
+    /**
+     * Whether to layer in a spoken affirmation alongside the chime.
+     * Defaults to true. Flashcard mode passes `false` because the next
+     * card's auto-TTS cancels the speech queue ~320ms after the swipe,
+     * which would chop the affirmation mid-syllable.
+     */
+    voice?: boolean
+}
+
+/** Soft ascending major arpeggio (C5 → E5 → G5) + a warm spoken word. */
+export function playCorrect(opts: FeedbackOpts = {}) {
     if (!isSoundEnabled()) return
-    blip(523.25, 0.12, 'sine', 0.18, 0)
-    blip(659.25, 0.12, 'sine', 0.18, 0.06)
-    blip(783.99, 0.20, 'sine', 0.22, 0.12)
+    // Gentler peak gains + longer tails than before — feels chime-like
+    // rather than alarmy.
+    blip(523.25, 0.18, 'sine', 0.14, 0)
+    blip(659.25, 0.20, 'sine', 0.14, 0.07)
+    blip(783.99, 0.30, 'sine', 0.18, 0.14)
+    if (opts.voice !== false) {
+        const pick = pickPhrase(CORRECT_PHRASES, lastCorrectIdx)
+        lastCorrectIdx = pick.idx
+        // Slightly raised pitch + relaxed rate reads as "encouraging".
+        speakAffirmation(pick.text, 1.15, 1.0)
+    }
 }
 
 /**
- * Two-note descending "wah-wah" dud. Sits in the mid range because phone
- * speakers roll off hard below ~300 Hz, so the earlier sub-bass version
- * was effectively silent on mobile. Sawtooth gives it a buzzy "wrong"
- * texture that doesn't blend with the success arpeggio.
+ * Gentle two-note descent (F4 → D4) using sine waves so it feels more
+ * "soft no" than buzzer. Paired with a kind spoken cue.
  */
-export function playWrong() {
+export function playWrong(opts: FeedbackOpts = {}) {
     if (!isSoundEnabled()) return
-    blip(392.00, 0.14, 'sawtooth', 0.22, 0)      // G4
-    blip(311.13, 0.26, 'sawtooth', 0.22, 0.09)   // Eb4
+    blip(349.23, 0.16, 'sine', 0.16, 0)      // F4
+    blip(293.66, 0.30, 'sine', 0.16, 0.10)   // D4
+    if (opts.voice !== false) {
+        const pick = pickPhrase(WRONG_PHRASES, lastWrongIdx)
+        lastWrongIdx = pick.idx
+        // Lower pitch + slightly slower rate reads as "patient".
+        speakAffirmation(pick.text, 0.9, 0.95)
+    }
 }
