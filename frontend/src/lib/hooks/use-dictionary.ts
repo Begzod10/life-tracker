@@ -218,6 +218,22 @@ export function useDictionaryWords(args: {
     })
 }
 
+/**
+ * Lightweight cross-folder word list used by the Learning landing page.
+ * Backend already orders by created_at desc, so a `.slice(0, limit)` gives
+ * the most recently added words without an extra endpoint.
+ */
+export function useRecentWords(limit = 5) {
+    const { request } = useHttp()
+    return useQuery<DictionaryWord[]>({
+        queryKey: [...KEYS.words, 'recent', limit],
+        queryFn: async () => {
+            const all = await request<DictionaryWord[]>(API_ENDPOINTS.DICTIONARY.LIST)
+            return all.slice(0, limit)
+        },
+    })
+}
+
 export function useDictStats(args: { folderId?: number; moduleId?: number } = {}) {
     const { folderId, moduleId } = args
     const { request } = useHttp()
