@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, useDueCounts, useDailyStreak, type PracticeWord } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
-import { playCorrect, playWrong, isSoundEnabled, setSoundEnabled, primeAudio } from '@/lib/utils/sounds'
+import { playCorrect, playWrong, playCheckpoint, playComplete, isSoundEnabled, setSoundEnabled, primeAudio } from '@/lib/utils/sounds'
 
 type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening' | 'cloze'
 type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
@@ -1087,6 +1087,10 @@ function PracticePageInner() {
             total: finalAggregate.total,
             correct: finalAggregate.correct,
         })
+        // Fanfare for clearing the full drill — distinct from the per-round
+        // checkpoint chime so the user can tell "round done" apart from
+        // "drill complete" by ear.
+        playComplete()
         setPhase('results')
     }, [completeSession, sessionId])
 
@@ -1135,6 +1139,9 @@ function PracticePageInner() {
             finishRun(nextAggregate)
             return
         }
+        // Round cleared but the drill keeps going — short ladder chime to
+        // mark the checkpoint before the review screen renders.
+        playCheckpoint()
         setPhase('chunk-review')
     }, [aggregate, mistakesPool, unseenQueue, wordsById, finishRun])
 

@@ -121,3 +121,32 @@ export function playWrong() {
     blip(349.23, 0.16, 'sine', 0.16, 0)      // F4
     blip(293.66, 0.30, 'sine', 0.16, 0.10)   // D4
 }
+
+/**
+ * Round-complete chime: four-note ascending ladder ending on the octave.
+ * Distinct from playCorrect (which is a three-note arpeggio) so the user
+ * can tell "I got the question right" apart from "I cleared the round".
+ */
+export function playCheckpoint() {
+    if (!isSoundEnabled()) return
+    blip(523.25, 0.14, 'sine', 0.16, 0)      // C5
+    blip(659.25, 0.14, 'sine', 0.16, 0.08)   // E5
+    blip(783.99, 0.14, 'sine', 0.18, 0.16)   // G5
+    blip(1046.50, 0.32, 'sine', 0.20, 0.24)  // C6
+}
+
+/**
+ * Full-drill completion fanfare: held C-major chord with a high sparkle
+ * on top. Noticeably bigger than the per-round checkpoint so the final
+ * results screen feels earned.
+ */
+export function playComplete() {
+    if (!isSoundEnabled()) return
+    // Held C major chord underneath.
+    blip(523.25, 0.55, 'sine', 0.12, 0)      // C5
+    blip(659.25, 0.55, 'sine', 0.12, 0)      // E5
+    blip(783.99, 0.55, 'sine', 0.12, 0)      // G5
+    // Bright sparkle climbing on top.
+    blip(1046.50, 0.22, 'sine', 0.16, 0.18)  // C6
+    blip(1318.51, 0.45, 'sine', 0.18, 0.32)  // E6
+}
