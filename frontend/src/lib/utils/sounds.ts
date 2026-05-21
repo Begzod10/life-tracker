@@ -54,6 +54,12 @@ export function setSoundEnabled(enabled: boolean) {
  * Schedule a single tone with a short attack + exponential decay so it
  * doesn't click. `startOffset` lets the caller stagger notes into an
  * arpeggio without juggling timers.
+ *
+ * If the audio context is still suspended (typical on first page load
+ * before any user gesture, or after the browser auto-pauses it), we
+ * defer the scheduling until `resume()` resolves. Otherwise the tones
+ * would be queued against a frozen clock and silently dropped once the
+ * context actually starts running.
  */
 function blip(
     freq: number,
@@ -64,22 +70,40 @@ function blip(
 ) {
     const ac = getCtx()
     if (!ac) return
-    // Some browsers suspend the context until a user gesture or after a
-    // period of silence — resume each call so the next tone is audible.
-    if (ac.state === 'suspended') {
-        ac.resume().catch(() => { /* ignore — non-fatal */ })
+
+    const schedule = () => {
+        const now = ac.currentTime + startOffset
+        const osc = ac.createOscillator()
+        const gain = ac.createGain()
+        osc.type = type
+        osc.frequency.value = freq
+        gain.gain.setValueAtTime(0, now)
+        gain.gain.linearRampToValueAtTime(peakGain, now + 0.01)
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+        osc.connect(gain).connect(ac.destination)
+        osc.start(now)
+        osc.stop(now + duration + 0.02)
     }
-    const now = ac.currentTime + startOffset
-    const osc = ac.createOscillator()
-    const gain = ac.createGain()
-    osc.type = type
-    osc.frequency.value = freq
-    gain.gain.setValueAtTime(0, now)
-    gain.gain.linearRampToValueAtTime(peakGain, now + 0.01)
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
-    osc.connect(gain).connect(ac.destination)
-    osc.start(now)
-    osc.stop(now + duration + 0.02)
+
+    if (ac.state === 'suspended') {
+        ac.resume().then(schedule).catch(() => { /* ignore — non-fatal */ })
+    } else {
+        schedule()
+    }
+}
+
+/**
+ * Call once from a user-gesture handler to wake the audio context up
+ * front. Subsequent `playCorrect()` / `playWrong()` calls will then run
+ * synchronously instead of paying a resume-roundtrip on the first cue.
+ * Safe to call repeatedly — no-op when already running.
+ */
+export function primeAudio() {
+    const ac = getCtx()
+    if (!ac) return
+    if (ac.state === 'suspended') {
+        ac.resume().catch(() => { /* ignore */ })
+    }
 }
 
 /** Bright ascending major arpeggio: C5 → E5 → G5. */

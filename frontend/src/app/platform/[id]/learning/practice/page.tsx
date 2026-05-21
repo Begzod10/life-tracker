@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, useDueCounts, useDailyStreak, type PracticeWord } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
-import { playCorrect, playWrong, isSoundEnabled, setSoundEnabled } from '@/lib/utils/sounds'
+import { playCorrect, playWrong, isSoundEnabled, setSoundEnabled, primeAudio } from '@/lib/utils/sounds'
 
 type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening' | 'cloze'
 type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
@@ -1036,6 +1036,11 @@ function PracticePageInner() {
     }
 
     const start = async () => {
+        // Wake the audio context inside the user gesture that started the
+        // drill, so the very first answer-feedback tone plays without the
+        // resume-roundtrip latency that would otherwise drop the leading
+        // note of the arpeggio.
+        primeAudio()
         setStartError(null)
         const res = await fetchWords()
         if (res.error) {
@@ -1348,6 +1353,9 @@ function PracticePageInner() {
                                         role="switch"
                                         aria-checked={sfx}
                                         onClick={() => {
+                                            // Unlock audio inside the same gesture that
+                                            // flips the switch so the preview tone plays.
+                                            primeAudio()
                                             setSfx(v => {
                                                 const next = !v
                                                 // Fire a preview tone when turning ON so the
