@@ -21,20 +21,25 @@ export function Header() {
         >
             <div className="container mx-auto px-4 sm:px-6 py-4">
                 <div className="flex items-center justify-between gap-4">
-                    {/* Left - Back Button or Logo */}
-                    {(!isRoot && !isHome) ? (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.back()}
-                            className="gap-2"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Back
-                        </Button>
-                    ) : (
-                        <span className="text-white font-semibold">Life Tracking</span>
-                    )}
+                    {/* Left - Back Button or Logo.
+                        On mobile <lg the sidebar renders its own hamburger
+                        fixed at top-left, so we offset this column to keep
+                        them from colliding. */}
+                    <div className="pl-12 lg:pl-0">
+                        {(!isRoot && !isHome) ? (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => router.back()}
+                                className="gap-2"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Back
+                            </Button>
+                        ) : (
+                            <span className="text-white font-semibold">Life Tracking</span>
+                        )}
+                    </div>
 
                     {/* Right - Notifications & Profile */}
                     <div className="flex items-center gap-2">

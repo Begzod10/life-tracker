@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
@@ -21,6 +22,8 @@ import {
     User as UserIcon,
     Target,
     CheckSquare,
+    Menu,
+    X,
 } from 'lucide-react'
 
 type NavItem = {
@@ -95,29 +98,22 @@ function isItemActive(
     return false
 }
 
-export function Sidebar() {
-    const params = useParams<{ id: string }>()
-    const pathname = usePathname() ?? ''
-    const searchParams = useSearchParams()
-    const hubCategoryParam = searchParams?.get('category') ?? null
-    const { data: user } = useUser()
-
-    // Prefer URL param so the sidebar reflects the route you're already on;
-    // fall back to the authenticated user when the route has no [id]
-    // (e.g. /platform, /platform/profile).
-    const id = params?.id ?? (user?.id != null ? String(user.id) : undefined)
-
-    if (!id) {
-        return null
-    }
-
-    const sections = buildSections(String(id))
-
+function SidebarContent({
+    sections,
+    pathname,
+    hubCategoryParam,
+    onNavigate,
+}: {
+    sections: NavSection[]
+    pathname: string
+    hubCategoryParam: string | null
+    onNavigate?: () => void
+}) {
     return (
-        <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-white/[0.03] border-r border-white/5 backdrop-blur-xl">
+        <>
             {/* Brand + back to hub */}
             <div className="flex flex-col gap-3 p-4 border-b border-white/5">
-                <Link href="/platform" className="flex items-center gap-2 group">
+                <Link href="/platform" onClick={onNavigate} className="flex items-center gap-2 group">
                     <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                         <LayoutGrid className="h-4 w-4 text-white" />
                     </div>
@@ -126,6 +122,7 @@ export function Sidebar() {
 
                 <Link
                     href="/platform"
+                    onClick={onNavigate}
                     className="flex items-center gap-2 text-xs text-white/50 hover:text-white/80 transition-colors"
                 >
                     <ArrowLeft className="h-3.5 w-3.5" />
@@ -149,6 +146,7 @@ export function Sidebar() {
                                 <Link
                                     key={item.href}
                                     href={item.href}
+                                    onClick={onNavigate}
                                     className={cn(
                                         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                                         active
@@ -174,12 +172,105 @@ export function Sidebar() {
             <div className="border-t border-white/5 p-3">
                 <Link
                     href="/platform/profile"
+                    onClick={onNavigate}
                     className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/55 hover:bg-white/[0.04] hover:text-white transition-colors"
                 >
                     <UserIcon className="h-4 w-4 text-white/40" />
                     Profile
                 </Link>
             </div>
-        </aside>
+        </>
+    )
+}
+
+export function Sidebar() {
+    const params = useParams<{ id: string }>()
+    const pathname = usePathname() ?? ''
+    const searchParams = useSearchParams()
+    const hubCategoryParam = searchParams?.get('category') ?? null
+    const { data: user } = useUser()
+    const [mobileOpen, setMobileOpen] = useState(false)
+
+    // Auto-close the drawer whenever the route changes — otherwise clicking
+    // a link on mobile leaves the drawer open over the new page.
+    useEffect(() => {
+        setMobileOpen(false)
+    }, [pathname, hubCategoryParam])
+
+    // Lock body scroll while the mobile drawer is open so the underlying
+    // page doesn't scroll under it.
+    useEffect(() => {
+        if (!mobileOpen) return
+        const prev = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = prev }
+    }, [mobileOpen])
+
+    // Prefer URL param so the sidebar reflects the route you're already on;
+    // fall back to the authenticated user when the route has no [id]
+    // (e.g. /platform, /platform/profile).
+    const id = params?.id ?? (user?.id != null ? String(user.id) : undefined)
+
+    if (!id) {
+        return null
+    }
+
+    const sections = buildSections(String(id))
+
+    return (
+        <>
+            {/* Mobile hamburger — fixed top-left, only visible <lg. Sits above
+                the platform header so it's reachable on every page. */}
+            <button
+                type="button"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Open menu"
+                className="lg:hidden fixed top-3 left-3 z-50 w-10 h-10 rounded-lg bg-white/10 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-white/15 flex items-center justify-center shadow-lg"
+            >
+                <Menu className="h-5 w-5" />
+            </button>
+
+            {/* Mobile backdrop */}
+            {mobileOpen && (
+                <button
+                    type="button"
+                    aria-label="Close menu"
+                    onClick={() => setMobileOpen(false)}
+                    className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+                />
+            )}
+
+            {/* Mobile drawer — slides in from the left below lg. */}
+            <aside
+                className={cn(
+                    'lg:hidden fixed left-0 top-0 bottom-0 z-50 w-[min(17rem,85vw)] flex flex-col bg-[#0a0a14] border-r border-white/10 shadow-2xl transition-transform duration-200',
+                    mobileOpen ? 'translate-x-0' : '-translate-x-full',
+                )}
+            >
+                <button
+                    type="button"
+                    onClick={() => setMobileOpen(false)}
+                    aria-label="Close menu"
+                    className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg text-white/50 hover:text-white hover:bg-white/5 flex items-center justify-center"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+                <SidebarContent
+                    sections={sections}
+                    pathname={pathname}
+                    hubCategoryParam={hubCategoryParam}
+                    onNavigate={() => setMobileOpen(false)}
+                />
+            </aside>
+
+            {/* Desktop sidebar — unchanged behaviour. */}
+            <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-white/[0.03] border-r border-white/5 backdrop-blur-xl">
+                <SidebarContent
+                    sections={sections}
+                    pathname={pathname}
+                    hubCategoryParam={hubCategoryParam}
+                />
+            </aside>
+        </>
     )
 }
