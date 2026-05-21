@@ -8,12 +8,11 @@
  * (<250ms) and shaped with an exponential decay envelope to avoid the
  * harsh click that raw oscillator starts produce.
  *
- * iOS / Chromium auto-suspend rules: the AudioContext is created lazily
- * on first call (which happens inside a click / swipe handler) and resumed
- * defensively each call in case the browser put it back to sleep.
+ * Always on — no user preference. iOS / Chromium auto-suspend rules: the
+ * AudioContext is created lazily on first call (which happens inside a
+ * click / swipe handler) and resumed defensively each call in case the
+ * browser put it back to sleep.
  */
-
-const SOUND_KEY = 'practice:sfx_enabled'
 
 let ctx: AudioContext | null = null
 
@@ -28,25 +27,6 @@ function getCtx(): AudioContext | null {
         return ctx
     } catch {
         return null
-    }
-}
-
-export function isSoundEnabled(): boolean {
-    if (typeof window === 'undefined') return true
-    try {
-        const v = window.localStorage.getItem(SOUND_KEY)
-        return v === null ? true : v === '1'
-    } catch {
-        return true
-    }
-}
-
-export function setSoundEnabled(enabled: boolean) {
-    if (typeof window === 'undefined') return
-    try {
-        window.localStorage.setItem(SOUND_KEY, enabled ? '1' : '0')
-    } catch {
-        // Storage disabled / quota — preference simply won't persist this session.
     }
 }
 
@@ -108,7 +88,6 @@ export function primeAudio() {
 
 /** Soft ascending major arpeggio (C5 → E5 → G5). */
 export function playCorrect() {
-    if (!isSoundEnabled()) return
     // Gentle peak gains + longer tails so it reads as chime, not alarm.
     blip(523.25, 0.18, 'sine', 0.14, 0)
     blip(659.25, 0.20, 'sine', 0.14, 0.07)
@@ -117,7 +96,6 @@ export function playCorrect() {
 
 /** Gentle two-note descent (F4 → D4) — "soft no" rather than buzzer. */
 export function playWrong() {
-    if (!isSoundEnabled()) return
     blip(349.23, 0.16, 'sine', 0.16, 0)      // F4
     blip(293.66, 0.30, 'sine', 0.16, 0.10)   // D4
 }
@@ -128,7 +106,6 @@ export function playWrong() {
  * can tell "I got the question right" apart from "I cleared the round".
  */
 export function playCheckpoint() {
-    if (!isSoundEnabled()) return
     blip(523.25, 0.14, 'sine', 0.16, 0)      // C5
     blip(659.25, 0.14, 'sine', 0.16, 0.08)   // E5
     blip(783.99, 0.14, 'sine', 0.18, 0.16)   // G5
@@ -141,7 +118,6 @@ export function playCheckpoint() {
  * results screen feels earned.
  */
 export function playComplete() {
-    if (!isSoundEnabled()) return
     // Held C major chord underneath.
     blip(523.25, 0.55, 'sine', 0.12, 0)      // C5
     blip(659.25, 0.55, 'sine', 0.12, 0)      // E5

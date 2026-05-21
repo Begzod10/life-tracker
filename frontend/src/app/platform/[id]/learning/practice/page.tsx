@@ -3,12 +3,12 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
-import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, VolumeX, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type } from 'lucide-react'
+import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, useDueCounts, useDailyStreak, type PracticeWord } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
-import { playCorrect, playWrong, playCheckpoint, playComplete, isSoundEnabled, setSoundEnabled, primeAudio } from '@/lib/utils/sounds'
+import { playCorrect, playWrong, playCheckpoint, playComplete, primeAudio } from '@/lib/utils/sounds'
 
 type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening' | 'cloze'
 type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
@@ -86,22 +86,6 @@ function buildCloze(word: PracticeWord): { sentence: string; blank: string } | n
     return null
 }
 
-const AUTO_TTS_KEY = 'practice:auto_tts'
-function readAutoTts(): boolean {
-    if (typeof window === 'undefined') return true
-    try {
-        const v = window.localStorage.getItem(AUTO_TTS_KEY)
-        return v === null ? true : v === '1'
-    } catch {
-        return true
-    }
-}
-function writeAutoTts(v: boolean) {
-    if (typeof window === 'undefined') return
-    try {
-        window.localStorage.setItem(AUTO_TTS_KEY, v ? '1' : '0')
-    } catch { /* ignore quota / disabled storage */ }
-}
 
 // ── Flashcard (single card with drag + flip + TTS) ──────────────────────────
 
@@ -978,11 +962,6 @@ function PracticePageInner() {
     const [scopeModuleId, setScopeModuleId] = useState<number | undefined>(initialModuleFromUrl)
     const [dueOnly, setDueOnly] = useState(false)
     const [weakOnly, setWeakOnly] = useState(false)
-    const [autoTts, setAutoTts] = useState<boolean>(() => readAutoTts())
-    useEffect(() => { writeAutoTts(autoTts) }, [autoTts])
-    const [sfx, setSfx] = useState<boolean>(() => isSoundEnabled())
-    useEffect(() => { setSoundEnabled(sfx) }, [sfx])
-
     // Surface motivational signals on the entry screen.
     const { streak, practicedToday } = useDailyStreak()
     const { data: dueCounts } = useDueCounts({
@@ -1344,69 +1323,6 @@ function PracticePageInner() {
                                 </p>
                             </Card>
 
-                            {/* Audio preferences. SFX toggle applies to all
-                                modes; auto-pronounce is only meaningful in
-                                flashcard mode and stays scoped to it. */}
-                            <Card className="p-4 bg-white/2.5 border border-white/5 space-y-3">
-                                <label className="flex items-center justify-between gap-3 cursor-pointer">
-                                    <span className="flex items-center gap-2 text-sm text-white/70">
-                                        {sfx
-                                            ? <Volume2 className="w-4 h-4 text-blue-300" />
-                                            : <VolumeX className="w-4 h-4 text-white/40" />}
-                                        Sound effects
-                                    </span>
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={sfx}
-                                        onClick={() => {
-                                            // Unlock audio inside the same gesture that
-                                            // flips the switch so the preview tone plays.
-                                            primeAudio()
-                                            setSfx(v => {
-                                                const next = !v
-                                                // Fire a preview tone when turning ON so the
-                                                // user knows what to expect.
-                                                if (next) playCorrect()
-                                                return next
-                                            })
-                                        }}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                            sfx ? 'bg-blue-500' : 'bg-white/10'
-                                        }`}
-                                    >
-                                        <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                                sfx ? 'translate-x-6' : 'translate-x-1'
-                                            }`}
-                                        />
-                                    </button>
-                                </label>
-
-                                {mode === 'flashcard' && (
-                                    <label className="flex items-center justify-between gap-3 cursor-pointer pt-2 border-t border-white/5">
-                                        <span className="flex items-center gap-2 text-sm text-white/70">
-                                            <Volume2 className="w-4 h-4 text-blue-300" />
-                                            Pronounce on reveal
-                                        </span>
-                                        <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={autoTts}
-                                            onClick={() => setAutoTts(v => !v)}
-                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                                autoTts ? 'bg-blue-500' : 'bg-white/10'
-                                            }`}
-                                        >
-                                            <span
-                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                                    autoTts ? 'translate-x-6' : 'translate-x-1'
-                                                }`}
-                                            />
-                                        </button>
-                                    </label>
-                                )}
-                            </Card>
 
                             {startError && (
                                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-3">
@@ -1449,7 +1365,7 @@ function PracticePageInner() {
                                         onSessionEnd={handleFlashcardDone}
                                         drillStartIndex={drillStartIndex}
                                         drillTotal={drillTotal}
-                                        autoTts={autoTts}
+                                        autoTts
                                     />
                                 ) : (
                                     <LegacySession
