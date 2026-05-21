@@ -4,9 +4,11 @@ __pycache__
 node_modules/
 .next/
 .git
-alembic
+# alembic.ini is intentionally ignored — it contains a hardcoded sqlalchemy.url
+# placeholder. The real URL is sourced from .env via alembic/env.py.
 alembic.ini
-alembic/versions
+alembic/__pycache__/
+alembic/versions/__pycache__/
 .pytest_cache
 .idea
 structure
