@@ -646,36 +646,92 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
     drillStartIndex: number
     drillTotal: number
 }) {
+    // Quiz mode runs two passes over the same chunk: recognition first
+    // (multiple choice), then recall (typed spelling). A word only counts
+    // as "correct" if it passed BOTH passes — that's a stronger signal
+    // than recognition alone and matches how the user wants results to
+    // surface (10 MC items + 10 spelling items per chunk).
+    const isQuizPlus = mode === 'quiz'
+    const [subMode, setSubMode] = useState<'quiz' | 'spelling'>(
+        mode === 'quiz' ? 'quiz' : (mode as 'quiz' | 'spelling')
+    )
     const [index, setIndex] = useState(0)
-    const [correctIds, setCorrectIds] = useState<number[]>([])
-    const [missedIds, setMissedIds] = useState<number[]>([])
+
+    // Pass-scoped trackers — used to gate progression to spell phase and
+    // to compute the per-word "got it on both passes" finale.
+    const [quizCorrect, setQuizCorrect] = useState<Set<number>>(() => new Set())
+    const [spellCorrect, setSpellCorrect] = useState<Set<number>>(() => new Set())
+    // Single combined display counter — increments on every right answer
+    // in either pass so the user always sees forward momentum.
+    const [correctCount, setCorrectCount] = useState(0)
+
     const { mutate: submitResult } = useSubmitResult()
 
     const word = words[index]
-    const progress = ((index) / words.length) * 100
+    // Total sub-questions in this chunk: 10 in normal modes, 20 in quiz+.
+    const totalSubQuestions = words.length * (isQuizPlus ? 2 : 1)
+    const subIndex = (isQuizPlus && subMode === 'spelling' ? words.length : 0) + index
+    const progress = (subIndex / totalSubQuestions) * 100
+
+    const finish = useCallback((finalQuiz: Set<number>, finalSpell: Set<number>) => {
+        // A word is "correct" only when both passes passed (or in non-
+        // quiz-plus modes, when the single pass passed — finalSpell is
+        // empty so the intersection collapses to finalQuiz which holds
+        // single-pass results in those modes).
+        const correctIds: number[] = []
+        const missedIds: number[] = []
+        for (const w of words) {
+            const passedQuiz = finalQuiz.has(w.id)
+            const passedSpell = isQuizPlus ? finalSpell.has(w.id) : true
+            if (passedQuiz && passedSpell) correctIds.push(w.id)
+            else missedIds.push(w.id)
+        }
+        onDone(correctIds, missedIds)
+    }, [words, isQuizPlus, onDone])
 
     const advance = useCallback((wasCorrect: boolean) => {
         submitResult({ wordId: word.id, wasCorrect })
-        const nextCorrect = wasCorrect ? [...correctIds, word.id] : correctIds
-        const nextMissed = wasCorrect ? missedIds : [...missedIds, word.id]
-        if (wasCorrect) setCorrectIds(nextCorrect)
-        else setMissedIds(nextMissed)
-        if (index + 1 >= words.length) {
-            onDone(nextCorrect, nextMissed)
-        } else {
-            setIndex(p => p + 1)
+        if (wasCorrect) setCorrectCount(c => c + 1)
+
+        const nextQuiz = new Set(quizCorrect)
+        const nextSpell = new Set(spellCorrect)
+        if (wasCorrect) {
+            if (subMode === 'spelling') nextSpell.add(word.id)
+            else nextQuiz.add(word.id)
         }
-    }, [word, index, correctIds, missedIds, words.length, onDone, submitResult])
+        setQuizCorrect(nextQuiz)
+        setSpellCorrect(nextSpell)
+
+        const isLastInPass = index + 1 >= words.length
+        if (!isLastInPass) {
+            setIndex(p => p + 1)
+            return
+        }
+
+        // End of current pass. For quiz+, kick into the spelling pass on
+        // the same words. Otherwise wrap up the chunk.
+        if (isQuizPlus && subMode === 'quiz') {
+            setSubMode('spelling')
+            setIndex(0)
+            return
+        }
+        finish(nextQuiz, nextSpell)
+    }, [word, index, words.length, subMode, isQuizPlus, quizCorrect, spellCorrect, submitResult, finish])
 
     return (
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
                 <div className="flex justify-between text-[11px] sm:text-xs text-white/40 mb-1.5 gap-2">
                     <span className="truncate">
-                        Round {index + 1} / {words.length}
+                        Question {subIndex + 1} / {totalSubQuestions}
+                        {isQuizPlus && (
+                            <span className="text-white/30">
+                                {' '}· {subMode === 'quiz' ? 'Choose' : 'Type'}
+                            </span>
+                        )}
                         <span className="text-white/30"> · Drill {drillStartIndex + index + 1} / {drillTotal}</span>
                     </span>
-                    <span className="shrink-0">{correctIds.length} correct</span>
+                    <span className="shrink-0">{correctCount} correct</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <motion.div
@@ -688,17 +744,20 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
 
             <AnimatePresence mode="wait">
                 <motion.div
-                    key={word.id}
+                    // Re-key on subMode so the same word transitions cleanly
+                    // when jumping from the quiz pass to the spelling pass.
+                    key={`${subMode}-${word.id}`}
                     initial={{ opacity: 0, x: 30 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -30 }}
                     transition={{ duration: 0.2 }}
                     className="w-full flex flex-col items-center"
                 >
-                    {mode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
-                    {mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
-                    {mode === 'listening' && <Listening word={word} onAnswer={advance} />}
-                    {mode === 'cloze' && <Cloze word={word} onAnswer={advance} />}
+                    {isQuizPlus && subMode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
+                    {isQuizPlus && subMode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
+                    {!isQuizPlus && mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
+                    {!isQuizPlus && mode === 'listening' && <Listening word={word} onAnswer={advance} />}
+                    {!isQuizPlus && mode === 'cloze' && <Cloze word={word} onAnswer={advance} />}
                 </motion.div>
             </AnimatePresence>
         </div>
@@ -1023,7 +1082,7 @@ function ScopePicker({
 
 const MODE_META: Record<Mode, { label: string; desc: string; icon: React.FC<{ className?: string }> }> = {
     flashcard: { label: 'Flashcard', desc: 'Swipe right if you know, left to review', icon: BookOpen },
-    quiz: { label: 'Multiple Choice', desc: 'Pick the correct word for the definition', icon: Brain },
+    quiz: { label: 'Multiple Choice + Spell', desc: 'Pick the word, then type it from memory', icon: Brain },
     spelling: { label: 'Spelling', desc: 'Type the word from its definition', icon: Keyboard },
     listening: { label: 'Listening', desc: 'Hear the word, type what you hear', icon: Headphones },
     cloze: { label: 'Cloze (fill blank)', desc: 'Type the missing word in an example sentence', icon: Type },
