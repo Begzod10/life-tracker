@@ -206,7 +206,7 @@ export function AICoach() {
         {
             id: 'welcome',
             role: 'assistant',
-            content: "Hi! I'm your AI Life Coach. I have access to your goals, tasks, and finances. What would you like to work on today?",
+            content: "Hi! I'm your AI Life Coach. I can see your goals, tasks, today's schedule, finances (income, expenses, savings, budgets), and learning activity (books, dictionary, practice, essays). Ask me anything about your day, money, or progress.",
         },
     ])
     const [input, setInput] = useState('')
@@ -253,7 +253,19 @@ export function AICoach() {
             })
 
             if (!res.ok) {
-                throw new Error(await res.text())
+                // FastAPI returns { detail: "…" } on HTTPException. Surface
+                // the detail so the UI shows the real cause (missing API
+                // key, schema error, etc) instead of a generic "something
+                // went wrong" that nobody can act on.
+                let detail = `HTTP ${res.status}`
+                try {
+                    const payload = await res.json()
+                    if (payload?.detail) detail = String(payload.detail)
+                } catch {
+                    const text = await res.text().catch(() => '')
+                    if (text) detail = text
+                }
+                throw new Error(detail)
             }
 
             const reader = res.body!.getReader()
@@ -272,22 +284,36 @@ export function AICoach() {
                     const data = line.slice(6)
                     if (data === '[DONE]') break
                     try {
-                        const { content } = JSON.parse(data)
-                        accumulated += content
+                        const parsed = JSON.parse(data)
+                        // Backend can emit { error: true, message } when the
+                        // upstream Groq call fails mid-stream; surface it
+                        // verbatim instead of silently truncating.
+                        if (parsed?.error) {
+                            throw new Error(parsed.message || 'AI coach error')
+                        }
+                        accumulated += parsed.content ?? ''
                         setMessages(prev =>
                             prev.map(m =>
                                 m.id === assistantId ? { ...m, content: accumulated } : m
                             )
                         )
-                    } catch {}
+                    } catch (parseErr) {
+                        // Re-throw structured error frames so the outer
+                        // catch can render them; ignore JSON parse failures
+                        // on partial chunks.
+                        if (parseErr instanceof Error && parseErr.message && parseErr.message !== 'Unexpected end of JSON input') {
+                            throw parseErr
+                        }
+                    }
                 }
             }
         } catch (err: unknown) {
             if (err instanceof Error && err.name !== 'AbortError') {
+                const detail = err.message || 'Something went wrong. Please try again.'
                 setMessages(prev =>
                     prev.map(m =>
                         m.id === assistantId
-                            ? { ...m, content: 'Sorry, something went wrong. Please try again.' }
+                            ? { ...m, content: `Sorry — ${detail}` }
                             : m
                     )
                 )
