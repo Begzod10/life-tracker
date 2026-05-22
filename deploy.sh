@@ -2,8 +2,20 @@
 set -e
 
 cd /var/www/life_tracker
+
+# Skip the whole deploy when there are no new commits — otherwise the cron
+# (*/5) restarts celery every 5 minutes and SIGTERMs any in-flight task
+# (e.g. the 22:30 AI daily-conclusion).
+before=$(git rev-parse HEAD)
 git fetch origin master
 git reset --hard origin/master
+after=$(git rev-parse HEAD)
+
+if [ "$before" = "$after" ]; then
+  exit 0
+fi
+
+echo "Deploying $before -> $after at $(date)"
 
 # Backend
 cd /var/www/life_tracker/backend
