@@ -655,11 +655,12 @@ class DailyConclusion(Base):
     """AI-generated daily conclusion for a person's day."""
     __tablename__ = "daily_conclusions"
 
-    id         = Column(Integer, primary_key=True, index=True)
-    person_id  = Column(Integer, ForeignKey("person.id"), nullable=False)
-    date       = Column(Date, nullable=False, index=True)
-    conclusion = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id               = Column(Integer, primary_key=True, index=True)
+    person_id        = Column(Integer, ForeignKey("person.id"), nullable=False)
+    date             = Column(Date, nullable=False, index=True)
+    conclusion       = Column(Text, nullable=False)
+    created_at       = Column(DateTime, default=datetime.utcnow)
+    telegram_sent_at = Column(DateTime, nullable=True)
 
     person = relationship("Person")
 

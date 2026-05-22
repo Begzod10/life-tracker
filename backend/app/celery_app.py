@@ -75,6 +75,13 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=17, minute=30),
     },
 
+    # Every 10 minutes — resend daily conclusions whose Telegram delivery
+    # never landed (e.g. worker SIGTERMed mid-send by a deploy).
+    "retry-undelivered-conclusions": {
+        "task": "app.tasks.retry_undelivered_conclusions",
+        "schedule": crontab(minute="*/10"),
+    },
+
     # Daily 17:00 UTC = 22:00 Tashkent — full day summary (blocks + tasks)
     "send-daily-summary": {
         "task": "app.tasks.send_daily_summary",

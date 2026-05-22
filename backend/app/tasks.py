@@ -1051,6 +1051,8 @@ def generate_conclusion_for_person(db, person, target_date, *, force: bool = Fal
                     f"🤖 <b>AI Daily Conclusion</b>\n\n{conclusion_text}",
                     chat_id=chat_id,
                 )
+                existing.telegram_sent_at = datetime.utcnow()
+                db.commit()
             except Exception as e:
                 logger.warning("Failed to send conclusion to Telegram: %s", e)
 
@@ -1094,6 +1096,60 @@ def generate_daily_conclusion(self):
         db.rollback()
         logger.exception("generate_daily_conclusion failed: %s", exc)
         raise self.retry(exc=exc, countdown=60 * 5)
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.retry_undelivered_conclusions", bind=True)
+def retry_undelivered_conclusions(self):
+    """Resend AI daily conclusions whose row exists but telegram_sent_at is
+    NULL (i.e. the worker was killed mid-send, the Telegram API blipped, or
+    the chat_id was missing when the row was first written). Only looks at
+    the last 2 days so we never re-deliver ancient messages."""
+    from app.config import settings
+    db = SessionLocal()
+    sent = 0
+    failed = 0
+    try:
+        TASHKENT = timedelta(hours=5)
+        today = (datetime.utcnow() + TASHKENT).date()
+        cutoff = today - timedelta(days=1)
+
+        rows = (
+            db.query(models.DailyConclusion)
+            .filter(
+                models.DailyConclusion.telegram_sent_at.is_(None),
+                models.DailyConclusion.date >= cutoff,
+            )
+            .all()
+        )
+
+        for row in rows:
+            person = db.query(models.Person).filter(models.Person.id == row.person_id).first()
+            if not person:
+                continue
+            chat_id = person.telegram_chat_id or settings.TELEGRAM_CHAT_ID
+            if not chat_id:
+                continue
+            try:
+                send_message(
+                    f"🤖 <b>AI Daily Conclusion</b>\n\n{row.conclusion}",
+                    chat_id=chat_id,
+                )
+                row.telegram_sent_at = datetime.utcnow()
+                db.commit()
+                sent += 1
+            except Exception as e:
+                db.rollback()
+                logger.warning(
+                    "retry_undelivered_conclusions: failed for person %d: %s",
+                    person.id, e,
+                )
+                failed += 1
+
+        if sent or failed:
+            logger.info("retry_undelivered_conclusions: sent=%d failed=%d", sent, failed)
+        return {"sent": sent, "failed": failed}
     finally:
         db.close()
 
