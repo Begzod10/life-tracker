@@ -4,14 +4,11 @@ import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
-    ArrowRight,
     BookOpen,
     Brain,
     Check,
     Clock,
     FileText,
-    Flame,
-    Headphones,
     Keyboard,
     Library as LibraryIcon,
     PenLine,
@@ -20,7 +17,6 @@ import {
     Target,
     Trophy,
     X,
-    Zap,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { useDictStats, useRecentWords } from '@/lib/hooks/use-dictionary'
@@ -240,20 +236,44 @@ function Panel({
     subtitle,
     icon: Icon,
     accent,
+    onClick,
+    ariaLabel,
     children,
 }: {
     title: string
     subtitle?: React.ReactNode
     icon: React.ComponentType<{ className?: string }>
     accent: string
+    onClick?: () => void
+    ariaLabel?: string
     children: React.ReactNode
 }) {
+    const handleKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onClick()
+        }
+    }
+    const interactive = onClick != null
     return (
         <motion.div
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
+            whileHover={interactive ? { y: -2 } : undefined}
         >
-            <Card className="h-full flex flex-col p-4 sm:p-5 bg-white/2.5 border border-white/5 hover:border-white/10 transition-colors">
+            <Card
+                role={interactive ? 'button' : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                aria-label={ariaLabel}
+                onClick={onClick}
+                onKeyDown={interactive ? handleKey : undefined}
+                className={`h-full flex flex-col p-4 sm:p-5 bg-white/2.5 border border-white/5 transition-all ${
+                    interactive
+                        ? 'cursor-pointer hover:border-white/15 hover:bg-white/3 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:ring-offset-2 focus:ring-offset-transparent'
+                        : 'hover:border-white/10'
+                }`}
+            >
                 <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
                         <p className="text-[11px] uppercase tracking-wider text-white/40">
@@ -273,31 +293,15 @@ function Panel({
     )
 }
 
+function stopPropagation(e: React.MouseEvent | React.KeyboardEvent) {
+    e.stopPropagation()
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
         <p className="text-[10px] uppercase tracking-wider text-white/40 mt-3 mb-2">
             {children}
         </p>
-    )
-}
-
-function FooterButton({
-    children,
-    onClick,
-    tone = 'default',
-}: {
-    children: React.ReactNode
-    onClick: () => void
-    tone?: 'default' | 'primary'
-}) {
-    const cls =
-        tone === 'primary'
-            ? 'mt-4 w-full h-10 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2'
-            : 'mt-4 w-full h-10 rounded-lg border border-white/10 hover:border-white/20 bg-white/2.5 hover:bg-white/5 text-white/80 text-sm transition-colors flex items-center justify-center gap-2'
-    return (
-        <button onClick={onClick} className={cls}>
-            {children}
-        </button>
     )
 }
 
@@ -326,6 +330,8 @@ function DictionaryPanel({
             }
             icon={BookOpen}
             accent="bg-blue-500/15"
+            onClick={onBrowse}
+            ariaLabel="Browse all words"
         >
             {levels.length > 0 && (
                 <>
@@ -375,12 +381,6 @@ function DictionaryPanel({
                     </ul>
                 </>
             )}
-
-            <div className="mt-auto" />
-            <FooterButton onClick={onBrowse}>
-                Browse all words
-                <ArrowRight className="w-3.5 h-3.5" />
-            </FooterButton>
         </Panel>
     )
 }
@@ -417,13 +417,18 @@ function PracticePanel({
             }
             icon={Brain}
             accent="bg-violet-500/15"
+            onClick={onStart}
+            ariaLabel="Start practice session"
         >
             <SectionLabel>Modes</SectionLabel>
             <div className="grid grid-cols-2 gap-2">
                 {PRACTICE_MODES.map((m) => (
                     <button
                         key={m.id}
-                        onClick={() => onMode(m.id)}
+                        onClick={(e) => {
+                            stopPropagation(e)
+                            onMode(m.id)
+                        }}
                         className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-white/10 hover:border-violet-500/40 hover:bg-violet-500/5 transition-colors text-left"
                     >
                         <m.icon className="w-3.5 h-3.5 text-violet-300 shrink-0" />
@@ -463,12 +468,6 @@ function PracticePanel({
                     </ul>
                 </>
             )}
-
-            <div className="mt-auto" />
-            <FooterButton onClick={onStart} tone="primary">
-                Start practice session
-                <Sparkles className="w-3.5 h-3.5" />
-            </FooterButton>
         </Panel>
     )
 }
@@ -493,15 +492,16 @@ function ReadingPanel({
                 subtitle={<span className="text-sm text-white/70">No active book</span>}
                 icon={FileText}
                 accent="bg-emerald-500/15"
+                onClick={onAdd}
+                ariaLabel="Add a book"
             >
                 <p className="text-sm text-white/50 mt-2">
                     Upload a PDF to start mining vocabulary as you read.
                 </p>
-                <div className="mt-auto" />
-                <FooterButton onClick={onAdd}>
+                <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-emerald-300/80">
                     <Plus className="w-3.5 h-3.5" />
                     Add a book
-                </FooterButton>
+                </span>
             </Panel>
         )
     }
@@ -517,6 +517,8 @@ function ReadingPanel({
             subtitle={<span className="text-sm text-white/70">Currently reading</span>}
             icon={FileText}
             accent="bg-emerald-500/15"
+            onClick={onPaste}
+            ariaLabel="Paste text to mine vocab"
         >
             <div className="flex items-center gap-3 sm:gap-4 mt-1">
                 <ProgressRing value={pct} />
@@ -562,12 +564,6 @@ function ReadingPanel({
                     </span>
                 </div>
             )}
-
-            <div className="mt-auto" />
-            <FooterButton onClick={onPaste}>
-                Paste text to mine vocab
-                <ArrowRight className="w-3.5 h-3.5" />
-            </FooterButton>
         </Panel>
     )
 }
@@ -632,6 +628,8 @@ function WritingPanel({
             }
             icon={PenLine}
             accent="bg-amber-500/15"
+            onClick={onNew}
+            ariaLabel="Submit new essay"
         >
             <p className="text-xs text-white/50 leading-relaxed">
                 Quick check or deep review with band score feedback.
@@ -639,13 +637,19 @@ function WritingPanel({
 
             <div className="grid grid-cols-2 gap-2 mt-3">
                 <button
-                    onClick={onQuick}
+                    onClick={(e) => {
+                        stopPropagation(e)
+                        onQuick()
+                    }}
                     className="px-3 py-1.5 rounded-md border border-white/10 hover:border-amber-500/40 hover:bg-amber-500/5 text-xs text-white/85 transition-colors"
                 >
                     Quick check
                 </button>
                 <button
-                    onClick={onDeep}
+                    onClick={(e) => {
+                        stopPropagation(e)
+                        onDeep()
+                    }}
                     className="px-3 py-1.5 rounded-md border border-white/10 hover:border-amber-500/40 hover:bg-amber-500/5 text-xs text-white/85 transition-colors"
                 >
                     Deep review
@@ -681,12 +685,6 @@ function WritingPanel({
                     </ul>
                 </>
             )}
-
-            <div className="mt-auto" />
-            <FooterButton onClick={onNew} tone="primary">
-                Submit new essay
-                <Sparkles className="w-3.5 h-3.5" />
-            </FooterButton>
         </Panel>
     )
 }
@@ -725,6 +723,8 @@ function ExercisesPanel({
             }
             icon={Sparkles}
             accent="bg-rose-500/15"
+            onClick={canStart ? onGenerate : undefined}
+            ariaLabel={canStart ? 'Generate new exercises' : undefined}
         >
             <p className="text-xs text-white/50 leading-relaxed">
                 Practice using your dictionary words in real context.
@@ -763,17 +763,9 @@ function ExercisesPanel({
                 </>
             )}
 
-            <div className="mt-auto" />
-            <FooterButton onClick={onGenerate} tone="primary">
-                {canStart ? (
-                    <>
-                        Generate new exercises
-                        <Sparkles className="w-3.5 h-3.5" />
-                    </>
-                ) : (
-                    'Add words to start'
-                )}
-            </FooterButton>
+            {!canStart && (
+                <p className="mt-3 text-xs text-white/40">Add words to start.</p>
+            )}
         </Panel>
     )
 }
@@ -822,6 +814,8 @@ function LibraryPanel({
             }
             icon={LibraryIcon}
             accent="bg-violet-500/15"
+            onClick={onAdd}
+            ariaLabel="Open library"
         >
             {top.length > 0 ? (
                 <>
@@ -830,7 +824,10 @@ function LibraryPanel({
                         {top.map((b) => (
                             <li key={b.id}>
                                 <button
-                                    onClick={() => onOpenBook(b.id)}
+                                    onClick={(e) => {
+                                        stopPropagation(e)
+                                        onOpenBook(b.id)
+                                    }}
                                     className="w-full text-left p-2 -mx-2 rounded-md hover:bg-white/3 transition-colors"
                                 >
                                     <div className="flex items-center justify-between gap-2">
@@ -880,12 +877,6 @@ function LibraryPanel({
                     )}
                 </div>
             )}
-
-            <div className="mt-auto" />
-            <FooterButton onClick={onAdd}>
-                <Plus className="w-3.5 h-3.5" />
-                Add new book
-            </FooterButton>
         </Panel>
     )
 }
