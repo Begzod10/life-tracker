@@ -118,6 +118,15 @@ body {
   cursor: help;
   pointer-events: auto;
 }
+/* Sentence overlay — softer fill + underline so a saved phrase reads as
+   "translated passage" rather than another word headword. Multiple rects
+   stack per visual line; the underline gives them a continuous baseline. */
+.react-pdf__Page__textContent .vocab-overlay-rect.vocab-overlay-phrase {
+  background: rgba(167, 139, 250, 0.14);
+  box-shadow:
+    inset 0 -1.5px 0 rgba(167, 139, 250, 0.55),
+    0 0 0 1px rgba(167, 139, 250, 0.12);
+}
 
 /* pdf.js renders an invisible "text layer" of <span>s on top of the canvas
    so the user can select and copy. By default the spans have `color:

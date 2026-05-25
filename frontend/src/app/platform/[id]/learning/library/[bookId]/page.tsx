@@ -171,6 +171,86 @@ function allWordRects(layer: Element, target: string): DOMRect[] {
     return rects
 }
 
+// True when the saved text represents more than one word — i.e. a sentence
+// or phrase rather than a single vocabulary headword. Trailing punctuation
+// is stripped first so "agility," still counts as a single word.
+function isPhraseText(text: string): boolean {
+    const t = (text || '').trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
+    return /\s/.test(t)
+}
+
+// Per-line rectangles covering a multi-word/multi-line phrase inside the
+// pdf.js text layer. Used by the sentence overlay so a saved sentence is
+// visibly highlighted on the page just like single-word vocab is.
+//
+// Strategy: lowercase-concat every span's text into a flat string while
+// recording each span's offset, locate the needle (with a regex fallback
+// that tolerates whitespace differences between PDF runs), then construct
+// a DOM Range from the first to last span and call getClientRects() so
+// the browser splits the rect per visual line.
+function phraseRects(layer: Element, target: string): DOMRect[] {
+    const norm = (s: string) => (s || '').toLowerCase()
+    const needle = norm(target).replace(/\s+/g, ' ').trim()
+    if (needle.length < 4) return []
+
+    const spans = Array.from(layer.querySelectorAll('span')) as HTMLElement[]
+    let flat = ''
+    const segs: { span: HTMLElement; flatStart: number; rawLen: number }[] = []
+    for (const s of spans) {
+        const raw = s.textContent || ''
+        if (!raw) continue
+        const flatStart = flat.length
+        flat += norm(raw)
+        segs.push({ span: s, flatStart, rawLen: raw.length })
+        flat += ' '
+    }
+
+    let idx = flat.indexOf(needle)
+    if (idx < 0) {
+        // pdf.js often emits each line as its own span — the inter-span
+        // ' ' we inserted may not match the source's word-break exactly,
+        // and hyphenated line-wraps break literal indexOf. Retry with a
+        // whitespace-tolerant regex.
+        const escaped = needle
+            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/\s+/g, '\\s+')
+        try {
+            const m = new RegExp(escaped).exec(flat)
+            if (m) idx = m.index
+        } catch {/* regex pathologies fall through */}
+    }
+    if (idx < 0) {
+        const head = needle.slice(0, Math.min(40, needle.length))
+        idx = flat.indexOf(head)
+        if (idx < 0) return []
+    }
+    const endIdx = idx + needle.length
+
+    const startSeg = segs.find(s => s.flatStart + s.rawLen > idx && s.flatStart <= idx)
+    const endSeg =
+        [...segs].reverse().find(s => s.flatStart < endIdx && s.flatStart + s.rawLen >= endIdx)
+        ?? segs[segs.length - 1]
+    if (!startSeg || !endSeg) return []
+    const startNode = startSeg.span.firstChild
+    const endNode = endSeg.span.firstChild
+    if (!startNode || startNode.nodeType !== Node.TEXT_NODE) return []
+    if (!endNode || endNode.nodeType !== Node.TEXT_NODE) return []
+    try {
+        const range = document.createRange()
+        range.setStart(startNode, Math.max(0, Math.min(idx - startSeg.flatStart, startSeg.rawLen)))
+        range.setEnd(endNode, Math.max(0, Math.min(endIdx - endSeg.flatStart, endSeg.rawLen)))
+        const list = range.getClientRects()
+        const out: DOMRect[] = []
+        for (let i = 0; i < list.length; i++) {
+            const r = list[i]
+            if (r.width >= 2 && r.height >= 2) out.push(r as DOMRect)
+        }
+        return out
+    } catch {
+        return []
+    }
+}
+
 // Return the exact pixel rectangle of `target` inside the given spans.
 // pdf.js often packs a whole line into one <span>, so a per-span bounding
 // rect would point at the left edge of the line rather than the actual
@@ -257,12 +337,33 @@ export default function ReaderPage() {
         () => [...allVocab].sort(byCreatedDesc),
         [allVocab],
     )
+    // Sentences / phrases are stored as vocab highlights too, but they
+    // shouldn't share the Dictionary card with single-word entries. Split
+    // both the current-page slice and the whole-book slice by word vs phrase
+    // so the sidebar can render two focused panels instead of mixing them.
+    const pageWords = useMemo(
+        () => pageVocab.filter(h => !isPhraseText(h.text)),
+        [pageVocab],
+    )
+    const pageSentences = useMemo(
+        () => pageVocab.filter(h => isPhraseText(h.text)),
+        [pageVocab],
+    )
+    const sortedAllWords = useMemo(
+        () => sortedAllVocab.filter(h => !isPhraseText(h.text)),
+        [sortedAllVocab],
+    )
+    const sortedAllSentences = useMemo(
+        () => sortedAllVocab.filter(h => isPhraseText(h.text)),
+        [sortedAllVocab],
+    )
     const [pageInput, setPageInput] = useState('1')
     // Default to fit-width (1.0). The user can zoom in/out from the toolbar
     // on desktop. Anything above 1.0 causes the page to exceed the column
     // width, which is then absorbed by overflow-x-auto on the column.
     const [zoom, setZoom] = useState(1)
     const [showAllVocab, setShowAllVocab] = useState(false)
+    const [showAllSentences, setShowAllSentences] = useState(false)
     const [selection, setSelection] = useState<Selection | null>(null)
     const [showHighlights, setShowHighlights] = useState(true)
     const [showHighlightOverlay, setShowHighlightOverlay] = useState(true)
@@ -645,17 +746,23 @@ export default function ReaderPage() {
                 const wordText = h.text.trim().replace(/[\p{P}\p{S}]+$/u, '').trim()
                 if (wordText.length < 2) continue
 
-                // Mark *every* occurrence of the word on this page, not
-                // only the instance the user originally selected. A single
-                // saved highlight therefore lights up the whole page's
-                // copies of "innate", "Bogues", etc.
-                const rects = allWordRects(layer, wordText)
+                const phrase = isPhraseText(h.text)
+                // Single words: light up every occurrence on the page so a
+                // saved "innate" stays marked across pages. Phrases: only
+                // paint the exact instance on the page where the user
+                // originally selected it — phrase matches are too specific
+                // to look meaningful anywhere else.
+                const rects = phrase
+                    ? (h.page === page ? phraseRects(layer, h.text) : [])
+                    : allWordRects(layer, wordText)
                 if (rects.length === 0) continue
                 anyHit = true
                 hitIds.add(h.id)
                 for (const wordRect of rects) {
                     const overlay = document.createElement('span')
-                    overlay.className = 'vocab-overlay-rect'
+                    overlay.className = phrase
+                        ? 'vocab-overlay-rect vocab-overlay-phrase'
+                        : 'vocab-overlay-rect'
                     overlay.setAttribute('data-vocab-translation', text)
                     overlay.style.position = 'absolute'
                     overlay.style.left = `${wordRect.left - layerRect.left}px`
@@ -1030,7 +1137,9 @@ export default function ReaderPage() {
                                 )}
                             </div>
 
-                            {/* Dictionary card */}
+                            {/* Dictionary card — single-word entries only. Sentences and
+                                multi-word phrases land in the Sentences card below so the
+                                Dictionary stays focused on actual headwords. */}
                             <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
                                 <div className="flex items-center justify-between mb-1">
                                     <h2 className="text-sm font-medium text-white flex items-center gap-2">
@@ -1038,7 +1147,7 @@ export default function ReaderPage() {
                                         Dictionary
                                     </h2>
                                     <span className="text-xs text-white/40">
-                                        {showAllVocab ? sortedAllVocab.length : pageVocab.length}
+                                        {showAllVocab ? sortedAllWords.length : pageWords.length}
                                     </span>
                                 </div>
                                 <p className="text-[11px] text-white/35 mb-3">
@@ -1048,13 +1157,13 @@ export default function ReaderPage() {
                                 </p>
 
                                 {(() => {
-                                    const list = showAllVocab ? sortedAllVocab : pageVocab
+                                    const list = showAllVocab ? sortedAllWords : pageWords
                                     if (list.length === 0) {
                                         return (
                                             <p className="text-xs text-white/30 leading-relaxed">
                                                 {showAllVocab
-                                                    ? <>No words yet. Select text and tap <span className="text-indigo-300">Save word</span> to add a dictionary entry tied to this book.</>
-                                                    : <>Nothing on this page yet. Select text and tap <span className="text-indigo-300">Save word</span>, or browse all words from this book below.</>}
+                                                    ? <>No words yet. Select a single word and tap <span className="text-indigo-300">Save word</span> to add a dictionary entry tied to this book.</>
+                                                    : <>Nothing on this page yet. Select a word and tap <span className="text-indigo-300">Save word</span>, or browse all words from this book below.</>}
                                             </p>
                                         )
                                     }
@@ -1085,17 +1194,84 @@ export default function ReaderPage() {
                                 {/* Show all / current-page toggle. Only render when there's
                                     extra context to reveal — i.e. when the book has any
                                     vocab outside the current page. */}
-                                {sortedAllVocab.length > pageVocab.length && (
+                                {sortedAllWords.length > pageWords.length && (
                                     <button
                                         onClick={() => setShowAllVocab(v => !v)}
                                         className="mt-3 text-xs text-indigo-300 hover:text-indigo-200 font-medium self-start"
                                     >
                                         {showAllVocab
-                                            ? `← Show current page only (${pageVocab.length})`
-                                            : `Show all in this book (${sortedAllVocab.length}) →`}
+                                            ? `← Show current page only (${pageWords.length})`
+                                            : `Show all in this book (${sortedAllWords.length}) →`}
                                     </button>
                                 )}
                             </div>
+
+                            {/* Sentences card — multi-word saves with their AI-generated
+                                English paraphrase. Only render when at least one sentence
+                                exists for this book so single-word readers don't see a
+                                permanent empty panel. */}
+                            {sortedAllSentences.length > 0 && (
+                                <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <h2 className="text-sm font-medium text-white flex items-center gap-2">
+                                            <Highlighter className="w-4 h-4 text-violet-300" />
+                                            Sentences
+                                        </h2>
+                                        <span className="text-xs text-white/40">
+                                            {showAllSentences ? sortedAllSentences.length : pageSentences.length}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-white/35 mb-3">
+                                        {showAllSentences
+                                            ? 'Every phrase saved from this book.'
+                                            : `Phrases on page ${page} (saved here or elsewhere).`}
+                                    </p>
+
+                                    {(() => {
+                                        const list = showAllSentences ? sortedAllSentences : pageSentences
+                                        if (list.length === 0) {
+                                            return (
+                                                <p className="text-xs text-white/30 leading-relaxed">
+                                                    Nothing on this page yet. Select a sentence and tap <span className="text-violet-300">Save sentence</span>, or browse every phrase from this book below.
+                                                </p>
+                                            )
+                                        }
+                                        return (
+                                            <div className="overflow-y-auto -mr-2 pr-2 space-y-1.5">
+                                                {list.map(h => (
+                                                    <VocabRow
+                                                        key={h.id}
+                                                        highlight={h}
+                                                        onCurrentPage={h.page === page}
+                                                        onJump={() => goToPage(h.page)}
+                                                        onDelete={() =>
+                                                            deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
+                                                        }
+                                                        onRefresh={() =>
+                                                            refreshDefinition.mutate({ bookId: book.id, highlightId: h.id })
+                                                        }
+                                                        isRefreshing={
+                                                            refreshDefinition.isPending &&
+                                                            refreshDefinition.variables?.highlightId === h.id
+                                                        }
+                                                    />
+                                                ))}
+                                            </div>
+                                        )
+                                    })()}
+
+                                    {sortedAllSentences.length > pageSentences.length && (
+                                        <button
+                                            onClick={() => setShowAllSentences(v => !v)}
+                                            className="mt-3 text-xs text-violet-300 hover:text-violet-200 font-medium self-start"
+                                        >
+                                            {showAllSentences
+                                                ? `← Show current page only (${pageSentences.length})`
+                                                : `Show all in this book (${sortedAllSentences.length}) →`}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </aside>
                 )}
@@ -1390,6 +1566,7 @@ function SelectionPopover({
     isMarkingResume: boolean
 }) {
     if (!selection || !selection.rect) return null
+    const phrase = isPhraseText(selection.text)
     const top = selection.rect.top + window.scrollY - 48
     // Clamp left so the popover stays inside the viewport even on narrow
     // screens where the selection sits near an edge. Assume ~320px popover
@@ -1423,10 +1600,14 @@ function SelectionPopover({
             <span className="w-px h-4 bg-white/10" />
             <button
                 onClick={onSaveWord}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-indigo-200 hover:bg-indigo-500/10 rounded transition"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded transition ${
+                    phrase
+                        ? 'text-violet-200 hover:bg-violet-500/10'
+                        : 'text-indigo-200 hover:bg-indigo-500/10'
+                }`}
             >
                 <Sparkles className="w-3.5 h-3.5" />
-                Save word
+                {phrase ? 'Save sentence' : 'Save word'}
             </button>
             <span className="w-px h-4 bg-white/10" />
             <button
@@ -1459,6 +1640,10 @@ function SaveToDictionaryDialog({
     onClose: () => void
     onDone: () => void
 }) {
+    // Tell the difference between a single-word save and a sentence/phrase
+    // save up front. Affects the dialog title, the save-button label, and
+    // the placeholder copy so the user knows where the entry will land.
+    const isPhrase = isPhraseText(text)
     // Seed folder/module from the last save so successive picks land in the
     // same target by default. Values are revalidated against the live data
     // below in case the stored folder/module has since been deleted.
@@ -1552,8 +1737,8 @@ function SaveToDictionaryDialog({
             >
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-indigo-300" />
-                        Save to dictionary
+                        <Sparkles className={`w-4 h-4 ${isPhrase ? 'text-violet-300' : 'text-indigo-300'}`} />
+                        {isPhrase ? 'Save sentence' : 'Save to dictionary'}
                     </h2>
                     <button onClick={onClose} className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded">
                         <X className="w-4 h-4" />
@@ -1561,7 +1746,9 @@ function SaveToDictionaryDialog({
                 </div>
 
                 <div className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/5">
-                    <p className="text-xs text-white/40 uppercase tracking-wider mb-1.5">Selection · page {page}</p>
+                    <p className="text-xs text-white/40 uppercase tracking-wider mb-1.5">
+                        {isPhrase ? 'Sentence' : 'Selection'} · page {page}
+                    </p>
                     <p className="text-sm text-white/90 leading-snug line-clamp-3">{text}</p>
                 </div>
 
@@ -1679,18 +1866,20 @@ function SaveToDictionaryDialog({
                         <Button
                             onClick={handleSave}
                             disabled={createHighlight.isPending}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                            className={`${isPhrase ? 'bg-violet-600 hover:bg-violet-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white gap-2`}
                         >
                             {createHighlight.isPending
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
                                 : <Plus className="w-4 h-4" />}
-                            Save word
+                            {isPhrase ? 'Save sentence' : 'Save word'}
                         </Button>
                     </div>
 
                     <p className="text-[11px] text-white/30 leading-relaxed flex items-start gap-1.5">
                         <ListChecks className="w-3 h-3 mt-0.5 shrink-0" />
-                        We&apos;ll create a dictionary entry tagged with this book + page. Fill the full definition from the Dictionary page when you have a moment.
+                        {isPhrase
+                            ? "We'll highlight this sentence on the page and keep it in the book's Sentences panel with an English paraphrase."
+                            : "We'll create a dictionary entry tagged with this book + page. Fill the full definition from the Dictionary page when you have a moment."}
                     </p>
                 </div>
             </motion.div>
