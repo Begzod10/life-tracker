@@ -685,9 +685,33 @@ class TelegramBotService:
         logger.info("Telegram bot stopped")
 
     async def process_update(self, data: dict):
-        if not self._app or not self._initialized:
-            logger.warning("Telegram bot not initialized — dropping webhook update")
+        if not self._app:
+            logger.warning("Telegram bot not configured — dropping webhook update")
             return
+        # Lazy self-heal: if the lifespan-time initialize() raised (network
+        # blip during boot, Telegram unreachable, etc.) the FastAPI app keeps
+        # serving the webhook endpoint and Telegram keeps POSTing to it, but
+        # this service silently swallows every callback because _initialized
+        # stays False. Retry the init the first time an update actually
+        # arrives so the bot recovers without a manual restart.
+        if not self._initialized:
+            try:
+                # python-telegram-bot raises RuntimeError on a second
+                # initialize() / start(); both calls are guarded so we can
+                # safely re-attempt either half independently.
+                try:
+                    await self._app.initialize()
+                except RuntimeError:
+                    pass  # already initialized
+                try:
+                    await self._app.start()
+                except RuntimeError:
+                    pass  # already started
+                self._initialized = True
+                logger.info("Telegram bot lazy-initialized on first webhook update")
+            except Exception:
+                logger.exception("Telegram bot lazy-init failed — dropping update")
+                return
         update = Update.de_json(data, self._app.bot)
         await self._app.process_update(update)
 
