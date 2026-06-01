@@ -82,7 +82,7 @@ export type ReviewCandidate = {
     accuracy: number | null
 }
 
-export type RetentionBucket = 'new' | 'learning' | 'young' | 'mature'
+export type RetentionBucket = 'fragile' | 'learning' | 'solid' | 'mastered'
 export type RetentionBuckets = Record<RetentionBucket, number>
 
 export type DictStats = {

@@ -1772,16 +1772,17 @@ function PracticePageInner() {
                                     </button>
                                     <button
                                         onClick={() => { setWeakOnly(true); setDueOnly(false) }}
+                                        title="Cards you keep forgetting — 2+ lapses or low ease"
                                         className={`px-3 py-1.5 rounded-lg text-xs border transition-all flex items-center gap-1.5 ${
                                             weakOnly
-                                                ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                                                ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
                                                 : 'border-white/10 text-white/50 hover:bg-white/5'
                                         }`}
-                                    ><AlertCircle className="w-3 h-3" /> Weak words</button>
+                                    ><AlertCircle className="w-3 h-3" /> Fragile words</button>
                                 </div>
                                 <p className="text-xs text-white/30 mt-2">
                                     {dueOnly && 'Only words whose review interval has elapsed (or never reviewed).'}
-                                    {weakOnly && 'Only words with accuracy below 70% or never reviewed.'}
+                                    {weakOnly && 'Words you keep struggling with — 2+ lapses or low ease. Brand-new words are in Learning, not here.'}
                                     {!dueOnly && !weakOnly && 'Random selection from your full dictionary scope.'}
                                 </p>
                             </Card>

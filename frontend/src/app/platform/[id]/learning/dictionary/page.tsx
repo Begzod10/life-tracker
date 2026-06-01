@@ -63,16 +63,20 @@ const DIFF_BAR_COLOR: Record<string, string> = {
     C2: 'bg-rose-400',
 }
 
-// Retention bucket palette. Ordered new → mature so the stacked bar
-// reads left-to-right as a "journey": untouched cards on the left,
-// solid cards on the right. The labels match the SRS scheduler's
-// own bucket terminology so a learner who's read the rules can map
-// the colors back to ease/interval/reps state.
-const BUCKETS: { key: 'new' | 'learning' | 'young' | 'mature'; label: string; bar: string; dot: string; help: string }[] = [
-    { key: 'new', label: 'New', bar: 'bg-white/30', dot: 'bg-white/30', help: 'Never reviewed' },
-    { key: 'learning', label: 'Learning', bar: 'bg-amber-400', dot: 'bg-amber-400', help: 'Fragile — interval ≤ 1 day' },
-    { key: 'young', label: 'Young', bar: 'bg-blue-400', dot: 'bg-blue-400', help: 'Interval 2–21 days' },
-    { key: 'mature', label: 'Mature', bar: 'bg-emerald-400', dot: 'bg-emerald-400', help: 'Interval > 21 days' },
+// Retention bucket palette. Fragile leads — the "struggle" axis is
+// independent of interval, so a long-interval word the learner keeps
+// failing belongs here instead of mastered. The other three are an
+// interval-strength axis: learning (≤ 7d) → solid (≤ 21d) → mastered.
+//
+// Fragile uses rose to flag attention; learning is amber (in-flight);
+// solid is blue (mid-strength); mastered is emerald (done). Labels +
+// help text mirror the backend bucket_expr / is_fragile semantics so
+// the UI legend is the same source of truth as the scheduler.
+const BUCKETS: { key: 'fragile' | 'learning' | 'solid' | 'mastered'; label: string; bar: string; dot: string; help: string }[] = [
+    { key: 'fragile', label: 'Fragile', bar: 'bg-rose-400', dot: 'bg-rose-400', help: 'Struggle: 2+ lapses or low ease' },
+    { key: 'learning', label: 'Learning', bar: 'bg-amber-400', dot: 'bg-amber-400', help: 'Interval ≤ 7 days (incl. new)' },
+    { key: 'solid', label: 'Solid', bar: 'bg-blue-400', dot: 'bg-blue-400', help: 'Interval 8–21 days' },
+    { key: 'mastered', label: 'Mastered', bar: 'bg-emerald-400', dot: 'bg-emerald-400', help: 'Interval > 21 days' },
 ]
 
 function StatsPanel({

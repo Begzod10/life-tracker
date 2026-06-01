@@ -22,7 +22,7 @@ import random
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import case, func, or_, select
 
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
@@ -34,8 +34,14 @@ FIRST_INTERVAL = 1             # days, after the 1st success
 SECOND_INTERVAL = 3            # days, after the 2nd success (gentle for B1 learners)
 HARD_MULTIPLIER = 1.2          # growth for a "hard" pass (vs ease_factor for "good")
 FUZZ_RATIO = 0.10              # +/- jitter on intervals >= 2 days
-MATURE_THRESHOLD = 21          # interval_days boundary for "mature" (Anki-style)
-WEAK_EASE = 2.0
+# Retention bucket boundaries — used by is_fragile() and bucket_expr().
+# is_fragile is the SHARED struggle predicate behind both the /stats
+# "fragile" bucket and the practice /words weak_only filter, so the
+# UI signal and the practice pool can never drift apart.
+WEAK_EASE = 2.0                # below this ease, a card is "fragile"
+FRAGILE_LAPSES = 2             # at or above this lapse count, "fragile"
+LEARNING_MAX_INT = 7           # days — upper bound of "learning" bucket
+SOLID_MAX_INT = 21             # days — upper bound of "solid" bucket (mastery boundary)
 LEECH_LAPSES = 5               # surface as a leech after this many lapses
 
 
@@ -166,16 +172,43 @@ def apply_result(
     return sched
 
 
-# ─── Retention buckets (replaces flat accuracy in /stats) ────────────────────
+# ─── Retention buckets + shared "fragile" predicate ──────────────────────────
+
+def is_fragile(Word):
+    """Struggle signal, independent of interval. The SAME predicate
+    backs both the /stats "fragile" bucket and the /practice/words
+    weak_only filter so the two can never drift apart — "practice
+    weak words" drills exactly the cards labelled fragile in stats.
+
+    A card is fragile when either:
+      - lapses >= FRAGILE_LAPSES  (forgotten more than once), or
+      - ease_factor < WEAK_EASE   (chronically hard, leech-ish).
+
+    Note: never-reviewed cards (lapses=0, ease=DEFAULT_EASE) do NOT
+    match — they're not fragile, they're untouched. They land in
+    "learning" via bucket_expr below.
+    """
+    return or_(Word.lapses >= FRAGILE_LAPSES, Word.ease_factor < WEAK_EASE)
+
 
 def bucket_expr(Word):
-    """SQLAlchemy CASE expression mapping a word's current state into a
-    learner-meaningful bucket."""
+    """SQLAlchemy CASE mapping a word's current state to one of four
+    learner-meaningful buckets. First match wins.
+
+    Fragile is checked FIRST so a long-interval word the learner keeps
+    relapsing on is classed fragile, not mastered — the struggle
+    signal outranks raw maturity.
+
+      fragile   — is_fragile() (lapses or low ease, any interval)
+      learning  — interval_days <= LEARNING_MAX_INT   (incl. new, interval 0)
+      solid     — interval_days <= SOLID_MAX_INT      (mid-strength)
+      mastered  — anything beyond                     (Anki-style mature)
+    """
     return case(
-        (Word.review_count == 0, "new"),
-        (Word.interval_days <= 1, "learning"),  # incl. just-lapsed
-        (Word.interval_days <= MATURE_THRESHOLD, "young"),
-        else_="mature",
+        (is_fragile(Word), "fragile"),
+        (Word.interval_days <= LEARNING_MAX_INT, "learning"),
+        (Word.interval_days <= SOLID_MAX_INT, "solid"),
+        else_="mastered",
     )
 
 
@@ -187,7 +220,7 @@ def retention_buckets(
     folder_id: Optional[int] = None,
     module_id: Optional[int] = None,
 ) -> Dict[str, int]:
-    """Returns {'new': n, 'learning': n, 'young': n, 'mature': n}."""
+    """Returns {'fragile': n, 'learning': n, 'solid': n, 'mastered': n}."""
     conds = [Word.person_id == person_id, Word.deleted.is_(False)]
     if module_id is not None:
         conds.append(Word.module_id == module_id)
@@ -199,35 +232,21 @@ def retention_buckets(
     rows = session.execute(
         select(label, func.count().label("n")).where(*conds).group_by(label)
     ).all()
-    out: Dict[str, int] = {"new": 0, "learning": 0, "young": 0, "mature": 0}
+    out: Dict[str, int] = {"fragile": 0, "learning": 0, "solid": 0, "mastered": 0}
     for bucket, n in rows:
         out[bucket] = n
     return out
 
 
-# ─── Redefined "weak" (fragile current retention) ────────────────────────────
-
 def weak_condition(Word):
-    """A word is "weak" when its *current* retention is fragile, not
-    when its lifetime hit-rate is low. Three independent signals
-    qualify a card; any one fires:
+    """Practice /words?weak_only=true filter. Delegates to is_fragile
+    so the practice pool matches the stats bucket exactly.
 
-      - ease_factor < WEAK_EASE       chronically hard ("leech-ish")
-      - lapses >= 2                   forgotten more than once
-      - interval_days <= 7 AND reps <= 1
-                                      still stuck in early learning
-
-    review_count >= 2 keeps never-reviewed cards out of "weak" — they
-    belong in "new" instead.
+    User-visible behavior change vs. the legacy filter: never-reviewed
+    cards no longer surface here (they're not struggle, just untouched).
+    The frontend toggle copy reflects this.
     """
-    return and_(
-        Word.review_count >= 2,
-        or_(
-            Word.ease_factor < WEAK_EASE,
-            Word.lapses >= 2,
-            and_(Word.interval_days <= 7, Word.reps <= 1),
-        ),
-    )
+    return is_fragile(Word)
 
 
 # ─── Default /practice/words priority ────────────────────────────────────────
