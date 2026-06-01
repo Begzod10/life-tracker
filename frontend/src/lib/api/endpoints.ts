@@ -214,6 +214,8 @@ export const API_ENDPOINTS = {
             if (extra?.weakOnly) p.append('weak_only', 'true')
             return `${API_URL}/practice/words?${p}`
         },
+        WORDS_BY_IDS: (ids: number[]) =>
+            `${API_URL}/practice/words?ids=${ids.join(',')}`,
         DUE_COUNTS: (args: { folderId?: number; moduleId?: number } = {}) => {
             const p = new URLSearchParams()
             if (args.folderId) p.set('folder_id', String(args.folderId))
@@ -226,6 +228,9 @@ export const API_ENDPOINTS = {
         SESSION: (mode: string) => `${API_URL}/practice/session?mode=${mode}`,
         COMPLETE: (sessionId: number, total: number, correct: number) =>
             `${API_URL}/practice/session/${sessionId}/complete?total_questions=${total}&correct_answers=${correct}`,
+        ACTIVE_SESSION: `${API_URL}/practice/session/active`,
+        PROGRESS: (sessionId: number) => `${API_URL}/practice/session/${sessionId}/progress`,
+        DISCARD: (sessionId: number) => `${API_URL}/practice/session/${sessionId}`,
         HISTORY: (limit = 10) => `${API_URL}/practice/history?limit=${limit}`,
     },
 

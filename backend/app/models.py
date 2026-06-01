@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -753,6 +753,11 @@ class PracticeSession(Base):
     correct_answers = Column(Integer, default=0)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    # Chunk-boundary snapshot for resume. NULL when the session has
+    # never been chunk-completed (just started) or after the row is
+    # marked completed_at. Shape lives in the frontend; backend treats
+    # it as an opaque JSON blob.
+    progress = Column(JSON, nullable=True)
 
     person = relationship("Person", back_populates="practice_sessions")
 

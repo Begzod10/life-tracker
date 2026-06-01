@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime, timedelta
 import json
 import random
@@ -65,9 +66,49 @@ def get_practice_words(
     folder_id: Optional[int] = Query(None),
     due_only: bool = Query(default=False),
     weak_only: bool = Query(default=False),
+    ids: Optional[str] = Query(
+        default=None,
+        description=(
+            "Comma-separated word IDs. When set, returns exactly those "
+            "words (still scoped to the current user, still skipping "
+            "soft-deleted rows) in the same order they were passed. "
+            "Used by Resume to rehydrate a paused drill without "
+            "re-selecting from the SRS pool."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
+    if ids:
+        # Resume path. Skip all the priority sorting and the >=2 sanity
+        # check — the caller already knows which words it wants and we
+        # do not want to silently drop a drill mid-flight just because
+        # other rows were edited.
+        try:
+            id_list = [int(x) for x in ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ids list")
+        if not id_list:
+            return []
+        rows = db.query(models.DictionaryWord).filter(
+            models.DictionaryWord.id.in_(id_list),
+            models.DictionaryWord.person_id == current_user.id,
+            models.DictionaryWord.deleted == False,
+        ).all()
+        by_id = {w.id: w for w in rows}
+        ordered = [by_id[i] for i in id_list if i in by_id]
+        # Distractors come from this set plus a small refresh pool so a
+        # short ids= list still gets sensible multiple-choice options.
+        pool = list(ordered)
+        if len(pool) < 4:
+            extra = db.query(models.DictionaryWord).filter(
+                models.DictionaryWord.person_id == current_user.id,
+                models.DictionaryWord.deleted == False,
+                models.DictionaryWord.id.notin_([w.id for w in pool]),
+            ).limit(20).all()
+            pool += extra
+        return [_serialize_practice_word(w, pool) for w in ordered]
+
     q = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.person_id == current_user.id,
         models.DictionaryWord.deleted == False,
@@ -254,6 +295,10 @@ def complete_session(
     session.total_questions = total_questions
     session.correct_answers = correct_answers
     session.completed_at = datetime.utcnow()
+    # A completed session can't be resumed — drop the snapshot so the
+    # "active session" lookup never picks it back up if the client
+    # racing the complete request also fired a progress update.
+    session.progress = None
     db.commit()
     return {
         "id": session.id,
@@ -263,6 +308,85 @@ def complete_session(
         "started_at": session.started_at,
         "completed_at": session.completed_at,
     }
+
+
+# ─── Resume support ──────────────────────────────────────────────────────────
+
+class ProgressUpdate(BaseModel):
+    progress: Any  # Opaque snapshot — frontend owns the shape.
+
+
+@router.get("/session/active")
+def get_active_session(
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return the most recent uncompleted session that has a progress
+    snapshot, or None. A session with no snapshot yet (just created,
+    no chunk finished) is intentionally NOT returned — we have nothing
+    useful to resume from."""
+    session = (
+        db.query(models.PracticeSession)
+        .filter(
+            models.PracticeSession.person_id == current_user.id,
+            models.PracticeSession.completed_at.is_(None),
+            models.PracticeSession.progress.isnot(None),
+        )
+        .order_by(models.PracticeSession.started_at.desc())
+        .first()
+    )
+    if not session:
+        return None
+    return {
+        "id": session.id,
+        "mode": session.mode,
+        "started_at": session.started_at,
+        "progress": session.progress,
+    }
+
+
+@router.put("/session/{session_id}/progress")
+def update_session_progress(
+    session_id: int,
+    payload: ProgressUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    session = db.query(models.PracticeSession).filter(
+        models.PracticeSession.id == session_id,
+        models.PracticeSession.person_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.completed_at is not None:
+        # Stale progress write racing the complete request. Drop it
+        # silently — a completed session can't be resumed and we don't
+        # want to bring it back to life by re-populating the snapshot.
+        return {"ok": True, "ignored": True}
+    session.progress = payload.progress
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/session/{session_id}", status_code=204)
+def discard_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Discard an uncompleted session — used by the Resume card's
+    "start over" button. We refuse to delete completed sessions so
+    history stays append-only."""
+    session = db.query(models.PracticeSession).filter(
+        models.PracticeSession.id == session_id,
+        models.PracticeSession.person_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.completed_at is not None:
+        raise HTTPException(status_code=400, detail="Cannot discard a completed session")
+    db.delete(session)
+    db.commit()
 
 
 @router.get("/history")

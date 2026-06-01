@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useHttp } from './use-http'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 
@@ -77,6 +77,97 @@ export function useCompleteSession() {
     return useMutation({
         mutationFn: ({ sessionId, total, correct }: { sessionId: number; total: number; correct: number }) =>
             request(API_ENDPOINTS.PRACTICE.COMPLETE(sessionId, total, correct), { method: 'PUT' }),
+    })
+}
+
+// ─── Resume support ─────────────────────────────────────────────────────────
+
+/**
+ * Chunk-boundary snapshot the practice page writes back to the server
+ * so a paused drill can be resumed later. Stored opaquely in
+ * practice_sessions.progress (JSONB) — the backend never inspects it.
+ *
+ * Word IDs are persisted (not full word objects) so a resume always
+ * fetches fresh definitions/source data via /practice/words?ids=...
+ * — if the learner edited a word between sessions, the resumed drill
+ * picks up the new version instead of stale JSON.
+ */
+export type PracticeProgress = {
+    version: 1
+    mode: string                       // matches `Mode` union on the page
+    chunkSize: number
+    scope: {
+        folderId: number | null
+        moduleId: number | null
+        dueOnly: boolean
+        weakOnly: boolean
+    }
+    originalIds: number[]              // the full shuffled pool we sourced from
+    unseenIds: number[]                // not yet shown this run
+    mistakesIds: number[]              // carry-forward — re-test these next chunk
+    aggregate: {
+        correct: number
+        total: number
+        missedIds: number[]            // unique miss list across the whole drill
+    }
+}
+
+export type ActiveSession = {
+    id: number
+    mode: string
+    started_at: string
+    progress: PracticeProgress
+}
+
+export function useActiveSession() {
+    const { request } = useHttp()
+    return useQuery<ActiveSession | null>({
+        queryKey: ['practice', 'active-session'],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.ACTIVE_SESSION),
+        // Resume should feel snappy if the user bounces back — but the
+        // active session can also change behind the scenes (completed
+        // in another tab, discarded). Short stale window so we revalidate
+        // on focus without spamming on every click.
+        staleTime: 5_000,
+    })
+}
+
+export function useUpdateSessionProgress() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ sessionId, progress }: { sessionId: number; progress: PracticeProgress }) =>
+            request(API_ENDPOINTS.PRACTICE.PROGRESS(sessionId), {
+                method: 'PUT',
+                body: { progress },
+            }),
+        // Don't invalidate practice queries on every chunk — the active
+        // session shape isn't visible until the user returns to the
+        // landing screen anyway, and invalidation would interrupt mid-
+        // drill in flight.
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['practice', 'active-session'] }),
+    })
+}
+
+export function useDiscardSession() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (sessionId: number) =>
+            request(API_ENDPOINTS.PRACTICE.DISCARD(sessionId), { method: 'DELETE' }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['practice', 'active-session'] }),
+    })
+}
+
+/** Fetch specific words by ID for resume rehydration. Lazy: caller
+ *  triggers via `.refetch()` so the load is tied to the Resume click. */
+export function usePracticeWordsByIds(ids: number[]) {
+    const { request } = useHttp()
+    return useQuery<PracticeWord[]>({
+        queryKey: ['practice', 'words-by-ids', ids.join(',')],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS_BY_IDS(ids)),
+        enabled: false,
+        retry: false,
     })
 }
 

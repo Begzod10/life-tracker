@@ -3,10 +3,23 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
-import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type } from 'lucide-react'
+import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type, Play, Trash2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { usePracticeWords, useSubmitResult, useCreateSession, useCompleteSession, useDueCounts, useDailyStreak, type PracticeWord } from '@/lib/hooks/use-practice'
+import {
+    usePracticeWords,
+    usePracticeWordsByIds,
+    useSubmitResult,
+    useCreateSession,
+    useCompleteSession,
+    useDueCounts,
+    useDailyStreak,
+    useActiveSession,
+    useUpdateSessionProgress,
+    useDiscardSession,
+    type PracticeWord,
+    type PracticeProgress,
+} from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 import { playCorrect, playWrong, playCheckpoint, playComplete, primeAudio } from '@/lib/utils/sounds'
 
@@ -1113,6 +1126,94 @@ function ScopePicker({
     )
 }
 
+// ── Resume card ──────────────────────────────────────────────────────────────
+
+function ResumeCard({
+    session, onResume, onDiscard, isResuming, isDiscarding, error,
+}: {
+    session: { id: number; mode: string; started_at: string; progress: PracticeProgress }
+    onResume: () => void
+    onDiscard: () => void
+    isResuming: boolean
+    isDiscarding: boolean
+    error: string | null
+}) {
+    const progress = session.progress
+    const remaining = progress.unseenIds.length + progress.mistakesIds.length
+    const seen = progress.originalIds.length - progress.unseenIds.length
+    const pct = progress.originalIds.length > 0
+        ? Math.round((seen / progress.originalIds.length) * 100)
+        : 0
+    const modeLabel = MODE_META[session.mode as Mode]?.label ?? session.mode
+    const startedAgo = (() => {
+        const ms = Date.now() - new Date(session.started_at).getTime()
+        const mins = Math.floor(ms / 60_000)
+        if (mins < 1) return 'just now'
+        if (mins < 60) return `${mins} min ago`
+        const hours = Math.floor(mins / 60)
+        if (hours < 24) return `${hours}h ago`
+        const days = Math.floor(hours / 24)
+        return `${days}d ago`
+    })()
+
+    return (
+        <Card className="p-4 sm:p-5 bg-gradient-to-br from-indigo-500/10 to-blue-500/5 border border-indigo-400/30 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-wider text-indigo-300/80 font-medium mb-1">
+                        Resume in-progress drill
+                    </p>
+                    <p className="text-white font-semibold truncate">{modeLabel}</p>
+                    <p className="text-xs text-white/50 mt-0.5">
+                        Started {startedAgo} · {progress.aggregate.correct}/{progress.aggregate.total} answered
+                    </p>
+                </div>
+                <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 tabular-nums">
+                    {pct}%
+                </span>
+            </div>
+
+            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div
+                    className="h-full bg-gradient-to-r from-indigo-400 to-blue-400 transition-all"
+                    style={{ width: `${pct}%` }}
+                />
+            </div>
+
+            <p className="text-xs text-white/40">
+                {remaining} word{remaining === 1 ? '' : 's'} left in this drill.
+            </p>
+
+            {error && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-300">
+                    {error}
+                </div>
+            )}
+
+            <div className="flex gap-2">
+                <Button
+                    onClick={onResume}
+                    disabled={isResuming || isDiscarding}
+                    className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                    <Play className="w-4 h-4" />
+                    {isResuming ? 'Loading…' : 'Resume'}
+                </Button>
+                <Button
+                    onClick={onDiscard}
+                    disabled={isResuming || isDiscarding}
+                    variant="outline"
+                    className="gap-2 border-white/15 text-white/60 hover:text-white hover:bg-white/5"
+                >
+                    <Trash2 className="w-4 h-4" />
+                    {isDiscarding ? '…' : 'Discard'}
+                </Button>
+            </div>
+        </Card>
+    )
+}
+
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 const MODE_META: Record<Mode, { label: string; desc: string; icon: React.FC<{ className?: string }> }> = {
@@ -1190,6 +1291,15 @@ function PracticePageInner() {
     const { mutate: createSession } = useCreateSession()
     const { mutate: completeSession } = useCompleteSession()
     const { mutate: submitResult } = useSubmitResult()
+    const { data: activeSession, isLoading: isActiveLoading, refetch: refetchActive } = useActiveSession()
+    const { mutate: updateProgress } = useUpdateSessionProgress()
+    const { mutate: discardSession, isPending: isDiscarding } = useDiscardSession()
+    const { refetch: fetchWordsByIds, isFetching: isResumeFetching } = usePracticeWordsByIds(
+        // ids are filled at click-time via refetch; we just need a stable
+        // hook reference here.
+        useMemo(() => activeSession?.progress.originalIds ?? [], [activeSession]),
+    )
+    const [resumeError, setResumeError] = useState<string | null>(null)
 
     const wordsById = useMemo(() => {
         const m = new Map<number, PracticeWord>()
@@ -1264,6 +1374,90 @@ function PracticePageInner() {
         startChunk(chunk)
     }
 
+    /**
+     * Rehydrate a paused drill from its server-side snapshot and jump
+     * straight into the next chunk. Word IDs are persisted (not full
+     * objects) so any edits to those words since the pause are
+     * reflected — we always read fresh data here.
+     *
+     * If words have been deleted between sessions the rehydrated pool
+     * shrinks silently rather than failing — the user still gets to
+     * finish whatever's left.
+     */
+    const resume = useCallback(async () => {
+        if (!activeSession) return
+        const snap = activeSession.progress
+        primeAudio()
+        setResumeError(null)
+        const res = await fetchWordsByIds()
+        if (res.error) {
+            setResumeError((res.error as Error).message || 'Could not load saved drill')
+            return
+        }
+        const fetched = res.data ?? []
+        if (fetched.length < 2) {
+            setResumeError('The saved drill no longer has enough words. Start a new one.')
+            return
+        }
+        const byId = new Map<number, PracticeWord>(fetched.map(w => [w.id, w]))
+
+        // Rebuild ordered arrays from the snapshot's ID lists. Drop
+        // any IDs that have been deleted or moved out of the user's
+        // scope since the pause.
+        const ordered = snap.originalIds.map(id => byId.get(id)).filter((w): w is PracticeWord => Boolean(w))
+        const unseen = snap.unseenIds.map(id => byId.get(id)).filter((w): w is PracticeWord => Boolean(w))
+        const mistakes = snap.mistakesIds.map(id => byId.get(id)).filter((w): w is PracticeWord => Boolean(w))
+
+        if (snap.mode === 'cloze') {
+            // Cloze rejects words without a usable sentence — same guard
+            // as `start()`. Apply it to all three lists; the aggregate
+            // counters stay as-is since they reflect history, not
+            // remaining work.
+            const keep = (w: PracticeWord) => buildCloze(w) !== null
+            const orderedFiltered = ordered.filter(keep)
+            if (orderedFiltered.length < 2) {
+                setResumeError('Cloze needs example sentences. Edit your saved words or start a new drill.')
+                return
+            }
+        }
+
+        setMode(snap.mode as Mode)
+        setScopeFolderId(snap.scope.folderId ?? undefined)
+        setScopeModuleId(snap.scope.moduleId ?? undefined)
+        setDueOnly(snap.scope.dueOnly)
+        setWeakOnly(snap.scope.weakOnly)
+        setOriginalWords(ordered)
+        setSessionId(activeSession.id)
+        setResults(null)
+        setLastChunk(null)
+        setAggregate({
+            correct: snap.aggregate.correct,
+            total: snap.aggregate.total,
+            missedIds: new Set<number>(snap.aggregate.missedIds),
+        })
+
+        // Pull the next chunk from (mistakes-pool, unseen) — same
+        // ordering as `continueChunk` so the resumed session feels
+        // identical to clicking Continue after a chunk-review.
+        const { chunk, unseenRest, poolRest } = takeChunk(unseen, mistakes, chunkSize)
+        setUnseenQueue(unseenRest)
+        setMistakesPool(poolRest)
+        // Inline startChunk's body without the createSession branch —
+        // we're reusing the existing session row, and startChunk's
+        // closure would still see the pre-setSessionId `null` and
+        // spawn a duplicate.
+        setWords(chunk)
+        setPhase('session')
+    }, [activeSession, fetchWordsByIds, takeChunk])
+
+    /** Throw away the active session so the next Start begins fresh. */
+    const discardActive = useCallback(() => {
+        if (!activeSession) return
+        discardSession(activeSession.id, {
+            onSuccess: () => { refetchActive() },
+        })
+    }, [activeSession, discardSession, refetchActive])
+
     const finishRun = useCallback((finalAggregate: { correct: number; total: number; missedIds: Set<number> }) => {
         const learningIds = Array.from(finalAggregate.missedIds)
         setResults({
@@ -1324,7 +1518,36 @@ function PracticePageInner() {
             .filter((w): w is PracticeWord => Boolean(w))
         setLastChunk({ correctCount: correctIds.length, missedWords })
 
-        if (unseenQueue.length === 0 && nextPool.length === 0) {
+        const drillFinished = unseenQueue.length === 0 && nextPool.length === 0
+
+        // Snapshot the drill at this chunk boundary so a navigation away
+        // can be resumed. On drill completion the row gets marked
+        // completed_at by finishRun → completeSession, which clears the
+        // progress server-side; no need to null it here.
+        if (sessionId && !drillFinished) {
+            const snapshot: PracticeProgress = {
+                version: 1,
+                mode,
+                chunkSize,
+                scope: {
+                    folderId: scopeFolderId ?? null,
+                    moduleId: scopeModuleId ?? null,
+                    dueOnly,
+                    weakOnly,
+                },
+                originalIds: originalWords.map(w => w.id),
+                unseenIds: unseenQueue.map(w => w.id),
+                mistakesIds: nextPool.map(w => w.id),
+                aggregate: {
+                    correct: nextAggregate.correct,
+                    total: nextAggregate.total,
+                    missedIds: Array.from(nextAggregate.missedIds),
+                },
+            }
+            updateProgress({ sessionId, progress: snapshot })
+        }
+
+        if (drillFinished) {
             finishRun(nextAggregate)
             return
         }
@@ -1332,7 +1555,11 @@ function PracticePageInner() {
         // mark the checkpoint before the review screen renders.
         playCheckpoint()
         setPhase('chunk-review')
-    }, [aggregate, mistakesPool, unseenQueue, wordsById, finishRun])
+    }, [
+        aggregate, mistakesPool, unseenQueue, wordsById, finishRun,
+        sessionId, mode, chunkSize, scopeFolderId, scopeModuleId,
+        dueOnly, weakOnly, originalWords, updateProgress,
+    ])
 
     const continueChunk = () => {
         if (unseenQueue.length === 0 && mistakesPool.length === 0) {
@@ -1455,6 +1682,16 @@ function PracticePageInner() {
                     {/* Mode picker */}
                     {phase === 'pick' && (
                         <motion.div key="pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                            {activeSession && !isActiveLoading && (
+                                <ResumeCard
+                                    session={activeSession}
+                                    onResume={resume}
+                                    onDiscard={discardActive}
+                                    isResuming={isResumeFetching}
+                                    isDiscarding={isDiscarding}
+                                    error={resumeError}
+                                />
+                            )}
                             <div className="grid gap-3">
                                 {(Object.entries(MODE_META) as [Mode, typeof MODE_META[Mode]][]).map(([m, meta]) => (
                                     <button
