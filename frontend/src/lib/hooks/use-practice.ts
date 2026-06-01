@@ -56,11 +56,26 @@ export function useDueCounts(args: { folderId?: number; moduleId?: number } = {}
     })
 }
 
+/**
+ * Per-word grading. `grade` (when provided) supersedes `wasCorrect`
+ * on the server:
+ *   0 = wrong/forgot   — lapse, ease drops 0.20, interval resets
+ *   1 = hard (close)   — interval grows by HARD_MULTIPLIER, ease drops 0.15
+ *   2 = good (exact)   — interval grows by ease_factor
+ * Flashcard swipe + quiz MCQ are binary so they keep using wasCorrect alone.
+ * Spelling / listening / cloze derive grade from `isCloseSpelling`.
+ */
+export type PracticeGrade = 0 | 1 | 2
+
 export function useSubmitResult() {
     const { request } = useHttp()
     return useMutation({
-        mutationFn: ({ wordId, wasCorrect }: { wordId: number; wasCorrect: boolean }) =>
-            request(API_ENDPOINTS.PRACTICE.RESULT(wordId, wasCorrect), { method: 'POST' }),
+        mutationFn: ({ wordId, wasCorrect, grade }: {
+            wordId: number
+            wasCorrect: boolean
+            grade?: PracticeGrade
+        }) =>
+            request(API_ENDPOINTS.PRACTICE.RESULT(wordId, wasCorrect, grade), { method: 'POST' }),
     })
 }
 

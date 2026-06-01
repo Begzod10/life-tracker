@@ -10,28 +10,9 @@ import random
 from app import models
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services import srs
 
 router = APIRouter(prefix="/practice", tags=["practice"])
-
-
-# ─── Spaced repetition (simplified SM-2) ─────────────────────────────────────
-
-# Day intervals applied to a "streak" of consecutive correct answers.
-# After a wrong answer the streak drops back to 0 (next review = 1 day).
-# Beyond the table, the interval doubles each correct answer.
-SR_LADDER_DAYS = [1, 2, 4, 7, 14, 30, 60]
-
-
-def _next_interval_days(prev_interval: int, was_correct: bool) -> int:
-    if not was_correct:
-        return 1
-    if prev_interval <= 0:
-        return SR_LADDER_DAYS[0]
-    if prev_interval in SR_LADDER_DAYS:
-        i = SR_LADDER_DAYS.index(prev_interval)
-        return SR_LADDER_DAYS[i + 1] if i + 1 < len(SR_LADDER_DAYS) else prev_interval * 2
-    # Custom interval: keep doubling (Anki-style growth)
-    return prev_interval * 2
 
 
 def _serialize_practice_word(word: models.DictionaryWord, all_words: list) -> dict:
@@ -109,83 +90,72 @@ def get_practice_words(
             pool += extra
         return [_serialize_practice_word(w, pool) for w in ordered]
 
-    q = db.query(models.DictionaryWord).filter(
-        models.DictionaryWord.person_id == current_user.id,
-        models.DictionaryWord.deleted == False,
+    Word = models.DictionaryWord
+    now = datetime.utcnow()
+
+    q = db.query(Word).filter(
+        Word.person_id == current_user.id,
+        Word.deleted == False,
     )
     if module_id is not None:
-        q = q.filter(models.DictionaryWord.module_id == module_id)
+        q = q.filter(Word.module_id == module_id)
     if folder_id is not None:
         q = q.join(
-            models.DictionaryModule, models.DictionaryWord.module_id == models.DictionaryModule.id
+            models.DictionaryModule, Word.module_id == models.DictionaryModule.id
         ).filter(models.DictionaryModule.folder_id == folder_id)
     if difficulty:
-        q = q.filter(models.DictionaryWord.difficulty == difficulty)
+        q = q.filter(Word.difficulty == difficulty)
     if due_only:
         q = q.filter(or_(
-            models.DictionaryWord.next_review_at.is_(None),
-            models.DictionaryWord.next_review_at <= datetime.utcnow(),
+            Word.next_review_at.is_(None),
+            Word.next_review_at <= now,
         ))
-
-    all_words = q.all()
-
     if weak_only:
-        def is_weak(w):
-            if w.review_count == 0:
-                return True
-            return (w.correct_count / w.review_count) < 0.7
-        all_words = [w for w in all_words if is_weak(w)]
-
-    if len(all_words) < 2:
-        raise HTTPException(status_code=400, detail="Not enough words available for practice (need at least 2).")
+        # Fragile-current-retention, not low lifetime accuracy.
+        q = q.filter(srs.weak_condition(Word))
 
     if due_only or weak_only:
-        # Pool was already narrowed; take up to count, prioritising oldest/never-reviewed first.
-        all_words.sort(key=lambda w: (
-            0 if w.review_count == 0 else 1,
-            w.last_reviewed_at or w.created_at,
-        ))
-        selected = all_words[:count]
-        # Need a wider pool for distractors so options aren't too repetitive.
-        pool = list({w.id: w for w in all_words}.values())
+        # Narrowed pool: hardest first (low ease, short interval, oldest).
+        # Since weak_only now excludes never-reviewed (review_count >= 2),
+        # the prior "never-reviewed first" tiebreak no longer applies.
+        ordered = (
+            q.order_by(
+                Word.ease_factor.asc(),
+                Word.interval_days.asc(),
+                Word.created_at.asc(),
+            )
+            .all()
+        )
+        if len(ordered) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Not enough words available for practice (need at least 2).",
+            )
+        selected = ordered[:count]
+        # Wider distractor pool so options aren't too repetitive.
+        pool = list({w.id: w for w in ordered}.values())
         if len(pool) < 4:
-            extra = db.query(models.DictionaryWord).filter(
-                models.DictionaryWord.person_id == current_user.id,
-                models.DictionaryWord.deleted == False,
-                models.DictionaryWord.id.notin_([w.id for w in pool]),
+            extra = db.query(Word).filter(
+                Word.person_id == current_user.id,
+                Word.deleted == False,
+                Word.id.notin_([w.id for w in pool]),
             ).limit(20).all()
             pool += extra
         return [_serialize_practice_word(w, pool) for w in selected]
 
-    # "All words" sampling: replaced the old random.sample with a coverage
-    # strategy that guarantees the user actually walks through the whole
-    # scope across sessions, and that any word they just got wrong shows
-    # up in the very next session — even when they didn't pick the
-    # "Due for review" filter.
+    # Default "all words" walk: coverage-aware priority sorted DB-side.
     #
-    # Priority order:
-    #   1. Words due now (next_review_at <= now) — this includes the ones
-    #      the previous session marked wrong, since submit_result resets
-    #      interval_days to 0 and stamps next_review_at = now on misses.
-    #   2. Never-reviewed words (review_count == 0), oldest first by
-    #      created_at. Once a fresh import lands all 87 words here, they
-    #      get dealt out N per session until none remain.
-    #   3. Everything else by ascending review_count, then by oldest
-    #      last_reviewed_at — so well-known words are revisited last.
-    now = datetime.utcnow()
-
-    def priority_bucket(w: models.DictionaryWord) -> int:
-        if w.next_review_at is not None and w.next_review_at <= now:
-            return 0  # due (includes just-missed)
-        if w.review_count == 0:
-            return 1  # never seen
-        return 2      # known, revisit later
-
-    all_words.sort(key=lambda w: (
-        priority_bucket(w),
-        w.review_count,
-        w.last_reviewed_at or w.created_at,
-    ))
+    #   1. Words due now (next_review_at <= now or NULL) — includes
+    #      just-missed because apply_result stamps next_review_at = now
+    #      on a lapse.
+    #   2. Never-reviewed words, oldest first by created_at.
+    #   3. Everything else hardest-first (low ease, short interval).
+    all_words = q.order_by(*srs.pool_priority_order(Word, now)).all()
+    if len(all_words) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough words available for practice (need at least 2).",
+        )
     selected = all_words[:count]
     return [_serialize_practice_word(w, all_words) for w in selected]
 
@@ -196,6 +166,20 @@ def get_practice_words(
 def submit_result(
     word_id: int,
     was_correct: bool,
+    grade: Optional[int] = Query(
+        default=None,
+        ge=0,
+        le=2,
+        description=(
+            "3-level grade: 0 = wrong/forgot, 1 = hard (close), "
+            "2 = good (exact/correct). When provided, supersedes "
+            "was_correct. Typed-answer modes (spelling, listening, "
+            "cloze) send this so 'close' answers get a smaller "
+            "interval bump + ease penalty instead of being marked "
+            "wholly correct. Flashcard swipe + quiz MCQ stay binary "
+            "via was_correct."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
@@ -206,21 +190,16 @@ def submit_result(
     if not word:
         raise HTTPException(status_code=404, detail="Word not found")
 
-    word.review_count += 1
-    if was_correct:
-        word.correct_count += 1
-    now = datetime.utcnow()
-    word.last_reviewed_at = now
-
-    next_days = _next_interval_days(word.interval_days or 0, was_correct)
-    word.interval_days = next_days
-    word.next_review_at = now + timedelta(days=next_days)
-
+    sched = srs.apply_result(word, grade=grade, was_correct=was_correct)
     db.commit()
     return {
         "ok": True,
         "interval_days": word.interval_days,
         "next_review_at": word.next_review_at.isoformat(),
+        "ease_factor": word.ease_factor,
+        "reps": word.reps,
+        "lapses": word.lapses,
+        "is_leech": sched["is_leech"],
     }
 
 

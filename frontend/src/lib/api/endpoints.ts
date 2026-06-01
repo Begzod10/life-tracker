@@ -223,8 +223,14 @@ export const API_ENDPOINTS = {
             const qs = p.toString()
             return qs ? `${API_URL}/practice/due-counts?${qs}` : `${API_URL}/practice/due-counts`
         },
-        RESULT: (wordId: number, wasCorrect: boolean) =>
-            `${API_URL}/practice/result?word_id=${wordId}&was_correct=${wasCorrect}`,
+        RESULT: (wordId: number, wasCorrect: boolean, grade?: 0 | 1 | 2) => {
+            const base = `${API_URL}/practice/result?word_id=${wordId}&was_correct=${wasCorrect}`
+            // grade overrides was_correct on the server side. Typed-answer
+            // modes (spelling/listening/cloze) pass grade so a "close"
+            // answer gets a smaller interval bump + ease penalty instead
+            // of being marked wholly correct.
+            return grade === undefined ? base : `${base}&grade=${grade}`
+        },
         SESSION: (mode: string) => `${API_URL}/practice/session?mode=${mode}`,
         COMPLETE: (sessionId: number, total: number, correct: number) =>
             `${API_URL}/practice/session/${sessionId}/complete?total_questions=${total}&correct_answers=${correct}`,

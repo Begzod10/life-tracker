@@ -63,6 +63,18 @@ const DIFF_BAR_COLOR: Record<string, string> = {
     C2: 'bg-rose-400',
 }
 
+// Retention bucket palette. Ordered new → mature so the stacked bar
+// reads left-to-right as a "journey": untouched cards on the left,
+// solid cards on the right. The labels match the SRS scheduler's
+// own bucket terminology so a learner who's read the rules can map
+// the colors back to ease/interval/reps state.
+const BUCKETS: { key: 'new' | 'learning' | 'young' | 'mature'; label: string; bar: string; dot: string; help: string }[] = [
+    { key: 'new', label: 'New', bar: 'bg-white/30', dot: 'bg-white/30', help: 'Never reviewed' },
+    { key: 'learning', label: 'Learning', bar: 'bg-amber-400', dot: 'bg-amber-400', help: 'Fragile — interval ≤ 1 day' },
+    { key: 'young', label: 'Young', bar: 'bg-blue-400', dot: 'bg-blue-400', help: 'Interval 2–21 days' },
+    { key: 'mature', label: 'Mature', bar: 'bg-emerald-400', dot: 'bg-emerald-400', help: 'Interval > 21 days' },
+]
+
 function StatsPanel({
     stats,
     isLoading,
@@ -140,6 +152,40 @@ function StatsPanel({
                                 {e.level} <span className="text-white/40">{e.count}</span>
                             </span>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {stats.buckets && (
+                <div>
+                    <p className="text-xs text-white/40 mb-2">Retention</p>
+                    <div
+                        className="flex h-2 rounded-full overflow-hidden bg-white/5"
+                        title="Per-card SR state: new → learning → young → mature"
+                    >
+                        {BUCKETS.map(b => {
+                            const n = stats.buckets[b.key] ?? 0
+                            if (n === 0) return null
+                            return (
+                                <div
+                                    key={b.key}
+                                    className={b.bar}
+                                    style={{ width: `${(n / stats.total) * 100}%` }}
+                                    title={`${b.label}: ${n} — ${b.help}`}
+                                />
+                            )
+                        })}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
+                        {BUCKETS.map(b => {
+                            const n = stats.buckets[b.key] ?? 0
+                            return (
+                                <span key={b.key} className="text-white/60" title={b.help}>
+                                    <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${b.dot}`} />
+                                    {b.label} <span className="text-white/40">{n}</span>
+                                </span>
+                            )
+                        })}
                     </div>
                 </div>
             )}

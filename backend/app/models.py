@@ -717,11 +717,20 @@ class DictionaryWord(Base):
     phonetic = Column(String(200), nullable=True)
     difficulty = Column(String(10), default="B1")       # A1, A2, B1, B2, C1, C2
     tags = Column(String(500), nullable=True)
+    # review_count / correct_count are display-only counters now —
+    # scheduling reads ease_factor / reps / lapses below instead.
     review_count = Column(Integer, default=0)
     correct_count = Column(Integer, default=0)
     last_reviewed_at = Column(DateTime, nullable=True)
     next_review_at = Column(DateTime, nullable=True, index=True)
     interval_days = Column(Integer, nullable=False, default=0)
+    # Per-card SM-2 state. ease_factor diverges per word so fragile
+    # cards stay fragile while easy cards accelerate; reps drives the
+    # first/second/then-multiplier branch in the scheduler; lapses
+    # feeds leech detection + the redefined "weak" filter.
+    ease_factor = Column(Float, nullable=False, default=2.5, server_default="2.5")
+    reps = Column(Integer, nullable=False, default=0, server_default="0")
+    lapses = Column(Integer, nullable=False, default=0, server_default="0")
     # Where this word came from. Populated when the word is saved from
     # the reader; nullable so a manually-typed word stays untethered.
     # source_sentence is the exact sentence around the selection — used

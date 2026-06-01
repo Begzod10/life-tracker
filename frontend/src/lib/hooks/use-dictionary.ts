@@ -82,6 +82,9 @@ export type ReviewCandidate = {
     accuracy: number | null
 }
 
+export type RetentionBucket = 'new' | 'learning' | 'young' | 'mature'
+export type RetentionBuckets = Record<RetentionBucket, number>
+
 export type DictStats = {
     total: number
     reviewed: number
@@ -90,6 +93,10 @@ export type DictStats = {
     by_part_of_speech: Record<string, number>
     needs_review_total: number
     needs_review: ReviewCandidate[]
+    // Per-card retention state from the new SM-2 scheduler. Replaces
+    // accuracy as the primary learning signal (accuracy is now
+    // display-only).
+    buckets: RetentionBuckets
 }
 
 const KEYS = {

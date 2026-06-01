@@ -10,6 +10,7 @@ from typing import List, Optional
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services import srs
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
@@ -456,6 +457,17 @@ def get_stats(
         for w in needs_review_words
     ]
 
+    # Retention buckets — replaces the flat accuracy figure as the
+    # primary learning signal. accuracy is kept for display continuity
+    # but no longer drives scheduling.
+    buckets = srs.retention_buckets(
+        db,
+        models.DictionaryWord,
+        current_user.id,
+        folder_id=folder_id,
+        module_id=module_id,
+    )
+
     return {
         "total": total,
         "reviewed": reviewed,
@@ -464,6 +476,7 @@ def get_stats(
         "by_part_of_speech": by_pos,
         "needs_review_total": needs_review_total,
         "needs_review": needs_review,
+        "buckets": buckets,
     }
 
 

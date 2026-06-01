@@ -19,6 +19,7 @@ import {
     useDiscardSession,
     type PracticeWord,
     type PracticeProgress,
+    type PracticeGrade,
 } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 import { playCorrect, playWrong, playCheckpoint, playComplete, primeAudio } from '@/lib/utils/sounds'
@@ -449,7 +450,7 @@ function Quiz({ word, onAnswer }: {
 
 function Spelling({ word, onAnswer }: {
     word: PracticeWord
-    onAnswer: (correct: boolean) => void
+    onAnswer: (correct: boolean, verdict: { ok: boolean; exact: boolean }) => void
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
@@ -463,7 +464,7 @@ function Spelling({ word, onAnswer }: {
         setSubmitted(true)
         if (verdict.ok) playCorrect()
         else playWrong()
-        setTimeout(() => onAnswer(verdict.ok), 900)
+        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
     }
 
     return (
@@ -519,7 +520,7 @@ function Spelling({ word, onAnswer }: {
 
 function Cloze({ word, onAnswer }: {
     word: PracticeWord
-    onAnswer: (correct: boolean) => void
+    onAnswer: (correct: boolean, verdict: { ok: boolean; exact: boolean }) => void
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
@@ -541,7 +542,7 @@ function Cloze({ word, onAnswer }: {
         setSubmitted(true)
         if (verdict.ok) playCorrect()
         else playWrong()
-        setTimeout(() => onAnswer(verdict.ok), 900)
+        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
     }
 
     return (
@@ -608,7 +609,7 @@ function Cloze({ word, onAnswer }: {
 
 function Listening({ word, onAnswer }: {
     word: PracticeWord
-    onAnswer: (correct: boolean) => void
+    onAnswer: (correct: boolean, verdict: { ok: boolean; exact: boolean }) => void
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
@@ -619,13 +620,17 @@ function Listening({ word, onAnswer }: {
         // re-speak on every new word; cleanup not needed since speak() cancels prior utterance
     }, [word.id, word.word])
 
+    // Same close-but-not-exact tolerance as Spelling/Cloze — typed
+    // listening answers get partial credit (grade=1) instead of a
+    // hard lapse on a single-letter slip.
+    const verdict = isCloseSpelling(input, word.word)
+
     const submit = () => {
         if (!input.trim() || submitted) return
         setSubmitted(true)
-        const correct = input.trim().toLowerCase() === word.word.toLowerCase()
-        if (correct) playCorrect()
+        if (verdict.ok) playCorrect()
         else playWrong()
-        setTimeout(() => onAnswer(correct), 900)
+        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
     }
 
     return (
@@ -657,13 +662,20 @@ function Listening({ word, onAnswer }: {
                     placeholder="Type what you heard…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
                         submitted
-                            ? input.trim().toLowerCase() === word.word.toLowerCase()
-                                ? 'border-green-500/50 bg-green-500/5'
+                            ? verdict.ok
+                                ? (verdict.exact
+                                    ? 'border-green-500/50 bg-green-500/5'
+                                    : 'border-amber-400/50 bg-amber-400/5')
                                 : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
                 />
-                {submitted && input.trim().toLowerCase() !== word.word.toLowerCase() && (
+                {submitted && verdict.ok && !verdict.exact && (
+                    <p className="text-center text-sm text-amber-300/90">
+                        Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !verdict.ok && (
                     <p className="text-center text-sm text-white/50">Correct: <span className="text-green-400 font-medium">{word.word}</span></p>
                 )}
                 {!submitted && (
@@ -737,8 +749,20 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
         onDone(correctIds, missedIds)
     }, [words, isQuizPlus, onDone])
 
-    const advance = useCallback((wasCorrect: boolean) => {
-        submitResult({ wordId: word.id, wasCorrect })
+    const advance = useCallback((
+        wasCorrect: boolean,
+        verdict?: { ok: boolean; exact: boolean },
+    ) => {
+        // Map the typed-answer verdict to the 3-level grade:
+        //   exact         -> 2 (good)
+        //   close (1-2ed) -> 1 (hard) — smaller interval bump + ease penalty
+        //   wrong         -> 0 (lapse)
+        // Quiz MCQ has no verdict, so it falls back to the binary
+        // was_correct on the server (grade defaults to 0 or 2).
+        const grade: PracticeGrade | undefined = verdict
+            ? (verdict.ok ? (verdict.exact ? 2 : 1) : 0)
+            : undefined
+        submitResult({ wordId: word.id, wasCorrect, grade })
         if (wasCorrect) setCorrectCount(c => c + 1)
 
         const nextQuiz = new Set(quizCorrect)
