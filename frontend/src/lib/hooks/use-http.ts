@@ -43,9 +43,17 @@ export async function refreshSession(): Promise<void> {
             method: 'POST',
             credentials: 'include',
         })
-        if (!installed.ok) {
+        if (installed.ok) return
+
+        // 401 from install-cookies = NextAuth session is gone (rotated secret,
+        // missing refresh token). Sign the user out. Any other status (502
+        // upstream-unreachable, 500 misconfig) is transient — surface a
+        // distinct error so callers don't kick the user to /auth on a
+        // momentary backend outage.
+        if (installed.status === 401) {
             throw new Error('SESSION_EXPIRED')
         }
+        throw new Error('REFRESH_UNAVAILABLE')
     })().finally(() => {
         refreshPromise = null
     })

@@ -1,6 +1,6 @@
 'use client'
 
-import { SessionProvider, useSession } from 'next-auth/react'
+import { SessionProvider, signOut, useSession } from 'next-auth/react'
 import { ReactNode, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
@@ -34,10 +34,23 @@ function CookieBridge() {
             .then((res) => {
                 if (res.ok) {
                     queryClient.invalidateQueries({ queryKey: ['user'] })
+                    return
+                }
+                // 401 = NextAuth session is structurally valid but the
+                // backend rejected the refresh token (revoked, rotated
+                // secret, deleted user). Sign out so the user doesn't
+                // sit on a half-authenticated UI that 401s on every
+                // request. 5xx is transient — leave the session and let
+                // use-http retry on the next user action.
+                if (res.status === 401) {
+                    signOut({ redirect: false }).finally(() => {
+                        window.location.replace('/auth')
+                    })
                 }
             })
             .catch(() => {
-                // Non-fatal: use-http will trigger /auth/refresh on the next 401.
+                // Network error reaching our own /api route — transient,
+                // use-http will retry on the next call.
             })
     }, [status, session, queryClient])
 
