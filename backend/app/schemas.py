@@ -1202,6 +1202,9 @@ class BookHighlightCreate(BaseModel):
     color: Optional[str] = None
     save_to_dictionary: bool = False
     module_id: Optional[int] = None
+    # Sentence surrounding the selection, captured by the reader from
+    # the PDF text layer. Used as the cloze stem in practice mode.
+    source_sentence: Optional[str] = Field(default=None, max_length=2000)
 
 
 class BookHighlightRead(BaseModel):
@@ -1218,6 +1221,7 @@ class BookHighlightRead(BaseModel):
     # round-trip. Null when no dictionary word is linked or no translation
     # has been filled in yet.
     translation: Optional[str] = None
+    source_sentence: Optional[str] = None
     created_at: datetime
 
 

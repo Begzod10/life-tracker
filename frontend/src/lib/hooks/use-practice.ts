@@ -13,6 +13,12 @@ export type PracticeWord = {
     examples?: string[]
     difficulty: string
     options: string[]
+    // Sentence captured at reader-save time. When present, cloze mode
+    // blanks the target word inside this real sentence instead of
+    // falling back to a generic example.
+    source_sentence?: string | null
+    source_book_id?: number | null
+    source_page?: number | null
 }
 
 export type PracticeSession = {

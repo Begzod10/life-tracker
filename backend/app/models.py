@@ -722,12 +722,25 @@ class DictionaryWord(Base):
     last_reviewed_at = Column(DateTime, nullable=True)
     next_review_at = Column(DateTime, nullable=True, index=True)
     interval_days = Column(Integer, nullable=False, default=0)
+    # Where this word came from. Populated when the word is saved from
+    # the reader; nullable so a manually-typed word stays untethered.
+    # source_sentence is the exact sentence around the selection — used
+    # as the cloze stem in practice mode (strongest recall cue).
+    source_book_id = Column(
+        Integer,
+        ForeignKey("books.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_page = Column(Integer, nullable=True)
+    source_sentence = Column(Text, nullable=True)
     deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     person = relationship("Person", back_populates="dictionary_words")
     module = relationship("DictionaryModule", back_populates="words")
+    source_book = relationship("Book", foreign_keys=[source_book_id])
 
 
 class PracticeSession(Base):
@@ -937,6 +950,11 @@ class BookHighlight(Base):
         nullable=True,
         index=True,
     )
+    # Sentence surrounding the selection, captured client-side from the
+    # PDF text layer. Stored here too (not only on the DictionaryWord)
+    # so the reader can replay the sentence as a tooltip / sidebar
+    # snippet even for non-vocab highlights.
+    source_sentence = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     book = relationship("Book", back_populates="highlights")

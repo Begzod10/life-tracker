@@ -642,6 +642,7 @@ def _serialize_highlight(
         "dictionary_word_id": h.dictionary_word_id,
         "translation": translation,
         "definition": definition,
+        "source_sentence": h.source_sentence,
         "created_at": h.created_at,
     }
 
@@ -730,8 +731,32 @@ def create_highlight(
                     None,
                 )
 
+        # A sentence-kind save (phrase selection) is itself a sentence;
+        # otherwise the reader sends the surrounding sentence in
+        # payload.source_sentence. Fall back to whichever is longer so
+        # we always store the strongest available cloze stem.
+        sentence_candidate = (payload.source_sentence or "").strip()
+        if not sentence_candidate and len((payload.text or "").strip()) > len(token):
+            sentence_candidate = (payload.text or "").strip()
+        sentence_for_word: Optional[str] = sentence_candidate or None
+
         if existing:
             dictionary_word_id = existing.id
+            # Populate source columns lazily — if the row was created
+            # before this feature shipped (or via manual add) and the
+            # reader now has a richer sentence/page for it, fill it in.
+            updated = False
+            if existing.source_book_id is None:
+                existing.source_book_id = book.id
+                updated = True
+            if existing.source_page is None:
+                existing.source_page = payload.page
+                updated = True
+            if not existing.source_sentence and sentence_for_word:
+                existing.source_sentence = sentence_for_word
+                updated = True
+            if updated:
+                db.flush()
         else:
             # Try AI → dictionaryapi.dev → Wiktionary. dictionaryapi.dev
             # misses words like "dunk"; Wiktionary catches the long tail.
@@ -750,6 +775,9 @@ def create_highlight(
                 translation=ai_translation or None,
                 difficulty="B1",
                 tags=f"book:{book.id}|page:{payload.page}",
+                source_book_id=book.id,
+                source_page=payload.page,
+                source_sentence=sentence_for_word,
             )
             db.add(word)
             db.flush()
@@ -791,6 +819,7 @@ def create_highlight(
         kind=payload.kind,
         color=payload.color,
         dictionary_word_id=dictionary_word_id,
+        source_sentence=(payload.source_sentence or "").strip() or None,
     )
     db.add(hl)
     db.commit()

@@ -346,6 +346,11 @@ def ai_word_details(
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _serialize_word(word: models.DictionaryWord) -> dict:
+    # source_book_title is read via the relationship — relies on the
+    # caller having loaded `source_book` (eager- or lazy-loaded).
+    source_book_title: Optional[str] = None
+    if word.source_book_id and word.source_book is not None:
+        source_book_title = word.source_book.title
     return {
         "id": word.id,
         "person_id": word.person_id,
@@ -362,6 +367,10 @@ def _serialize_word(word: models.DictionaryWord) -> dict:
         "correct_count": word.correct_count,
         "last_reviewed_at": word.last_reviewed_at,
         "created_at": word.created_at,
+        "source_book_id": word.source_book_id,
+        "source_book_title": source_book_title,
+        "source_page": word.source_page,
+        "source_sentence": word.source_sentence,
     }
 
 

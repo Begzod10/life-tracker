@@ -53,6 +53,12 @@ export type DictionaryWord = {
     correct_count: number
     last_reviewed_at?: string
     created_at: string
+    // Reader-origin fields. Populated when the word was saved from a
+    // book; null for manually-added entries.
+    source_book_id?: number | null
+    source_book_title?: string | null
+    source_page?: number | null
+    source_sentence?: string | null
 }
 
 export type WordCreate = {

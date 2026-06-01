@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -57,6 +57,10 @@ async function ensurePdfJs() {
 interface Selection {
     text: string
     rect: DOMRect | null
+    // Sentence surrounding `text`, captured at selection-time from the
+    // PDF text layer. Sent to the backend as `source_sentence` so
+    // practice mode can blank the saved word inside its own sentence.
+    sentence: string | null
 }
 
 // ─── Text-layer matching helper ────────────────────────────────────────────
@@ -251,6 +255,72 @@ function phraseRects(layer: Element, target: string): DOMRect[] {
     }
 }
 
+// Extract the sentence surrounding the current window selection inside
+// the PDF text layer. Returns the full sentence (preserving original
+// casing) or null if the selection isn't inside the layer or the text
+// can't be reconstructed. Used at save-time to record the cloze stem.
+//
+// Strategy: build a flat string of every span on the page, locate the
+// selection's text inside it, then walk outward to the nearest sentence
+// boundary on each side (.!?, paragraph break, or page edge).
+function sentenceAroundSelection(layer: Element): string | null {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null
+    const range = sel.getRangeAt(0)
+    if (!layer.contains(range.startContainer) || !layer.contains(range.endContainer)) {
+        return null
+    }
+
+    const spans = Array.from(layer.querySelectorAll('span')) as HTMLElement[]
+    let flat = ''
+    const segs: { node: Node | null; flatStart: number; rawLen: number }[] = []
+    for (const s of spans) {
+        const raw = s.textContent || ''
+        if (!raw) continue
+        segs.push({ node: s.firstChild, flatStart: flat.length, rawLen: raw.length })
+        flat += raw
+        // Insert a space between spans so adjacent runs from different
+        // pdf.js boxes don't fuse mid-word. Multiple spaces are
+        // normalized out below.
+        flat += ' '
+    }
+    if (!flat) return null
+
+    const offsetFor = (node: Node, nodeOffset: number): number | null => {
+        const seg = segs.find(s => s.node === node)
+        if (!seg) return null
+        return seg.flatStart + Math.max(0, Math.min(nodeOffset, seg.rawLen))
+    }
+    const start = offsetFor(range.startContainer, range.startOffset)
+    const end = offsetFor(range.endContainer, range.endOffset)
+    if (start === null || end === null || end <= start) return null
+
+    // Walk left until we cross a sentence terminator. The terminator
+    // belongs to the previous sentence, so include the character right
+    // after it as the start of ours.
+    let lo = start
+    while (lo > 0) {
+        const ch = flat[lo - 1]
+        if (ch === '.' || ch === '!' || ch === '?' || ch === '\n') break
+        lo--
+    }
+    // Walk right past the selection until we hit a terminator. Include
+    // the terminator itself so the stored sentence reads naturally.
+    let hi = end
+    while (hi < flat.length) {
+        const ch = flat[hi]
+        hi++
+        if (ch === '.' || ch === '!' || ch === '?' || ch === '\n') break
+    }
+
+    const sentence = flat.slice(lo, hi).replace(/\s+/g, ' ').trim()
+    // Reject obviously broken extractions — too short to be useful as a
+    // cloze, or longer than the practice card can reasonably render.
+    if (sentence.length < 8) return null
+    if (sentence.length > 600) return null
+    return sentence
+}
+
 // Return the exact pixel rectangle of `target` inside the given spans.
 // pdf.js often packs a whole line into one <span>, so a per-span bounding
 // rect would point at the left edge of the line rather than the actual
@@ -289,6 +359,18 @@ function rectForText(spans: HTMLElement[], target: string): DOMRect | null {
 export default function ReaderPage() {
     const params = useParams<{ id: string; bookId: string }>()
     const router = useRouter()
+    const searchParams = useSearchParams()
+    // ?page=N deep-links — used by the Dictionary card's "jump back to
+    // source" button. Read once on mount and consumed below in the
+    // initial-page sync effect so we don't fight book.current_page on
+    // every render.
+    const deepLinkPage = useMemo(() => {
+        const raw = searchParams?.get('page')
+        if (!raw) return null
+        const n = Number(raw)
+        return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null
+    }, [searchParams])
+    const deepLinkConsumedRef = useRef(false)
     const bookId = Number(params.bookId)
 
     const { data: book, isLoading } = useBook(bookId)
@@ -446,13 +528,21 @@ export default function ReaderPage() {
         [fileBytes],
     )
 
-    // Initial page sync once book loads.
+    // Initial page sync once book loads. A `?page=N` deep-link wins
+    // over the stored current_page exactly once on first mount, so the
+    // Dictionary "jump to source" link lands the user on the right
+    // page without permanently overwriting their last reading position.
     useEffect(() => {
-        if (book) {
-            setPage(book.current_page || 1)
-            setPageInput(String(book.current_page || 1))
+        if (!book) return
+        if (deepLinkPage && !deepLinkConsumedRef.current) {
+            deepLinkConsumedRef.current = true
+            setPage(deepLinkPage)
+            setPageInput(String(deepLinkPage))
+            return
         }
-    }, [book])
+        setPage(book.current_page || 1)
+        setPageInput(String(book.current_page || 1))
+    }, [book, deepLinkPage])
 
     // ResizeObserver — keep the page width tied to the container so the
     // PDF fills nicely without horizontal scroll. On narrow viewports we
@@ -529,7 +619,14 @@ export default function ReaderPage() {
         // Only capture selections inside the page surface.
         if (!pageRef.current?.contains(sel.anchorNode as Node)) return
         const rect = sel.getRangeAt(0).getBoundingClientRect()
-        setSelection({ text, rect })
+        // Pull the surrounding sentence now while the selection is live
+        // — the dialog re-renders the page and would invalidate the
+        // range later. Falls back to null on phrase selections that are
+        // already longer than a sentence; the backend treats `text`
+        // itself as the sentence in that case.
+        const layer = pageRef.current?.querySelector('.react-pdf__Page__textContent')
+        const sentence = layer ? sentenceAroundSelection(layer) : null
+        setSelection({ text, rect, sentence })
     }, [])
 
     const handleMouseUp = captureSelection
@@ -1292,6 +1389,7 @@ export default function ReaderPage() {
                 {saveDialogOpen && selection && (
                     <SaveToDictionaryDialog
                         text={selection.text}
+                        sentence={selection.sentence}
                         page={page}
                         bookId={book.id}
                         onClose={() => setSaveDialogOpen(false)}
@@ -1632,9 +1730,10 @@ function SelectionPopover({
 }
 
 function SaveToDictionaryDialog({
-    text, page, bookId, onClose, onDone,
+    text, sentence, page, bookId, onClose, onDone,
 }: {
     text: string
+    sentence: string | null
     page: number
     bookId: number
     onClose: () => void
@@ -1700,6 +1799,14 @@ function SaveToDictionaryDialog({
     }
 
     const handleSave = () => {
+        // For a phrase save, `text` is already a sentence — don't echo
+        // it as source_sentence (the backend stores it on the highlight
+        // anyway). For a single-word save, send the surrounding
+        // sentence captured at selection-time as the cloze stem.
+        const phrase = isPhraseText(text)
+        const sourceSentence = phrase
+            ? undefined
+            : (sentence && sentence.trim()) || undefined
         createHighlight.mutate(
             {
                 bookId,
@@ -1710,6 +1817,7 @@ function SaveToDictionaryDialog({
                     kind: 'vocab',
                     module_id: moduleId,
                     save_to_dictionary: true,
+                    source_sentence: sourceSentence,
                 },
             },
             {

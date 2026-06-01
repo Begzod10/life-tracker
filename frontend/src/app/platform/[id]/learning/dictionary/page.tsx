@@ -373,12 +373,77 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
 
 // ─── Word card ───────────────────────────────────────────────────────────────
 
+// Render the saved sentence with the target word emphasized inline. The
+// emphasis is whole-word matched (`\bword\b`) and case-insensitive so an
+// inflected form like "running" still bolds the "run" stem only when it
+// actually appears; otherwise the sentence renders plain. We deliberately
+// avoid stemming — bolding the wrong span is more confusing than no bold.
+function HighlightedSentence({ sentence, word }: { sentence: string; word: string }) {
+    const target = word.trim()
+    if (!target) return <>{sentence}</>
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    try {
+        const parts = sentence.split(new RegExp(`(\\b${escaped}\\b)`, 'i'))
+        return (
+            <>
+                {parts.map((p, i) =>
+                    i % 2 === 1
+                        ? <mark key={i} className="bg-indigo-500/20 text-indigo-200 rounded px-0.5">{p}</mark>
+                        : <span key={i}>{p}</span>
+                )}
+            </>
+        )
+    } catch {
+        return <>{sentence}</>
+    }
+}
+
+function SourceBlock({ word, onJump }: { word: DictionaryWord; onJump: () => void }) {
+    const hasBook = !!word.source_book_id
+    const bookLabel = word.source_book_title || (hasBook ? `Book #${word.source_book_id}` : null)
+    return (
+        <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/[0.04] p-3 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-indigo-300/80 min-w-0">
+                    <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                        {bookLabel ? `From ${bookLabel}` : 'From your reading'}
+                        {word.source_page ? ` · p. ${word.source_page}` : ''}
+                    </span>
+                </div>
+                {hasBook && (
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onJump() }}
+                        className="shrink-0 text-xs px-2 py-1 rounded-md border border-indigo-400/30 bg-indigo-500/10 text-indigo-200 hover:bg-indigo-500/20 transition-colors"
+                    >
+                        Open
+                    </button>
+                )}
+            </div>
+            {word.source_sentence && (
+                <p className="text-sm text-white/75 leading-snug italic">
+                    &ldquo;<HighlightedSentence sentence={word.source_sentence} word={word.word} />&rdquo;
+                </p>
+            )}
+        </div>
+    )
+}
+
 function WordCard({ word }: { word: DictionaryWord }) {
     const [expanded, setExpanded] = useState(false)
     const [editOpen, setEditOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
     const { mutate: update, isPending: isUpdating, error: updateError, reset: resetUpdate } = useWordUpdate()
     const { mutate: del, isPending: isDeleting } = useWordDelete()
+    const router = useRouter()
+    const params = useParams<{ id: string }>()
+
+    const jumpToSource = () => {
+        if (!word.source_book_id) return
+        const q = word.source_page ? `?page=${word.source_page}` : ''
+        router.push(`/platform/${params.id}/learning/library/${word.source_book_id}${q}`)
+    }
 
     const accuracy = word.review_count > 0
         ? Math.round(word.correct_count / word.review_count * 100)
@@ -428,6 +493,9 @@ function WordCard({ word }: { word: DictionaryWord }) {
                                         <span className="text-white/40 mr-1">Translation:</span>{word.translation}
                                     </p>
                                 )}
+                                {(word.source_book_id || word.source_sentence) && (
+                                    <SourceBlock word={word} onJump={jumpToSource} />
+                                )}
                                 {word.examples && word.examples.length > 0 && (
                                     <div>
                                         <p className="text-xs text-white/40 mb-1">Examples</p>
@@ -438,7 +506,7 @@ function WordCard({ word }: { word: DictionaryWord }) {
                                         </ul>
                                     </div>
                                 )}
-                                {word.tags && (
+                                {word.tags && !/^book:\d+\|page:\d+$/.test(word.tags) && (
                                     <div className="flex gap-1.5 flex-wrap">
                                         {word.tags.split(',').map(t => (
                                             <span key={t} className="text-xs text-white/40 bg-white/5 px-2 py-0.5 rounded">{t.trim()}</span>

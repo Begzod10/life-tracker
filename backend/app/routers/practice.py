@@ -47,6 +47,11 @@ def _serialize_practice_word(word: models.DictionaryWord, all_words: list) -> di
         "examples": json.loads(word.examples) if word.examples else [],
         "difficulty": word.difficulty,
         "options": options,
+        # Cloze mode prefers the original sentence over an AI-generated
+        # example — strongest possible recall cue.
+        "source_sentence": word.source_sentence,
+        "source_book_id": word.source_book_id,
+        "source_page": word.source_page,
     }
 
 

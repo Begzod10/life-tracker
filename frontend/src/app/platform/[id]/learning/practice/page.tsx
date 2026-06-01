@@ -70,18 +70,35 @@ function isCloseSpelling(input: string, target: string): { ok: boolean; exact: b
 }
 
 /**
- * Find the first example containing the target word (any case) and return
- * the prompt with that occurrence replaced by an underline blank.
- * Returns null when no usable example exists.
+ * Build the cloze prompt. Prefers the original sentence captured when
+ * the word was saved from the reader — that's the user's strongest
+ * recall cue. Falls back to scanning AI-generated examples for one
+ * that actually contains the target word.
+ *
+ * The returned `source` lets the UI label where the sentence came
+ * from ("from your reading" vs an example) so the learner knows when
+ * they're being shown the original passage.
  */
-function buildCloze(word: PracticeWord): { sentence: string; blank: string } | null {
-    if (!word.examples) return null
-    for (const ex of word.examples) {
-        if (!ex) continue
-        const rx = new RegExp(`\\b(${word.word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})\\b`, 'i')
-        if (!rx.test(ex)) continue
-        const blank = '_'.repeat(Math.max(word.word.length, 4))
-        return { sentence: ex.replace(rx, blank), blank }
+function buildCloze(
+    word: PracticeWord,
+): { sentence: string; blank: string; source: 'reading' | 'example' } | null {
+    const rx = new RegExp(
+        `\\b(${word.word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')})\\b`,
+        'i',
+    )
+    const blank = '_'.repeat(Math.max(word.word.length, 4))
+
+    const sourceSentence = (word.source_sentence || '').trim()
+    if (sourceSentence && rx.test(sourceSentence)) {
+        return { sentence: sourceSentence.replace(rx, blank), blank, source: 'reading' }
+    }
+
+    if (word.examples) {
+        for (const ex of word.examples) {
+            if (!ex) continue
+            if (!rx.test(ex)) continue
+            return { sentence: ex.replace(rx, blank), blank, source: 'example' }
+        }
     }
     return null
 }
@@ -498,7 +515,12 @@ function Cloze({ word, onAnswer }: {
     // containing it, we degrade to a plain spelling prompt rather than
     // skipping — the caller already filters words without examples, but a
     // defensive fallback keeps the session from dead-ending.
-    const built = useMemo(() => buildCloze(word), [word.id, word.word, word.examples])
+    const built = useMemo(
+        () => buildCloze(word),
+        // source_sentence is the strongest cue and should retrigger
+        // the build when it changes (e.g. cross-tab edit).
+        [word.id, word.word, word.examples, word.source_sentence],
+    )
     const verdict = isCloseSpelling(input, word.word)
 
     const submit = () => {
@@ -512,7 +534,11 @@ function Cloze({ word, onAnswer }: {
     return (
         <div className="w-full max-w-md space-y-6">
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                <p className="text-white/50 text-xs mb-3 text-center">Fill in the blank</p>
+                <p className="text-white/50 text-xs mb-3 text-center">
+                    {built?.source === 'reading'
+                        ? 'From your reading'
+                        : 'Fill in the blank'}
+                </p>
                 {built ? (
                     <p className="text-white text-base leading-relaxed text-center">
                         &ldquo;{built.sentence}&rdquo;

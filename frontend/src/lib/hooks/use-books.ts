@@ -45,6 +45,7 @@ export interface BookHighlight {
     dictionary_word_id: number | null
     translation: string | null
     definition: string | null
+    source_sentence: string | null
     created_at: string
 }
 
@@ -96,6 +97,7 @@ export interface HighlightCreateInput {
     color?: string
     save_to_dictionary?: boolean
     module_id?: number
+    source_sentence?: string
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
