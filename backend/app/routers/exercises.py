@@ -28,7 +28,7 @@ from app import models
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.routers.practice import _next_interval_days
+from app.services import srs
 
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
@@ -344,14 +344,10 @@ async def grade_exercises(
         )
         db.add(attempt)
 
-        # Update SRS on the word.
-        word.review_count = (word.review_count or 0) + 1
-        if was_correct:
-            word.correct_count = (word.correct_count or 0) + 1
-        word.last_reviewed_at = now
-        next_days = _next_interval_days(word.interval_days or 0, was_correct)
-        word.interval_days = next_days
-        word.next_review_at = now + timedelta(days=next_days)
+        # Update SRS on the word. apply_result handles review_count,
+        # correct_count, last_reviewed_at, interval_days, next_review_at,
+        # and the per-card ease_factor/reps/lapses.
+        srs.apply_result(word, was_correct=was_correct, now=now)
 
         results.append({
             "word_id": word.id,
