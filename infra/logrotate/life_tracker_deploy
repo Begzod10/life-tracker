@@ -1,4 +1,7 @@
 /var/log/life_tracker_deploy.log {
+  # /var/log on Debian is group-writable by `syslog`, which logrotate
+  # treats as insecure. Tell it explicitly to act as root:root.
+  su root root
   weekly
   rotate 8
   compress
