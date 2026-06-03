@@ -212,28 +212,86 @@ def _coerce_grade(raw: dict, fallback_id: int) -> dict:
 
 
 async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
-    from groq import AsyncGroq
+    from groq import (
+        AsyncGroq,
+        APIConnectionError,
+        APIError,
+        AuthenticationError,
+        RateLimitError,
+    )
 
     client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-    response = await client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": _GRADER_SYSTEM},
-            {"role": "user", "content": _grader_user_prompt(grader_items)},
-        ],
-        max_tokens=900,
-        temperature=0.2,
-        stream=False,
-    )
-    raw = response.choices[0].message.content.strip()
+    # Budget ~150 output tokens per item for feedback + suggested_revision,
+    # plus ~150 for the JSON envelope. A 10-item batch needs ~1.6k; the prior
+    # 900-cap silently truncated and made `message.content` None, which then
+    # crashed `.strip()` as an unhandled AttributeError → generic 500.
+    max_tokens = max(700, 200 + 150 * len(grader_items))
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": _GRADER_SYSTEM},
+                {"role": "user", "content": _grader_user_prompt(grader_items)},
+            ],
+            max_tokens=max_tokens,
+            temperature=0.2,
+            stream=False,
+            # Force a valid JSON object — eliminates the markdown-fence /
+            # prose-leak class of parse failures entirely.
+            response_format={"type": "json_object"},
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Grader auth failed: {exc}",
+        ) from exc
+    except RateLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Grader rate-limited: {exc}",
+        ) from exc
+    except APIConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Grader unreachable: {exc}",
+        ) from exc
+    except APIError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Grader API error: {exc}",
+        ) from exc
+
+    if not response.choices:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Grader returned no choices.",
+        )
+
+    choice = response.choices[0]
+    raw = choice.message.content
+    if not raw:
+        finish = getattr(choice, "finish_reason", "unknown")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Grader returned empty content (finish_reason={finish}). "
+                "Try fewer items or shorter sentences."
+            ),
+        )
+    raw = raw.strip()
+    # Defensive: even with response_format set, strip any stray fences.
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
     raw = re.sub(r'\s*```$', '', raw)
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
+        finish = getattr(choice, "finish_reason", "unknown")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Grader returned invalid JSON: {raw[:200]}",
+            detail=(
+                f"Grader returned invalid JSON (finish_reason={finish}): "
+                f"{raw[:200]}"
+            ),
         )
     items = data.get("items") or []
     if not isinstance(items, list):
