@@ -238,6 +238,7 @@ export const API_ENDPOINTS = {
         PROGRESS: (sessionId: number) => `${API_URL}/practice/session/${sessionId}/progress`,
         DISCARD: (sessionId: number) => `${API_URL}/practice/session/${sessionId}`,
         HISTORY: (limit = 10) => `${API_URL}/practice/history?limit=${limit}`,
+        JUDGE_ANSWER: `${API_URL}/practice/judge-answer`,
     },
 
     ESSAYS: {
@@ -346,5 +347,18 @@ export const API_ENDPOINTS = {
         BULK_RESCHEDULE: `${API_URL}/timetable/bulk-reschedule`,
         CATEGORY_BUDGETS: `${API_URL}/category-budgets/`,
         CATEGORY_BUDGET: (category: string) => `${API_URL}/category-budgets/${encodeURIComponent(category)}`,
+    },
+
+    NEWS: {
+        CATEGORIES: `${API_URL}/news/categories`,
+        ITEMS: (date?: string) => date ? `${API_URL}/news/?date=${date}` : `${API_URL}/news/`,
+        DATES: (from?: string, to?: string) => {
+            const params = new URLSearchParams()
+            if (from) params.append('from', from)
+            if (to) params.append('to', to)
+            const qs = params.toString()
+            return `${API_URL}/news/dates${qs ? `?${qs}` : ''}`
+        },
+        FETCH: (date?: string) => date ? `${API_URL}/news/fetch?date=${date}` : `${API_URL}/news/fetch`,
     },
 }

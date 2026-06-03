@@ -25,6 +25,7 @@ import {
     Target,
     CheckSquare,
     Menu,
+    Newspaper,
     X,
 } from 'lucide-react'
 
@@ -55,6 +56,7 @@ function buildSections(id: string): NavSection[] {
                 { name: 'Goals', href: '/platform?category=goals', icon: Target, hubCategory: 'goals' },
                 { name: 'Tasks', href: '/platform?category=tasks', icon: CheckSquare, hubCategory: 'tasks' },
                 { name: 'Timetable', href: `${base}/timetable`, icon: CalendarClock, matchPrefix: true },
+                { name: 'News', href: `${base}/news`, icon: Newspaper, matchPrefix: true },
             ],
         },
         {

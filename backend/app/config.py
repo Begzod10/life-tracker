@@ -89,6 +89,21 @@ class Settings(BaseSettings):
     NOTIFY_MORNING_HOUR_UTC: int = 3   # 08:00 Tashkent (UTC+5)
     NOTIFY_EVENING_HOUR_UTC: int = 16  # 21:00 Tashkent (UTC+5)
 
+    # News providers
+    # GNews — primary. Free tier: 100 req/day, production-allowed.
+    # Get a key at https://gnews.io. Leave empty to disable provider.
+    GNEWS_API_KEY: Optional[str] = None
+    # NewsAPI.org — fallback. Free tier is dev-only per their terms; leave
+    # empty in production unless you've paid for a commercial plan. The
+    # pipeline degrades gracefully — if this is None, only GNews runs.
+    NEWSAPI_KEY: Optional[str] = None
+    # Per-category daily cap. 9 categories × 10 items = at most 90 cards/day
+    # for a user who subscribed to everything. Keeps AI summary cost bounded
+    # and the log scroll sane.
+    NEWS_ITEMS_PER_CATEGORY: int = 10
+    # Beat schedule entry for fetch_daily_news.
+    NEWS_FETCH_HOUR_UTC: int = 4   # 09:00 Tashkent (UTC+5) — ready before morning digest
+
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"

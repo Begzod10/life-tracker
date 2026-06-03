@@ -102,4 +102,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.send_word_of_the_day",
         "schedule": crontab(hour=4, minute=0),
     },
+
+    # Daily NEWS_FETCH_HOUR_UTC = 09:00 Tashkent — fetch + summarize news
+    "fetch-daily-news": {
+        "task": "app.tasks.fetch_daily_news",
+        "schedule": crontab(hour=settings.NEWS_FETCH_HOUR_UTC, minute=15),
+    },
 }

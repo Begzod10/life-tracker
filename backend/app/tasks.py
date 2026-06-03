@@ -8,7 +8,7 @@ import logging
 from app.celery_app import celery_app
 from app.database import SessionLocal
 from app import models
-from app.bot.telegram import send_message, is_configured
+from app.bot.telegram import send_message, send_photo, is_configured
 
 logger = logging.getLogger(__name__)
 
@@ -1342,6 +1342,36 @@ def send_weekly_review(self):
 
             if send_message("\n".join(lines), chat_id=chat_id):
                 sent += 1
+
+            # Weekly "wrapped" share card — image first, text above is the
+            # explainer. Wrapped in its own try so a render failure for one
+            # user never aborts the whole task or breaks the text send for
+            # the rest of the list.
+            try:
+                from app.services.weekly_card import (
+                    compute_weekly_stats,
+                    generate_uzbek_motivation_line,
+                    render_weekly_card,
+                )
+                stats = compute_weekly_stats(db, person, week_start, today)
+                ai_line = generate_uzbek_motivation_line(stats)
+                png_bytes = render_weekly_card(stats, ai_line)
+                caption = (
+                    f"<b>{ai_line}</b>\n"
+                    f"{stats['completed_blocks']}/{stats['total_blocks']} blocks · "
+                    f"streak {stats['streak_days']}"
+                )
+                send_photo(
+                    png_bytes,
+                    chat_id=chat_id,
+                    caption=caption,
+                    filename=f"weekly-{week_start.isoformat()}.png",
+                )
+            except Exception as card_exc:
+                logger.exception(
+                    "send_weekly_review: card render failed for person %s: %s",
+                    person.id, card_exc,
+                )
 
         logger.info("send_weekly_review: sent to %d users", sent)
         return {"sent": sent}
