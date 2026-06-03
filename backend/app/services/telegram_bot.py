@@ -441,9 +441,25 @@ async def focus_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         db.close()
 
 
+async def _safe_edit(query, text: str, **kwargs) -> None:
+    """
+    edit_message_text wrapper that swallows the "message is not modified"
+    BadRequest — the only failure mode that legitimately occurs when a user
+    double-taps the same button.
+    """
+    from telegram.error import BadRequest
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except BadRequest as exc:
+        if "not modified" not in str(exc).lower():
+            logger.warning("edit_message_text failed: %s", exc)
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from telegram.error import TimedOut as TelegramTimedOut
     query = update.callback_query
+    # Always answer the callback so the client stops the loading spinner —
+    # this happens before any potentially-failing DB or edit work below.
     try:
         await query.answer()
     except TelegramTimedOut:
@@ -454,10 +470,64 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         person = resolve_person(db, chat_id)
         if not person:
-            await query.edit_message_text(
+            await _safe_edit(
+                query,
                 "❌ Account not linked. Use /start to connect.",
                 parse_mode="Markdown",
             )
+            return
+
+        # ── tb:{d|s|p}:{block_id} — new short-code timetable callbacks ──────
+        # Routed through the shared block_completion service so the bot and
+        # the /timetable/{id}/toggle endpoint never drift on the ProgressLogTask
+        # sync rule for recurring-task-linked blocks.
+        if data.startswith("tb:"):
+            parts = data.split(":")
+            if len(parts) != 3:
+                await _safe_edit(query, "⚠️ Malformed callback.")
+                return
+            action = parts[1]
+            try:
+                block_id = int(parts[2])
+            except ValueError:
+                await _safe_edit(query, "⚠️ Malformed callback.")
+                return
+
+            from app.services.block_completion import (
+                set_block_completed, set_block_skipped, postpone_block_checkin,
+            )
+
+            if action == "d":
+                result = set_block_completed(
+                    db, block_id, completed=True, person_id=person.id,
+                )
+                if result is None:
+                    await _safe_edit(query, "⚠️ This block no longer exists.")
+                    return
+                if result.task is not None:
+                    text = f"✅ Done — {result.streak}🔥 day streak"
+                else:
+                    text = f"✅ Done — <b>{result.block.title}</b>"
+                await _safe_edit(query, text, parse_mode="HTML")
+                return
+
+            if action == "s":
+                result = set_block_skipped(db, block_id, person_id=person.id)
+                if result is None:
+                    await _safe_edit(query, "⚠️ This block no longer exists.")
+                    return
+                await _safe_edit(query, "❌ Skipped")
+                return
+
+            if action == "p":
+                result = postpone_block_checkin(db, block_id, person_id=person.id)
+                if result is None:
+                    await _safe_edit(query, "⚠️ This block no longer exists.")
+                    return
+                await _safe_edit(query, "⏰ I'll ask again in 30 min.")
+                return
+
+            await _safe_edit(query, "⚠️ Unknown action.")
             return
 
         if data.startswith("done_"):
@@ -510,31 +580,37 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
 
         elif data.startswith("block_done_"):
+            # Legacy callback (pre-tb: short codes). Still routed through the
+            # shared service so live messages from before the rollout keep the
+            # ProgressLogTask sync rule.
             block_id = int(data.split("_")[2])
-            block = _owns_block(db, block_id, person.id)
-            if not block:
-                await query.edit_message_text("⚠️ Block not found or not yours.")
+            from app.services.block_completion import set_block_completed
+            result = set_block_completed(
+                db, block_id, completed=True, person_id=person.id,
+            )
+            if result is None:
+                await _safe_edit(query, "⚠️ Block not found or not yours.")
                 return
-            block.is_completed = True
-            block.is_missed = False
-            db.commit()
-            await query.edit_message_text(
-                f"✅ Marked as done: *{block.title}*", parse_mode="Markdown"
+            await _safe_edit(
+                query,
+                f"✅ Marked as done: <b>{result.block.title}</b>",
+                parse_mode="HTML",
             )
 
         elif data.startswith("block_focus_"):
-            await query.edit_message_text("💪 Keep going! You've got this.", parse_mode="Markdown")
+            await _safe_edit(query, "💪 Keep going! You've got this.", parse_mode="Markdown")
 
         elif data.startswith("block_skip_"):
             block_id = int(data.split("_")[2])
-            block = _owns_block(db, block_id, person.id)
-            if not block:
-                await query.edit_message_text("⚠️ Block not found or not yours.")
+            from app.services.block_completion import set_block_skipped
+            result = set_block_skipped(db, block_id, person_id=person.id)
+            if result is None:
+                await _safe_edit(query, "⚠️ Block not found or not yours.")
                 return
-            block.is_missed = True
-            db.commit()
-            await query.edit_message_text(
-                f"❌ Marked as missed: *{block.title}*", parse_mode="Markdown"
+            await _safe_edit(
+                query,
+                f"❌ Marked as missed: <b>{result.block.title}</b>",
+                parse_mode="HTML",
             )
 
         elif data.startswith("carryover_"):

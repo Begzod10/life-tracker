@@ -468,15 +468,13 @@ def check_block_completions(self):
             if not chat_id:
                 continue
 
+            from app.services.block_completion import (
+                block_checkin_keyboard, block_checkin_text,
+            )
             if send_message(
-                f"⏰ Time's up! Did you complete: <b>{block.title}</b> ({block.start_time}–{block.end_time})?",
+                block_checkin_text(block),
                 chat_id=chat_id,
-                reply_markup={
-                    "inline_keyboard": [[
-                        {"text": "✅ Yes!", "callback_data": f"block_done_{block.id}"},
-                        {"text": "❌ No", "callback_data": f"block_skip_{block.id}"},
-                    ]]
-                },
+                reply_markup=block_checkin_keyboard(block.id),
             ):
                 block.notified_at = datetime.utcnow()
                 sent += 1
@@ -491,6 +489,72 @@ def check_block_completions(self):
     except Exception as exc:
         db.rollback()
         logger.exception("check_block_completions failed: %s", exc)
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.tasks.send_block_checkin", bind=True, max_retries=2)
+def send_block_checkin(self, block_id: int):
+    """
+    One-off re-prompt for a single block. Enqueued by the "⏰ +30m" Telegram
+    button with countdown=1800, so the user gets re-asked 30 min after they
+    deferred. Bypasses the */5 sweeper's `notified_at IS NULL` filter — the
+    deferred block deliberately keeps its non-null notified_at so the beat
+    sweeper leaves it alone; this task is what re-prompts.
+
+    Idempotent. If the block was completed, deleted, or already responded to
+    via another channel between scheduling and firing, the task silently noops.
+    """
+    if not is_configured():
+        return {"skipped": True}
+
+    db = SessionLocal()
+    try:
+        block = (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.id == block_id,
+                models.TimeBlock.deleted == False,
+            )
+            .first()
+        )
+        if not block:
+            return {"skipped": "missing"}
+        if block.is_completed:
+            return {"skipped": "completed"}
+
+        person = (
+            db.query(models.Person)
+            .filter(models.Person.id == block.person_id)
+            .first()
+        )
+        if not person:
+            return {"skipped": "no_person"}
+
+        chat_id = person.telegram_chat_id
+        if not chat_id:
+            from app.config import settings
+            chat_id = settings.TELEGRAM_CHAT_ID
+        if not chat_id:
+            return {"skipped": "no_chat"}
+
+        from app.services.block_completion import (
+            block_checkin_keyboard, block_checkin_text,
+        )
+        ok = send_message(
+            block_checkin_text(block),
+            chat_id=chat_id,
+            reply_markup=block_checkin_keyboard(block.id),
+        )
+        if ok:
+            block.notified_at = datetime.utcnow()
+            db.commit()
+        return {"sent": 1 if ok else 0}
+
+    except Exception as exc:
+        db.rollback()
+        logger.exception("send_block_checkin failed for block %s: %s", block_id, exc)
         raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()

@@ -252,7 +252,14 @@ def toggle_time_block(
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Toggle completion status of a time block."""
+    """Toggle completion status of a time block.
+
+    Delegates to `set_block_completed` in app.services.block_completion so the
+    web and the Telegram bot share one completion path (including the
+    ProgressLogTask sync rule for recurring tasks).
+    """
+    from app.services.block_completion import set_block_completed
+
     db_block = db.query(models.TimeBlock).filter(
         models.TimeBlock.id == block_id,
         models.TimeBlock.person_id == current_user.id,
@@ -260,32 +267,16 @@ def toggle_time_block(
     ).first()
     if not db_block:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
-    db_block.is_completed = not db_block.is_completed
-    # A completed block can never also be "missed" — keep the two states
-    # mutually exclusive so the day-overview count doesn't double-count.
-    if db_block.is_completed:
-        db_block.is_missed = False
-    db.commit()
 
-    # Sync ProgressLogTask for linked recurring tasks so streak counts the block completion
-    if db_block.task_id:
-        task = db.query(models.Task).filter(models.Task.id == db_block.task_id).first()
-        if task and task.is_recurring:
-            log_date = db_block.date
-            existing_log = db.query(models.ProgressLogTask).filter(
-                models.ProgressLogTask.task_id == db_block.task_id,
-                models.ProgressLogTask.log_date == log_date,
-            ).first()
-
-            if db_block.is_completed and not existing_log:
-                db.add(models.ProgressLogTask(task_id=db_block.task_id, log_date=log_date))
-                db.commit()
-            elif not db_block.is_completed and existing_log:
-                db.delete(existing_log)
-                db.commit()
-
-    db.refresh(db_block)
-    return db_block
+    result = set_block_completed(
+        db,
+        block_id,
+        completed=not db_block.is_completed,
+        person_id=current_user.id,
+    )
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
+    return result.block
 
 
 # ── Daily AI Conclusions ──────────────────────────────────────────────────────
