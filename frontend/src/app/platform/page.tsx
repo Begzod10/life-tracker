@@ -78,6 +78,13 @@ const categories: categoryType[] = [
         description: 'Control your money'
     },
     {
+        id: 'learning',
+        title: 'Learning',
+        icon: Book,
+        color: 'from-indigo-500 to-blue-500',
+        description: 'Expand knowledge'
+    },
+    {
         id: 'health',
         title: 'Health',
         icon: Heart,
@@ -90,13 +97,6 @@ const categories: categoryType[] = [
         icon: Repeat,
         color: 'from-yellow-500 to-amber-500',
         description: 'Build routines'
-    },
-    {
-        id: 'learning',
-        title: 'Learning',
-        icon: Book,
-        color: 'from-indigo-500 to-blue-500',
-        description: 'Expand knowledge'
     },
     {
         id: 'analytics',
