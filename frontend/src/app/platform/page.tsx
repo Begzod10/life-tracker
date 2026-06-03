@@ -17,7 +17,7 @@ import { useUser } from '@/lib/hooks/use-auth'
 import {
     Target, DollarSign, Heart, Repeat, Book, BarChart3, CheckSquare, Users,
     ArrowLeft, Bell, Search, User, Plus, LayoutGrid, List,
-    Loader2, CalendarDays
+    Loader2, CalendarDays, Newspaper
 } from 'lucide-react'
 import { useGoalCreate, useGoalsList, useGoalDelete, useGoalUpdate, useDeletedGoalsList, useGoalRestore, useGoalsOverviewStats } from '@/lib/hooks/use-goals'
 import { useTaskCreate, useTasksList, useTasksStatsByPerson } from '@/lib/hooks/use-tasks'
@@ -62,6 +62,13 @@ const categories: categoryType[] = [
         icon: CalendarDays,
         color: 'from-teal-500 to-cyan-500',
         description: 'Plan your day hour by hour'
+    },
+    {
+        id: 'news',
+        title: 'News',
+        icon: Newspaper,
+        color: 'from-indigo-500 to-violet-500',
+        description: 'Daily AI-summarized headlines'
     },
     {
         id: 'finances',
@@ -129,7 +136,7 @@ function PlatformPageContent() {
 
     const { data: user, isLoading: isUserLoading, error } = useUser()
 
-    const DEDICATED_PAGES = ['timetable', 'finances', 'health', 'learning']
+    const DEDICATED_PAGES = ['timetable', 'finances', 'health', 'learning', 'news']
 
     // Redirect dedicated pages to their own routes once user is loaded
     useEffect(() => {
