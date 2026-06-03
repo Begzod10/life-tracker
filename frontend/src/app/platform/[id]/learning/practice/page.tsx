@@ -23,6 +23,37 @@ import {
 } from '@/lib/hooks/use-practice'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 import { playCorrect, playWrong, playCheckpoint, playComplete, primeAudio } from '@/lib/utils/sounds'
+import { fetchWithAuth } from '@/lib/api/fetch-with-auth'
+import { API_ENDPOINTS } from '@/lib/api/endpoints'
+
+// Server-side AI judge for typed spelling answers — used only when the local
+// matcher rejects an answer. Catches near-equivalents the static rules miss
+// (synonyms outside the definition, "it is argued" vs "it is argued that",
+// etc.). Returns null on any network/HTTP error so the caller can fall back
+// to "wrong" without surfacing the AI dependency to the learner.
+async function judgeTypedAnswer(
+    userInput: string,
+    target: string,
+    definition: string | null | undefined,
+): Promise<{ ok: boolean; verdict: 'yes' | 'close' | 'no' } | null> {
+    try {
+        const res = await fetchWithAuth(API_ENDPOINTS.PRACTICE.JUDGE_ANSWER, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_input: userInput,
+                target,
+                definition: definition || undefined,
+            }),
+        })
+        if (!res.ok) return null
+        const data = await res.json() as { ok: boolean; verdict: string }
+        const v = data.verdict === 'yes' || data.verdict === 'close' ? data.verdict : 'no'
+        return { ok: !!data.ok, verdict: v }
+    } catch {
+        return null
+    }
+}
 
 type Mode = 'flashcard' | 'quiz' | 'spelling' | 'listening' | 'cloze'
 type Phase = 'pick' | 'session' | 'chunk-review' | 'results'
@@ -80,6 +111,40 @@ function isCloseSpelling(input: string, target: string): { ok: boolean; exact: b
     // distinguishable from "wrong word" — guard short words to avoid
     // letting "cat" pass as "bat".
     if (b.length >= 5 && levenshtein(a, b) <= 1) return { ok: true, exact: false }
+    return { ok: false, exact: false }
+}
+
+/**
+ * Spelling-mode answer check that also accepts synonyms parsed from the
+ * definition (e.g. "persistence / perseverance / resilience"). The target
+ * word is still the "true" answer surfaced in feedback — synonyms are
+ * accepted as exact-only (no fuzz), and the target keeps its off-by-one
+ * tolerance. Returns `matchedSynonym` when the user hit a synonym instead
+ * of the target so the UI can reveal what the real word was.
+ */
+function isAcceptableSpelling(
+    input: string,
+    target: string,
+    definition: string | undefined | null,
+): { ok: boolean; exact: boolean; matchedSynonym?: string } {
+    const a = input.trim().toLowerCase()
+    if (!a) return { ok: false, exact: false }
+
+    const t = target.toLowerCase()
+    if (a === t) return { ok: true, exact: true }
+
+    // Synonyms: every token in the definition split on common delimiters
+    // (/, comma, semicolon, pipe). Exact match only — fuzz on multi-word
+    // phrases like "strong willpower" would be too permissive.
+    const def = (definition || '').toLowerCase()
+    for (const raw of def.split(/[\/,;|]/)) {
+        const syn = raw.trim()
+        if (!syn || syn === t) continue
+        if (a === syn) return { ok: true, exact: true, matchedSynonym: syn }
+    }
+
+    // Off-by-one against the target only.
+    if (t.length >= 5 && levenshtein(a, t) <= 1) return { ok: true, exact: false }
     return { ok: false, exact: false }
 }
 
@@ -253,6 +318,8 @@ function FlashcardSession({
     drillStartIndex,
     drillTotal,
     autoTts,
+    initialPosition,
+    onPositionChange,
 }: {
     words: PracticeWord[]
     onCardDecided: (wordId: number, wasKnow: boolean) => void
@@ -260,11 +327,21 @@ function FlashcardSession({
     drillStartIndex: number
     drillTotal: number
     autoTts: boolean
+    initialPosition?: {
+        index: number
+        knowIds?: number[]
+        learningIds?: number[]
+    }
+    onPositionChange?: (pos: {
+        index: number
+        knowIds: number[]
+        learningIds: number[]
+    }) => void
 }) {
-    const [index, setIndex] = useState(0)
+    const [index, setIndex] = useState(initialPosition?.index ?? 0)
     const [flipped, setFlipped] = useState(false)
-    const [know, setKnow] = useState<number[]>([])
-    const [learning, setLearning] = useState<number[]>([])
+    const [know, setKnow] = useState<number[]>(initialPosition?.knowIds ?? [])
+    const [learning, setLearning] = useState<number[]>(initialPosition?.learningIds ?? [])
     const [exit, setExit] = useState<0 | 1 | -1>(0)
     const lockRef = useRef(false)
 
@@ -288,12 +365,15 @@ function FlashcardSession({
             setExit(0)
             lockRef.current = false
             if (index + 1 >= words.length) {
+                onPositionChange?.({ index: words.length, knowIds: nextKnow, learningIds: nextLearning })
                 onSessionEnd(nextKnow, nextLearning)
             } else {
-                setIndex(p => p + 1)
+                const nextIndex = index + 1
+                setIndex(nextIndex)
+                onPositionChange?.({ index: nextIndex, knowIds: nextKnow, learningIds: nextLearning })
             }
         }, 320)
-    }, [word, index, words.length, know, learning, onCardDecided, onSessionEnd])
+    }, [word, index, words.length, know, learning, onCardDecided, onSessionEnd, onPositionChange])
 
     // keyboard: space = flip, ← = still learning, → = know
     useEffect(() => {
@@ -454,17 +534,76 @@ function Spelling({ word, onAnswer }: {
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
+    // "revealed" = user gave up via Show answer. Counts as wrong but shows
+    // the target so they learn it instead of just seeing a red border.
+    const [revealed, setRevealed] = useState(false)
+    // While the server-side AI judge is deciding (only used when the local
+    // matcher rejects). Disables the Check/Show-answer buttons so a double
+    // click can't double-submit.
+    const [judging, setJudging] = useState(false)
+    // Final verdict shown to the user. Starts from the local matcher and
+    // is overwritten when the AI judge accepts an answer the local one
+    // rejected. Synonym-match handled here too so the "Synonym — target
+    // was X" hint matches what was actually accepted.
+    const [finalVerdict, setFinalVerdict] = useState<{
+        ok: boolean
+        exact: boolean
+        matchedSynonym?: string
+        aiAccepted?: boolean
+    } | null>(null)
 
-    // Re-derived each render so the input border + "Close" hint use the same
-    // verdict the submit handler will use.
-    const verdict = isCloseSpelling(input, word.word)
+    // Local verdict — re-derived each render so the live input border tracks
+    // it (the *final* verdict overrides only after submit).
+    const localVerdict = isAcceptableSpelling(input, word.word, word.definition)
+    const verdict: { ok: boolean; exact: boolean; matchedSynonym?: string; aiAccepted?: boolean } =
+        finalVerdict ?? localVerdict
 
-    const submit = () => {
-        if (!input.trim() || submitted) return
+    const submit = async () => {
+        if (!input.trim() || submitted || judging) return
+
+        // Local matcher first — costs nothing, handles exact + synonym +
+        // off-by-one. Only fall through to AI when it rejects, and only
+        // when the user typed something non-trivial (two chars or more,
+        // otherwise we'd burn API calls on stray keystrokes).
+        if (localVerdict.ok || input.trim().length < 2) {
+            setSubmitted(true)
+            setFinalVerdict(localVerdict)
+            if (localVerdict.ok) playCorrect()
+            else playWrong()
+            setTimeout(() => onAnswer(localVerdict.ok, localVerdict), 900)
+            return
+        }
+
+        // AI fallback. Don't lock the UI as "submitted" yet so the input
+        // border doesn't flash red before the AI verdict comes back.
+        setJudging(true)
+        const ai = await judgeTypedAnswer(input, word.word, word.definition)
+        setJudging(false)
         setSubmitted(true)
-        if (verdict.ok) playCorrect()
-        else playWrong()
-        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
+
+        if (ai && ai.ok) {
+            // Treat "yes" as exact, "close" as partial credit (same shape
+            // the SRS layer already understands for off-by-one matches).
+            const v = { ok: true, exact: ai.verdict === 'yes', aiAccepted: true }
+            setFinalVerdict(v)
+            playCorrect()
+            setTimeout(() => onAnswer(true, { ok: true, exact: v.exact }), 900)
+        } else {
+            setFinalVerdict(localVerdict)
+            playWrong()
+            setTimeout(() => onAnswer(false, localVerdict), 900)
+        }
+    }
+
+    const showAnswer = () => {
+        if (submitted || judging) return
+        setSubmitted(true)
+        setRevealed(true)
+        setFinalVerdict({ ok: false, exact: false })
+        playWrong()
+        // Slightly longer pause than submit() so the learner has time to
+        // read the revealed word before the next prompt slides in.
+        setTimeout(() => onAnswer(false, { ok: false, exact: false }), 1500)
     }
 
     return (
@@ -488,28 +627,59 @@ function Spelling({ word, onAnswer }: {
                     placeholder="Type the word…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
                         submitted
-                            ? verdict.ok
-                                ? (verdict.exact
-                                    ? 'border-green-500/50 bg-green-500/5'
-                                    : 'border-amber-400/50 bg-amber-400/5')
-                                : 'border-red-500/50 bg-red-500/5'
+                            ? revealed
+                                ? 'border-amber-400/40 bg-amber-400/5'
+                                : verdict.ok
+                                    ? (verdict.exact
+                                        ? 'border-green-500/50 bg-green-500/5'
+                                        : 'border-amber-400/50 bg-amber-400/5')
+                                    : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
                 />
-                {submitted && verdict.ok && !verdict.exact && (
+                {submitted && revealed && (
+                    <p className="text-center text-sm text-amber-300/90">
+                        Answer: <span className="text-amber-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !revealed && verdict.ok && verdict.aiAccepted && (
+                    <p className="text-center text-sm text-green-300/90">
+                        Accepted — target was <span className="text-green-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !revealed && verdict.ok && verdict.matchedSynonym && !verdict.aiAccepted && (
+                    <p className="text-center text-sm text-green-300/90">
+                        Synonym — target was <span className="text-green-200 font-semibold">{word.word}</span>
+                    </p>
+                )}
+                {submitted && !revealed && verdict.ok && !verdict.exact && !verdict.matchedSynonym && !verdict.aiAccepted && (
                     <p className="text-center text-sm text-amber-300/90">
                         Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
                     </p>
                 )}
-                {submitted && !verdict.ok && (
+                {submitted && !revealed && !verdict.ok && (
                     <p className="text-center text-sm text-white/50">
                         Correct: <span className="text-green-400 font-medium">{word.word}</span>
                     </p>
                 )}
                 {!submitted && (
-                    <Button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={!input.trim()}>
-                        Check
-                    </Button>
+                    <div className="space-y-2">
+                        <Button
+                            onClick={submit}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={!input.trim() || judging}
+                        >
+                            {judging ? 'Checking…' : 'Check'}
+                        </Button>
+                        <button
+                            type="button"
+                            onClick={showAnswer}
+                            disabled={judging}
+                            className="w-full text-xs text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            Show answer
+                        </button>
+                    </div>
                 )}
             </div>
         </div>
@@ -690,12 +860,35 @@ function Listening({ word, onAnswer }: {
 
 // ── Quiz/Spelling/Listening session wrapper (legacy correct-counter model) ──
 
-function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
+function LegacySession({
+    words, mode, onDone, drillStartIndex, drillTotal,
+    initialPosition, onPositionChange,
+}: {
     words: PracticeWord[]
     mode: Exclude<Mode, 'flashcard'>
     onDone: (correctIds: number[], missedIds: number[]) => void
     drillStartIndex: number
     drillTotal: number
+    // Resume into the middle of a chunk. The values come from the server-
+    // side snapshot (see PracticeProgress.chunk); only honoured on first
+    // mount so subsequent in-session updates don't fight local state.
+    initialPosition?: {
+        index: number
+        subMode?: 'quiz' | 'spelling'
+        quizCorrectIds?: number[]
+        spellCorrectIds?: number[]
+        correctCount?: number
+    }
+    // Called after every answer with the current chunk position so the
+    // parent can persist it. Fires synchronously inside advance(); the
+    // parent debounces the actual network write.
+    onPositionChange?: (pos: {
+        index: number
+        subMode: 'quiz' | 'spelling'
+        quizCorrectIds: number[]
+        spellCorrectIds: number[]
+        correctCount: number
+    }) => void
 }) {
     // Quiz mode runs two passes over the same chunk: recognition first
     // (multiple choice), then recall (typed spelling). A word only counts
@@ -704,17 +897,21 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
     // surface (10 MC items + 10 spelling items per chunk).
     const isQuizPlus = mode === 'quiz'
     const [subMode, setSubMode] = useState<'quiz' | 'spelling'>(
-        mode === 'quiz' ? 'quiz' : (mode as 'quiz' | 'spelling')
+        initialPosition?.subMode ?? (mode === 'quiz' ? 'quiz' : (mode as 'quiz' | 'spelling'))
     )
-    const [index, setIndex] = useState(0)
+    const [index, setIndex] = useState(initialPosition?.index ?? 0)
 
     // Pass-scoped trackers — used to gate progression to spell phase and
     // to compute the per-word "got it on both passes" finale.
-    const [quizCorrect, setQuizCorrect] = useState<Set<number>>(() => new Set())
-    const [spellCorrect, setSpellCorrect] = useState<Set<number>>(() => new Set())
+    const [quizCorrect, setQuizCorrect] = useState<Set<number>>(
+        () => new Set(initialPosition?.quizCorrectIds ?? []),
+    )
+    const [spellCorrect, setSpellCorrect] = useState<Set<number>>(
+        () => new Set(initialPosition?.spellCorrectIds ?? []),
+    )
     // Single combined display counter — increments on every right answer
     // in either pass so the user always sees forward momentum.
-    const [correctCount, setCorrectCount] = useState(0)
+    const [correctCount, setCorrectCount] = useState(initialPosition?.correctCount ?? 0)
 
     const { mutate: submitResult } = useSubmitResult()
 
@@ -763,7 +960,8 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
             ? (verdict.ok ? (verdict.exact ? 2 : 1) : 0)
             : undefined
         submitResult({ wordId: word.id, wasCorrect, grade })
-        if (wasCorrect) setCorrectCount(c => c + 1)
+        const nextCorrectCount = correctCount + (wasCorrect ? 1 : 0)
+        if (wasCorrect) setCorrectCount(nextCorrectCount)
 
         const nextQuiz = new Set(quizCorrect)
         const nextSpell = new Set(spellCorrect)
@@ -775,20 +973,45 @@ function LegacySession({ words, mode, onDone, drillStartIndex, drillTotal }: {
         setSpellCorrect(nextSpell)
 
         const isLastInPass = index + 1 >= words.length
+        let nextIndex = index
+        let nextSubMode: 'quiz' | 'spelling' = subMode
         if (!isLastInPass) {
-            setIndex(p => p + 1)
+            nextIndex = index + 1
+            setIndex(nextIndex)
+        } else if (isQuizPlus && subMode === 'quiz') {
+            // End of quiz pass → spelling pass on the same chunk.
+            nextSubMode = 'spelling'
+            nextIndex = 0
+            setSubMode('spelling')
+            setIndex(0)
+        } else {
+            // End of the whole chunk — fire finish() AND tell the parent so
+            // it can either snapshot the final mid-chunk position (no-op
+            // since the chunk is done) or fall through to the chunk-end
+            // path. Position emit is intentionally fire-and-forget here.
+            onPositionChange?.({
+                index: words.length, // sentinel past the end
+                subMode: nextSubMode,
+                quizCorrectIds: Array.from(nextQuiz),
+                spellCorrectIds: Array.from(nextSpell),
+                correctCount: nextCorrectCount,
+            })
+            finish(nextQuiz, nextSpell)
             return
         }
 
-        // End of current pass. For quiz+, kick into the spelling pass on
-        // the same words. Otherwise wrap up the chunk.
-        if (isQuizPlus && subMode === 'quiz') {
-            setSubMode('spelling')
-            setIndex(0)
-            return
-        }
-        finish(nextQuiz, nextSpell)
-    }, [word, index, words.length, subMode, isQuizPlus, quizCorrect, spellCorrect, submitResult, finish])
+        onPositionChange?.({
+            index: nextIndex,
+            subMode: nextSubMode,
+            quizCorrectIds: Array.from(nextQuiz),
+            spellCorrectIds: Array.from(nextSpell),
+            correctCount: nextCorrectCount,
+        })
+    }, [
+        word, index, words.length, subMode, isQuizPlus,
+        quizCorrect, spellCorrect, correctCount,
+        submitResult, finish, onPositionChange,
+    ])
 
     return (
         <div className="flex flex-col items-center gap-8">
@@ -1325,11 +1548,190 @@ function PracticePageInner() {
     )
     const [resumeError, setResumeError] = useState<string | null>(null)
 
+    // Per-question in-chunk position. Lives on the parent so a tab-close
+    // handler can include it in the beacon payload — the wrappers push it
+    // here via onPositionChange after every answer.
+    type ChunkPosition =
+        | { kind: 'legacy'; index: number; subMode: 'quiz' | 'spelling'; quizCorrectIds: number[]; spellCorrectIds: number[]; correctCount: number }
+        | { kind: 'flashcard'; index: number; knowIds: number[]; learningIds: number[] }
+    const [chunkPosition, setChunkPosition] = useState<ChunkPosition | null>(null)
+    // Cleared when resume hands off `initialPosition` to the wrapper so the
+    // *next* mount of the same wrapper (after a chunk review) starts fresh.
+    const [resumePosition, setResumePosition] = useState<ChunkPosition | null>(null)
+
     const wordsById = useMemo(() => {
         const m = new Map<number, PracticeWord>()
         for (const w of originalWords) m.set(w.id, w)
         return m
     }, [originalWords])
+
+    // Build a snapshot the resume flow can rehydrate from. Used by both the
+    // per-answer auto-save and the tab-close beacon, so the two paths can't
+    // drift. Reads chunkPosition out of the parameter (not from state) so
+    // the caller can pass a freshly-computed position in the same tick the
+    // wrapper handed it up.
+    //
+    // The current chunk is ALWAYS included when there's an in-flight one,
+    // even if no answer has been recorded yet (chunkPosition === null) —
+    // otherwise the saved unseenQueue/mistakesPool already exclude the
+    // chunk's words and a resume would skip the chunk entirely. When the
+    // user hasn't answered yet, we default index=0 and treat the chunk as
+    // a "just started" snapshot.
+    const buildSnapshot = useCallback((opts?: {
+        position?: ChunkPosition | null
+    }): PracticeProgress | null => {
+        if (!sessionId) return null
+        const pos = opts?.position !== undefined ? opts.position : chunkPosition
+        const hasChunkInFlight = words.length > 0
+        let chunk: PracticeProgress['chunk'] | undefined
+        if (hasChunkInFlight) {
+            const ids = words.map(w => w.id)
+            if (pos?.kind === 'legacy') {
+                chunk = {
+                    ids,
+                    index: pos.index,
+                    subMode: pos.subMode,
+                    quizCorrectIds: pos.quizCorrectIds,
+                    spellCorrectIds: pos.spellCorrectIds,
+                    correctCount: pos.correctCount,
+                }
+            } else if (pos?.kind === 'flashcard') {
+                chunk = {
+                    ids,
+                    index: pos.index,
+                    knowIds: pos.knowIds,
+                    learningIds: pos.learningIds,
+                }
+            } else {
+                // No answers yet in this chunk — record it at index 0 so
+                // resume rebuilds the chunk as-is instead of skipping it.
+                chunk = mode === 'flashcard'
+                    ? { ids, index: 0, knowIds: [], learningIds: [] }
+                    : {
+                        ids,
+                        index: 0,
+                        subMode: mode === 'quiz' ? 'quiz' : 'spelling',
+                        quizCorrectIds: [],
+                        spellCorrectIds: [],
+                        correctCount: 0,
+                    }
+            }
+        }
+        return {
+            version: 1,
+            mode,
+            chunkSize,
+            scope: {
+                folderId: scopeFolderId ?? null,
+                moduleId: scopeModuleId ?? null,
+                dueOnly,
+                weakOnly,
+            },
+            originalIds: originalWords.map(w => w.id),
+            unseenIds: unseenQueue.map(w => w.id),
+            mistakesIds: mistakesPool.map(w => w.id),
+            aggregate: {
+                correct: aggregate.correct,
+                total: aggregate.total,
+                missedIds: Array.from(aggregate.missedIds),
+            },
+            chunk,
+        }
+    }, [
+        sessionId, chunkPosition, words, mode, chunkSize,
+        scopeFolderId, scopeModuleId, dueOnly, weakOnly,
+        originalWords, unseenQueue, mistakesPool, aggregate,
+    ])
+
+    // Keep the most recent snapshot in a ref so the tab-close beacon can
+    // grab it without going through React's render cycle (handlers fire
+    // during pagehide when state reads are too late).
+    const snapshotRef = useRef<PracticeProgress | null>(null)
+
+    // Per-question auto-save. Debounced so a rapid-fire answer streak
+    // collapses into a single network write — at 200ms we get ~5 writes
+    // per second worst case, which is well under what the backend cares
+    // about and still feels "live" if you peek at the resume card after
+    // a single answer.
+    const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const scheduleSave = useCallback(() => {
+        if (pendingSaveRef.current) clearTimeout(pendingSaveRef.current)
+        pendingSaveRef.current = setTimeout(() => {
+            pendingSaveRef.current = null
+            const snap = snapshotRef.current
+            if (sessionId && snap) updateProgress({ sessionId, progress: snap })
+        }, 250)
+    }, [sessionId, updateProgress])
+
+    // Whenever position OR session-level state moves, refresh the ref and
+    // schedule a save. Only fires while the user is mid-session (phase ===
+    // 'session') — chunk-review / pick / results never need per-question
+    // writes, and the chunk-boundary save in handleChunkComplete still
+    // handles the round-cleared snapshot.
+    useEffect(() => {
+        if (phase !== 'session' || !sessionId) return
+        snapshotRef.current = buildSnapshot()
+        scheduleSave()
+    }, [phase, sessionId, chunkPosition, buildSnapshot, scheduleSave])
+
+    // Clear resumePosition once the wrapper has mounted with it — its lazy
+    // initial state has already captured the value, so dropping the prop
+    // prevents the next chunk from accidentally re-using a stale offset.
+    // chunkPosition is NOT cleared here: the resume() path deliberately
+    // seeds it so the first auto-save reflects the user's actual offset
+    // instead of a default index=0. Fresh chunks (start/continueChunk)
+    // clear chunkPosition inside startChunk() before setWords runs.
+    useEffect(() => {
+        setResumePosition(null)
+    }, [words])
+
+    // Flush the latest snapshot directly to the server, bypassing the
+    // debounce. Used by the tab-close handler AND by the unmount cleanup
+    // so SPA navigation (Back button, route change) doesn't drop the
+    // in-flight 250ms save. Uses fetch({keepalive:true}) instead of
+    // sendBeacon because the progress route is PUT and sendBeacon is
+    // POST-only. keepalive lets the request finish after the page tears
+    // down, within a ~64KB body budget that an ID-only snapshot fits.
+    useEffect(() => {
+        if (!sessionId) return
+        const flush = () => {
+            // Cancel any pending debounced save — we're about to send the
+            // same data synchronously and don't want the timer to fire a
+            // second write on an unmounted component.
+            if (pendingSaveRef.current) {
+                clearTimeout(pendingSaveRef.current)
+                pendingSaveRef.current = null
+            }
+            const snap = snapshotRef.current
+            if (!snap) return
+            try {
+                fetch(API_ENDPOINTS.PRACTICE.PROGRESS(sessionId), {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ progress: snap }),
+                    keepalive: true,
+                }).catch(() => { /* page is gone; nothing to handle */ })
+            } catch {
+                // Browsers reject keepalive fetches >64KB or in certain
+                // detached contexts. Swallow — best-effort flush; the next
+                // foreground tick will catch up.
+            }
+        }
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') flush()
+        }
+        window.addEventListener('visibilitychange', onVisibility)
+        window.addEventListener('pagehide', flush)
+        return () => {
+            window.removeEventListener('visibilitychange', onVisibility)
+            window.removeEventListener('pagehide', flush)
+            // SPA route change / Back button: neither pagehide nor
+            // visibilitychange fires, so the debounced timer would be
+            // dropped with the unmount. Flush synchronously here.
+            flush()
+        }
+    }, [sessionId])
 
     // Pull next chunk: mistakes from earlier rounds first (so they recur
     // immediately), then fill remaining slots with fresh words.
@@ -1349,6 +1751,10 @@ function PracticePageInner() {
     }, [])
 
     const startChunk = (chunk: PracticeWord[]) => {
+        // Fresh chunk always starts at index 0 — drop any leftover position
+        // from a prior chunk or resume so the next snapshot reflects the
+        // new chunk truthfully.
+        setChunkPosition(null)
         setWords(chunk)
         // One backend "session" record per drill run is enough; only create
         // it on the very first chunk so the completion stats roll up cleanly.
@@ -1459,6 +1865,49 @@ function PracticePageInner() {
             total: snap.aggregate.total,
             missedIds: new Set<number>(snap.aggregate.missedIds),
         })
+
+        // Prefer the mid-chunk snapshot when present — the user was on a
+        // specific question and we want them to land exactly there. Falls
+        // back to the chunk-boundary behaviour when the saved snapshot
+        // pre-dates per-question saves (no `chunk` field).
+        if (snap.chunk && snap.chunk.ids.length > 0) {
+            const chunkWords = snap.chunk.ids
+                .map(id => byId.get(id))
+                .filter((w): w is PracticeWord => Boolean(w))
+            if (chunkWords.length >= 1 && snap.chunk.index < chunkWords.length) {
+                setUnseenQueue(unseen)
+                setMistakesPool(mistakes)
+                setWords(chunkWords)
+                // Seed BOTH chunkPosition (so the next auto-save reflects
+                // where the user actually was, not a default index=0) and
+                // resumePosition (so the wrapper's lazy initial state
+                // picks up the same offset on mount). The [words] effect
+                // clears resumePosition after one render; chunkPosition
+                // sticks until the user answers and emits a new one.
+                const seeded: ChunkPosition = snap.mode === 'flashcard'
+                    ? {
+                        kind: 'flashcard',
+                        index: snap.chunk.index,
+                        knowIds: snap.chunk.knowIds ?? [],
+                        learningIds: snap.chunk.learningIds ?? [],
+                    }
+                    : {
+                        kind: 'legacy',
+                        index: snap.chunk.index,
+                        subMode: snap.chunk.subMode ?? (snap.mode === 'quiz' ? 'quiz' : 'spelling'),
+                        quizCorrectIds: snap.chunk.quizCorrectIds ?? [],
+                        spellCorrectIds: snap.chunk.spellCorrectIds ?? [],
+                        correctCount: snap.chunk.correctCount ?? 0,
+                    }
+                setResumePosition(seeded)
+                setChunkPosition(seeded)
+                setPhase('session')
+                return
+            }
+            // Snapshot pointed at a chunk that no longer reconstructs
+            // cleanly (words deleted, index out of range). Fall through
+            // to the chunk-boundary path instead of erroring out.
+        }
 
         // Pull the next chunk from (mistakes-pool, unseen) — same
         // ordering as `continueChunk` so the resumed session feels
@@ -1838,6 +2287,21 @@ function PracticePageInner() {
                                         drillStartIndex={drillStartIndex}
                                         drillTotal={drillTotal}
                                         autoTts
+                                        initialPosition={
+                                            resumePosition?.kind === 'flashcard'
+                                                ? {
+                                                    index: resumePosition.index,
+                                                    knowIds: resumePosition.knowIds,
+                                                    learningIds: resumePosition.learningIds,
+                                                }
+                                                : undefined
+                                        }
+                                        onPositionChange={(pos) => setChunkPosition({
+                                            kind: 'flashcard',
+                                            index: pos.index,
+                                            knowIds: pos.knowIds,
+                                            learningIds: pos.learningIds,
+                                        })}
                                     />
                                 ) : (
                                     <LegacySession
@@ -1847,6 +2311,25 @@ function PracticePageInner() {
                                         onDone={handleLegacyDone}
                                         drillStartIndex={drillStartIndex}
                                         drillTotal={drillTotal}
+                                        initialPosition={
+                                            resumePosition?.kind === 'legacy'
+                                                ? {
+                                                    index: resumePosition.index,
+                                                    subMode: resumePosition.subMode,
+                                                    quizCorrectIds: resumePosition.quizCorrectIds,
+                                                    spellCorrectIds: resumePosition.spellCorrectIds,
+                                                    correctCount: resumePosition.correctCount,
+                                                }
+                                                : undefined
+                                        }
+                                        onPositionChange={(pos) => setChunkPosition({
+                                            kind: 'legacy',
+                                            index: pos.index,
+                                            subMode: pos.subMode,
+                                            quizCorrectIds: pos.quizCorrectIds,
+                                            spellCorrectIds: pos.spellCorrectIds,
+                                            correctCount: pos.correctCount,
+                                        })}
                                     />
                                 )}
                             </motion.div>

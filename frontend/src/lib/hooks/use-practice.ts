@@ -125,6 +125,23 @@ export type PracticeProgress = {
         total: number
         missedIds: number[]            // unique miss list across the whole drill
     }
+    // Optional per-question snapshot — present when the user is mid-chunk.
+    // When absent, resume rebuilds the next chunk from (unseen, mistakes)
+    // exactly like the original chunk-boundary flow. When present, resume
+    // jumps straight back to (chunkIds, index, subMode) so closing the tab
+    // at question 3/10 returns to question 3/10.
+    chunk?: {
+        ids: number[]                  // word IDs in the currently visible chunk
+        index: number                  // 0-based position the user was on
+        // Legacy modes (quiz / spelling / listening / cloze):
+        subMode?: 'quiz' | 'spelling'  // quiz+ pass; absent for single-pass modes
+        quizCorrectIds?: number[]      // words that passed the quiz pass so far
+        spellCorrectIds?: number[]     // words that passed the spelling pass so far
+        correctCount?: number          // running display counter
+        // Flashcard mode:
+        knowIds?: number[]             // cards swiped right
+        learningIds?: number[]         // cards swiped left
+    }
 }
 
 export type ActiveSession = {

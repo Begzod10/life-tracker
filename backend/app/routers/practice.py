@@ -390,3 +390,75 @@ def get_history(
         }
         for s in sessions
     ]
+
+
+# ─── AI judge for typed answers ──────────────────────────────────────────────
+
+
+class JudgeAnswerRequest(BaseModel):
+    user_input: str
+    target: str
+    definition: Optional[str] = None
+
+
+@router.post("/judge-answer")
+def judge_typed_answer(
+    body: JudgeAnswerRequest,
+    current_user: models.Person = Depends(get_current_user),
+):
+    """
+    Last-resort AI judge for typed spelling answers when the local matcher
+    rejects them. Designed for cases like target="it is argued that" /
+    typed="it is argued" — same meaning, missing a function word.
+
+    Returns {"ok": bool, "verdict": "yes"|"close"|"no", "reason": str}.
+    Falls back to {"ok": false, "verdict": "no", "reason": "..."} when no AI
+    provider is configured or the call fails — caller keeps the local
+    rejection in that case.
+    """
+    user_input = (body.user_input or "").strip()
+    target = (body.target or "").strip()
+    if not user_input or not target:
+        raise HTTPException(status_code=400, detail="user_input and target are required")
+
+    # Hard length caps — defensive against prompt-injection ballooning. The
+    # judge is for short answers, never paragraphs.
+    if len(user_input) > 200 or len(target) > 200:
+        raise HTTPException(status_code=400, detail="inputs too long")
+
+    from app.config import settings
+    from app.tasks import _generate_text
+
+    if not (settings.GEMINI_API_KEY or settings.OPENAI_API_KEY or settings.GROQ_API_KEY):
+        return {"ok": False, "verdict": "no", "reason": "AI not configured"}
+
+    definition = (body.definition or "").strip()[:400]
+    prompt = (
+        "You judge English vocabulary answers. The student was asked to "
+        "produce a target word or phrase. Decide whether their typed answer "
+        "is essentially the same as the target — accept valid synonyms, "
+        "one-letter typos on long words, and missing function words "
+        "(articles, prepositions, conjunctions) at the start or end of "
+        "multi-word phrases. Reject answers that change the meaning, "
+        "misspell a short word, or pick a different content word.\n\n"
+        f"Target: {target}\n"
+        f"Definition / hint: {definition or '(none)'}\n"
+        f"Student typed: {user_input}\n\n"
+        "Reply with exactly ONE word, uppercase: YES (essentially correct), "
+        "CLOSE (right idea but partial credit only), or NO."
+    )
+
+    try:
+        raw = _generate_text(prompt, max_tokens=4, temperature=0.0)
+    except Exception as e:
+        return {"ok": False, "verdict": "no", "reason": f"ai_error: {type(e).__name__}"}
+
+    token = (raw or "").strip().upper().split()[:1]
+    verdict = token[0] if token else "NO"
+    if verdict not in ("YES", "CLOSE", "NO"):
+        verdict = "NO"
+    return {
+        "ok": verdict in ("YES", "CLOSE"),
+        "verdict": verdict.lower(),
+        "reason": raw[:200] if raw else "",
+    }
