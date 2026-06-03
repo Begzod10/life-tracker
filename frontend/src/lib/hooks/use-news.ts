@@ -68,7 +68,9 @@ export function useSetNewsCategories() {
         mutationFn: (categoryIds: number[]) =>
             request(API_ENDPOINTS.NEWS.CATEGORIES, {
                 method: 'PUT',
-                body: JSON.stringify({ category_ids: categoryIds }),
+                // useHttp.buildConfig calls JSON.stringify(body) internally —
+                // pass the plain object so we don't double-encode.
+                body: { category_ids: categoryIds },
             }),
         onSuccess: (data) => {
             qc.setQueryData(keys.categories, data)
