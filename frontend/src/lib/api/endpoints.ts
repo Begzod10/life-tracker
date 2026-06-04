@@ -360,5 +360,6 @@ export const API_ENDPOINTS = {
             return `${API_URL}/news/dates${qs ? `?${qs}` : ''}`
         },
         FETCH: (date?: string) => date ? `${API_URL}/news/fetch?date=${date}` : `${API_URL}/news/fetch`,
+        ITEM: (id: number) => `${API_URL}/news/${id}`,
     },
 }

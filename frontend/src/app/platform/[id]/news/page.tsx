@@ -220,7 +220,7 @@ export default function NewsPage() {
                                             <SectionHeader label={cat.label} color={cat.color} count={bucket.length} />
                                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                                 {bucket.map(item => (
-                                                    <ArticleCard key={item.id} item={item} />
+                                                    <ArticleCard key={item.id} item={item} platformId={platformId} />
                                                 ))}
                                             </div>
                                         </section>
@@ -230,7 +230,7 @@ export default function NewsPage() {
                         ) : (
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                 {filteredItems.map(item => (
-                                    <ArticleCard key={item.id} item={item} />
+                                    <ArticleCard key={item.id} item={item} platformId={platformId} />
                                 ))}
                             </div>
                         )}
@@ -313,6 +313,7 @@ function SectionHeader({ label, color, count }: SectionHeaderProps) {
 
 interface ArticleCardProps {
     item: NewsItem
+    platformId: string
 }
 
 // Deterministic pastel background for source avatar based on name characters.
@@ -327,7 +328,7 @@ function sourceAvatarColor(name: string): string {
     return colors[h % colors.length]
 }
 
-function ArticleCard({ item }: ArticleCardProps) {
+function ArticleCard({ item, platformId }: ArticleCardProps) {
     const sourceName = item.source_name || item.provider || 'News'
     const initials = sourceName.replace(/[^a-zA-Z0-9 ]/g, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
     const avatarBg = sourceAvatarColor(sourceName)
@@ -350,7 +351,7 @@ function ArticleCard({ item }: ArticleCardProps) {
                         <p className="text-[10px] text-white/35">{relativeTime(item.published_at)}</p>
                     )}
                 </div>
-                {/* Direct link to article — always visible */}
+                {/* Direct external link — bypasses profile page */}
                 <a
                     href={item.url}
                     target="_blank"
@@ -363,45 +364,37 @@ function ArticleCard({ item }: ArticleCardProps) {
                 </a>
             </div>
 
-            {/* Image */}
-            {item.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={item.image_url}
-                    alt=""
-                    loading="lazy"
-                    className="h-40 w-full object-cover opacity-90"
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
-            ) : (
-                <div className="grid h-32 w-full place-items-center bg-gradient-to-br from-white/[0.04] to-transparent">
-                    <Newspaper className="h-7 w-7 text-white/12" />
-                </div>
-            )}
-
-            {/* Content */}
-            <div className="flex flex-1 flex-col gap-2 p-4">
-                <h3 className="line-clamp-3 text-sm font-semibold leading-snug text-white/95">
-                    {item.headline}
-                </h3>
-                {item.summary && (
-                    <p className="line-clamp-3 text-xs leading-relaxed text-white/50">
-                        <Sparkles className="mr-1 inline h-3 w-3 text-indigo-300/60" />
-                        {item.summary}
-                    </p>
+            {/* Clicking image/title/summary goes to the in-app profile page */}
+            <Link href={`/platform/${platformId}/news/${item.id}`} className="group block">
+                {item.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={item.image_url}
+                        alt=""
+                        loading="lazy"
+                        className="h-40 w-full object-cover opacity-90 transition group-hover:opacity-100"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    />
+                ) : (
+                    <div className="grid h-32 w-full place-items-center bg-gradient-to-br from-white/[0.04] to-transparent">
+                        <Newspaper className="h-7 w-7 text-white/12" />
+                    </div>
                 )}
-
-                {/* Explicit read link at bottom */}
-                <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-auto inline-flex items-center gap-1 pt-3 text-[11px] font-medium text-indigo-400/80 transition hover:text-indigo-300"
-                >
-                    Read full article
-                    <ExternalLink className="h-3 w-3" />
-                </a>
-            </div>
+                <div className="flex flex-1 flex-col gap-2 p-4">
+                    <h3 className="line-clamp-3 text-sm font-semibold leading-snug text-white/95 group-hover:text-white transition">
+                        {item.headline}
+                    </h3>
+                    {item.summary && (
+                        <p className="line-clamp-2 text-xs leading-relaxed text-white/50">
+                            <Sparkles className="mr-1 inline h-3 w-3 text-indigo-300/60" />
+                            {item.summary}
+                        </p>
+                    )}
+                    <p className="mt-auto pt-3 text-[11px] font-medium text-indigo-400/70 transition group-hover:text-indigo-300">
+                        View article →
+                    </p>
+                </div>
+            </Link>
         </motion.div>
     )
 }

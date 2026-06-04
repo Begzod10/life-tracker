@@ -211,6 +211,22 @@ def list_dates_with_items(
     return {"dates": [str(r[0]) for r in rows]}
 
 
+# ─── Single article ─────────────────────────────────────────────────────────
+
+@router.get("/{item_id}")
+def get_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return one news article by id."""
+    item = db.query(models.NewsItem).filter(models.NewsItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Article not found")
+    cat = db.query(models.NewsCategory).filter(models.NewsCategory.id == item.category_id).first()
+    return _serialize_item(item, cat)
+
+
 # ─── Manual fetch trigger ───────────────────────────────────────────────────
 
 @router.post("/fetch", response_model=schemas.NewsFetchSummary)

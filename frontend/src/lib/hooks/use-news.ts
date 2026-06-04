@@ -97,6 +97,15 @@ export function useNewsDates(from?: string, to?: string) {
     })
 }
 
+export function useNewsItem(id: number | null) {
+    const { request } = useHttp()
+    return useQuery<NewsItem>({
+        queryKey: ['news', 'item', id],
+        queryFn: () => request(API_ENDPOINTS.NEWS.ITEM(id!)),
+        enabled: id !== null,
+    })
+}
+
 export function useNewsFetch() {
     const { request } = useHttp()
     const qc = useQueryClient()
