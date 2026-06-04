@@ -2019,7 +2019,7 @@ function PracticePageInner() {
         const remaining = size - fromPool.length
         const fromUnseen = remaining > 0 ? unseen.slice(0, remaining) : []
         return {
-            chunk: [...fromPool, ...fromUnseen],
+            chunk: shuffleArray([...fromPool, ...fromUnseen]),
             poolRest: pool.slice(fromPool.length),
             unseenRest: unseen.slice(fromUnseen.length),
         }
