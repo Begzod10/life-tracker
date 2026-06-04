@@ -1100,7 +1100,7 @@ function LegacySession({
         // streak so the user has to earn it back.
         if (wasCorrect) {
             streakRef.current += 1
-            if (streakRef.current % 10 === 0) {
+            if (streakRef.current % 5 === 0) {
                 setFireLevel(lv => lv + 1)
                 setFireMilestones(m => m + 1)
             }
