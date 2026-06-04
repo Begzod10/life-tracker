@@ -881,52 +881,101 @@ function Listening({ word, onAnswer }: {
     )
 }
 
-// ── Fire background (body-style hook + inline badge) ─────────────────────────
-// Sets backgroundImage directly on document.body so it's never clipped by
-// framer-motion's opacity stacking context. Badge renders inline with a
-// very high z-index so it floats above all content.
+// ── Fire background (fixed DOM overlay — never scrolls, always viewport-locked)
+
+const FIRE_CSS_ID = 'fire-keyframes'
+const FIRE_OVERLAY_ID = 'fire-bg-overlay'
+
+function ensureFireKeyframes() {
+    if (document.getElementById(FIRE_CSS_ID)) return
+    const s = document.createElement('style')
+    s.id = FIRE_CSS_ID
+    s.textContent = `
+        @keyframes fire-pulse {
+            0%,100% { opacity:.85; transform:scaleY(1) scaleX(1); }
+            20%  { opacity:1;   transform:scaleY(1.04) scaleX(1.01); }
+            50%  { opacity:.72; transform:scaleY(.97)  scaleX(.99); }
+            75%  { opacity:.94; transform:scaleY(1.02) scaleX(1); }
+        }
+        @keyframes fire-wave {
+            0%,100% { transform:translateX(0)   scaleX(1);    opacity:.9; }
+            33%     { transform:translateX(1.5%) scaleX(1.02); opacity:1; }
+            66%     { transform:translateX(-1%)  scaleX(.98);  opacity:.8; }
+        }
+        @keyframes fire-ember {
+            0%,100% { opacity:.45; }
+            40%     { opacity:.8; }
+            70%     { opacity:.55; }
+        }
+        @keyframes fire-glow {
+            0%,100% { box-shadow:0 0 18px 6px rgba(255,50,0,.65),0 0 40px 14px rgba(255,90,0,.35); }
+            50%     { box-shadow:0 0 28px 10px rgba(255,70,0,.8), 0 0 55px 20px rgba(255,120,0,.45); }
+        }
+    `
+    document.head.appendChild(s)
+}
 
 function useFireBackground(level: number) {
     useEffect(() => {
-        if (level === 0) {
-            document.body.style.backgroundImage = ''
-            return
-        }
-        const alpha1 = Math.min(0.45 + level * 0.06, 0.65)
-        const alpha2 = Math.min(0.25 + level * 0.04, 0.40)
-        document.body.style.backgroundImage = [
-            `radial-gradient(ellipse at 50% 115%, rgba(255,55,0,${alpha1}) 0%, rgba(255,120,0,${alpha2}) 28%, rgba(180,30,0,0.08) 55%, transparent 78%)`,
-            `radial-gradient(ellipse at 18% 108%, rgba(255,70,0,${alpha2 * 0.7}) 0%, transparent 38%)`,
-            `radial-gradient(ellipse at 82% 108%, rgba(255,70,0,${alpha2 * 0.7}) 0%, transparent 38%)`,
-        ].join(', ')
-        return () => { document.body.style.backgroundImage = '' }
+        ensureFireKeyframes()
+        const existing = document.getElementById(FIRE_OVERLAY_ID)
+        if (level === 0) { existing?.remove(); return }
+
+        const el = (existing ?? (() => {
+            const d = document.createElement('div')
+            d.id = FIRE_OVERLAY_ID
+            document.body.appendChild(d)
+            return d
+        })()) as HTMLDivElement
+
+        const a1 = Math.min(0.58 + level * 0.05, 0.78)
+        const a2 = Math.min(0.32 + level * 0.04, 0.52)
+
+        el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9998;'
+        el.innerHTML = `
+            <div style="position:absolute;inset:0;
+                background:radial-gradient(ellipse at 50% 120%,rgba(255,45,0,${a1}) 0%,rgba(255,105,0,${a2}) 24%,rgba(160,22,0,.09) 52%,transparent 74%),
+                           radial-gradient(ellipse at 18% 114%,rgba(255,60,0,${a2*.8}) 0%,transparent 35%),
+                           radial-gradient(ellipse at 82% 114%,rgba(255,60,0,${a2*.8}) 0%,transparent 35%);
+                animation:fire-pulse 1.9s ease-in-out infinite;">
+            </div>
+            <div style="position:absolute;inset:0;
+                background:radial-gradient(ellipse at 50% 118%,rgba(255,25,0,.28) 0%,transparent 48%);
+                animation:fire-wave 2.4s ease-in-out infinite;">
+            </div>
+            <div style="position:absolute;bottom:0;left:0;right:0;height:40vh;
+                background:linear-gradient(to top,rgba(200,15,0,.55) 0%,rgba(255,70,0,.22) 35%,transparent 80%);
+                animation:fire-ember 2.9s ease-in-out infinite;">
+            </div>
+            <div style="position:absolute;bottom:0;left:0;right:0;height:4px;
+                background:rgba(255,35,0,.95);
+                animation:fire-glow 1.7s ease-in-out infinite;">
+            </div>
+        `
+        return () => { document.getElementById(FIRE_OVERLAY_ID)?.remove() }
     }, [level])
 }
 
-function FireBadge({ milestones }: { milestones: number }) {
+function FireBadge({ streak }: { streak: number }) {
     return (
         <motion.div
-            key={milestones}
-            initial={{ scale: 0.4, opacity: 0, y: -10 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+            key={streak}
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             className="fixed pointer-events-none flex items-center gap-1.5 px-3 py-1.5 rounded-full"
             style={{
-                top: '5.5rem',
-                right: '1rem',
-                zIndex: 9999,
-                background: 'rgba(220, 60, 0, 0.25)',
-                border: '1px solid rgba(255, 140, 0, 0.6)',
-                color: 'rgb(255, 210, 80)',
+                top: '5.5rem', right: '1rem', zIndex: 9999,
+                background: 'rgba(210,50,0,.28)',
+                border: '1px solid rgba(255,130,0,.65)',
+                color: 'rgb(255,210,70)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
-                boxShadow: '0 0 20px rgba(255,80,0,0.4)',
+                boxShadow: '0 0 22px rgba(255,70,0,.5)',
             }}
         >
             <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>🔥</span>
-            <span style={{ fontSize: '0.875rem', fontWeight: 700 }}>
-                {milestones > 1 ? `${milestones}× streak` : 'On fire!'}
-            </span>
+            <span style={{ fontSize: '0.875rem', fontWeight: 700 }}>{streak}</span>
         </motion.div>
     )
 }
@@ -986,12 +1035,12 @@ function LegacySession({
     // in either pass so the user always sees forward momentum.
     const [correctCount, setCorrectCount] = useState(initialPosition?.correctCount ?? 0)
 
-    // Fire streak — consecutive correct answers across the whole session.
-    // Stored in a ref so advance() reads the latest value without needing
-    // it in its dependency array, avoiding stale-closure issues.
+    // Fire streak — consecutive correct answers.
+    // Ref for threshold checks (no closure staleness); streakDisplay is the
+    // state copy that drives the badge so React re-renders on every answer.
     const streakRef = useRef(0)
-    const [fireLevel, setFireLevel] = useState(0)      // 0 = no fire, 1+ = fire active
-    const [fireMilestones, setFireMilestones] = useState(0) // how many 10-streak hits
+    const [streakDisplay, setStreakDisplay] = useState(0)
+    const [fireLevel, setFireLevel] = useState(0)
 
     const { mutate: submitResult } = useSubmitResult()
 
@@ -1068,12 +1117,13 @@ function LegacySession({
         // streak so the user has to earn it back.
         if (wasCorrect) {
             streakRef.current += 1
+            setStreakDisplay(streakRef.current)
             if (streakRef.current % 5 === 0) {
                 setFireLevel(lv => lv + 1)
-                setFireMilestones(m => m + 1)
             }
         } else {
             streakRef.current = 0
+            setStreakDisplay(0)
             setFireLevel(0)
         }
 
@@ -1133,7 +1183,7 @@ function LegacySession({
 
     return (
         <>
-        {fireLevel > 0 && <FireBadge milestones={fireMilestones} />}
+        {fireLevel > 0 && <FireBadge streak={streakDisplay} />}
 
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">

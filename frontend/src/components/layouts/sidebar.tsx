@@ -14,6 +14,7 @@ import {
     PenLine,
     Library as LibraryIcon,
     GraduationCap,
+    ListChecks,
     CalendarClock,
     Wallet,
     Coins,
@@ -64,6 +65,7 @@ function buildSections(id: string): NavSection[] {
             items: [
                 { name: 'Library', href: `${base}/learning/library`, icon: LibraryIcon, matchPrefix: true },
                 { name: 'Practice', href: `${base}/learning/practice`, icon: Dumbbell, matchPrefix: true },
+                { name: 'Exercise', href: `${base}/learning/exercise`, icon: ListChecks, matchPrefix: true },
                 { name: 'Dictionary', href: `${base}/learning/dictionary`, icon: NotebookText, matchPrefix: true },
                 { name: 'Writing', href: `${base}/learning/writing`, icon: PenLine, matchPrefix: true },
                 { name: 'Reading', href: `${base}/learning/reading`, icon: BookOpen, matchPrefix: true },

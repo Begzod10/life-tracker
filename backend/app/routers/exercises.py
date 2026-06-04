@@ -415,7 +415,7 @@ async def grade_exercises(
             "usage_score": grade["usage_score"],
             "feedback": grade["feedback"],
             "suggested_revision": grade["suggested_revision"],
-            "next_review_at": word.next_review_at.isoformat(),
+            "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
         })
 
     # Close session.
