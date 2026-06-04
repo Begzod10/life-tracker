@@ -171,7 +171,7 @@ export default function LearningPage() {
                         stats={exerciseStats}
                         recent={recentExercises}
                         canStart={(stats?.total ?? 0) >= 1}
-                        onGenerate={() => goto('/exercises')}
+                        onGenerate={() => goto('/exercise')}
                     />
 
                     <LibraryPanel
