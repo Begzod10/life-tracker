@@ -315,62 +315,94 @@ interface ArticleCardProps {
     item: NewsItem
 }
 
+// Deterministic pastel background for source avatar based on name characters.
+function sourceAvatarColor(name: string): string {
+    const colors = [
+        'bg-indigo-500/70', 'bg-violet-500/70', 'bg-blue-500/70',
+        'bg-emerald-500/70', 'bg-amber-500/70', 'bg-rose-500/70',
+        'bg-cyan-500/70', 'bg-fuchsia-500/70', 'bg-teal-500/70',
+    ]
+    let h = 0
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff
+    return colors[h % colors.length]
+}
+
 function ArticleCard({ item }: ArticleCardProps) {
+    const sourceName = item.source_name || item.provider || 'News'
+    const initials = sourceName.replace(/[^a-zA-Z0-9 ]/g, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'
+    const avatarBg = sourceAvatarColor(sourceName)
+
     return (
-        <motion.a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
+        <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.18 }}
-            className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition hover:border-white/20 hover:bg-white/[0.06]"
+            className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition hover:border-white/15 hover:bg-white/[0.05]"
         >
+            {/* Source profile header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${avatarBg}`}>
+                    {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white/90">{sourceName}</p>
+                    {item.published_at && (
+                        <p className="text-[10px] text-white/35">{relativeTime(item.published_at)}</p>
+                    )}
+                </div>
+                {/* Direct link to article — always visible */}
+                <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open original article"
+                    className="shrink-0 rounded-lg p-1.5 text-white/35 transition hover:bg-white/10 hover:text-white/80"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+            </div>
+
+            {/* Image */}
             {item.image_url ? (
-                /* Intentionally use <img> instead of next/image — these are
-                   third-party URLs from many domains; whitelisting them all in
-                   next.config is more friction than the perf payoff. */
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                     src={item.image_url}
                     alt=""
                     loading="lazy"
-                    className="h-40 w-full object-cover opacity-90 transition group-hover:opacity-100"
-                    onError={e => {
-                        ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                    }}
+                    className="h-40 w-full object-cover opacity-90"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
             ) : (
-                <div className="grid h-40 w-full place-items-center bg-gradient-to-br from-white/[0.04] to-transparent">
-                    <Newspaper className="h-8 w-8 text-white/15" />
+                <div className="grid h-32 w-full place-items-center bg-gradient-to-br from-white/[0.04] to-transparent">
+                    <Newspaper className="h-7 w-7 text-white/12" />
                 </div>
             )}
+
+            {/* Content */}
             <div className="flex flex-1 flex-col gap-2 p-4">
                 <h3 className="line-clamp-3 text-sm font-semibold leading-snug text-white/95">
                     {item.headline}
                 </h3>
                 {item.summary && (
-                    <p className="line-clamp-3 text-xs leading-relaxed text-white/55">
-                        <Sparkles className="mr-1 inline h-3 w-3 text-indigo-300/70" />
+                    <p className="line-clamp-3 text-xs leading-relaxed text-white/50">
+                        <Sparkles className="mr-1 inline h-3 w-3 text-indigo-300/60" />
                         {item.summary}
                     </p>
                 )}
-                <div className="mt-auto flex items-center justify-between gap-2 pt-2 text-[10px] text-white/35">
-                    <div className="flex items-center gap-1.5 truncate">
-                        <span className="truncate font-medium uppercase tracking-wider text-white/50">
-                            {item.source_name || item.provider}
-                        </span>
-                        {item.published_at && (
-                            <>
-                                <span aria-hidden>·</span>
-                                <span>{relativeTime(item.published_at)}</span>
-                            </>
-                        )}
-                    </div>
-                    <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition group-hover:opacity-60" />
-                </div>
+
+                {/* Explicit read link at bottom */}
+                <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-auto inline-flex items-center gap-1 pt-3 text-[11px] font-medium text-indigo-400/80 transition hover:text-indigo-300"
+                >
+                    Read full article
+                    <ExternalLink className="h-3 w-3" />
+                </a>
             </div>
-        </motion.a>
+        </motion.div>
     )
 }
 
