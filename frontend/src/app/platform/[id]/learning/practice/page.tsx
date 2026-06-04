@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
 import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type, Play, Trash2 } from 'lucide-react'
@@ -880,6 +881,87 @@ function Listening({ word, onAnswer }: {
     )
 }
 
+// ── Fire overlay (portal — renders directly under document.body) ─────────────
+// Using a portal bypasses framer-motion's opacity stacking context so the
+// fixed overlay always sits at the correct viewport z-level.
+
+function FireOverlay({ level, milestones }: { level: number; milestones: number }) {
+    return (
+        <>
+            {/* Base fire glow from bottom — intensity grows with level */}
+            <motion.div
+                key="fire-base"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.0 }}
+                className="fixed inset-0 pointer-events-none"
+                style={{ zIndex: 2 }}
+            >
+                <div className="absolute inset-0" style={{
+                    background: [
+                        `radial-gradient(ellipse at 50% 110%, rgba(255,65,0,${Math.min(0.22 + level * 0.04, 0.38)}) 0%, rgba(255,130,0,${Math.min(0.12 + level * 0.02, 0.22)}) 32%, rgba(180,40,0,0.04) 58%, transparent 80%)`,
+                        `radial-gradient(ellipse at 15% 100%, rgba(255,80,0,${Math.min(0.08 + level * 0.02, 0.16)}) 0%, transparent 38%)`,
+                        `radial-gradient(ellipse at 85% 100%, rgba(255,80,0,${Math.min(0.08 + level * 0.02, 0.16)}) 0%, transparent 38%)`,
+                    ].join(', ')
+                }} />
+            </motion.div>
+
+            {/* Flicker layer — breathing animation mimics flame movement */}
+            <motion.div
+                className="fixed inset-0 pointer-events-none"
+                animate={{ opacity: [0.45, 0.9, 0.55, 0.85, 0.45] }}
+                transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ zIndex: 2 }}
+            >
+                <div className="absolute inset-0" style={{
+                    background: 'radial-gradient(ellipse at 50% 115%, rgba(255,45,0,0.13) 0%, transparent 52%)'
+                }} />
+            </motion.div>
+
+            {/* Edge shimmer — second flicker slightly out of phase */}
+            <motion.div
+                className="fixed inset-0 pointer-events-none"
+                animate={{ opacity: [0.3, 0.65, 0.3] }}
+                transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+                style={{ zIndex: 2 }}
+            >
+                <div className="absolute inset-0" style={{
+                    background: [
+                        'radial-gradient(ellipse at 25% 105%, rgba(255,100,0,0.09) 0%, transparent 35%)',
+                        'radial-gradient(ellipse at 75% 105%, rgba(255,100,0,0.09) 0%, transparent 35%)',
+                    ].join(', ')
+                }} />
+            </motion.div>
+
+            {/* Streak badge — re-keys on milestone so it pops on each new one */}
+            <motion.div
+                key={`badge-${milestones}`}
+                initial={{ scale: 0.4, opacity: 0, y: -12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 340, damping: 22 }}
+                className="fixed pointer-events-none flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                style={{
+                    top: '5.5rem',
+                    right: '1rem',
+                    zIndex: 60,
+                    background: 'rgba(255, 80, 0, 0.18)',
+                    border: '1px solid rgba(255, 155, 0, 0.55)',
+                    color: 'rgb(255, 210, 100)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                }}
+            >
+                <span style={{ fontSize: '1rem', lineHeight: 1 }}>🔥</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {milestones > 1 ? `${milestones}×` : 'On fire!'}
+                </span>
+            </motion.div>
+        </>
+    )
+}
+
 // ── Quiz/Spelling/Listening session wrapper (legacy correct-counter model) ──
 
 function LegacySession({
@@ -934,6 +1016,13 @@ function LegacySession({
     // Single combined display counter — increments on every right answer
     // in either pass so the user always sees forward momentum.
     const [correctCount, setCorrectCount] = useState(initialPosition?.correctCount ?? 0)
+
+    // Fire streak — consecutive correct answers across the whole session.
+    // Stored in a ref so advance() reads the latest value without needing
+    // it in its dependency array, avoiding stale-closure issues.
+    const streakRef = useRef(0)
+    const [fireLevel, setFireLevel] = useState(0)      // 0 = no fire, 1+ = fire active
+    const [fireMilestones, setFireMilestones] = useState(0) // how many 10-streak hits
 
     const { mutate: submitResult } = useSubmitResult()
 
@@ -1005,6 +1094,20 @@ function LegacySession({
         // in sync with the sound/colour feedback, before the next card slides in.
         setWordStatuses(prev => ({ ...prev, [word.id]: wasCorrect ? 'correct' : 'wrong' }))
 
+        // Fire streak tracking — consecutive correct answers unlock the
+        // fire background. A wrong answer extinguishes it and resets the
+        // streak so the user has to earn it back.
+        if (wasCorrect) {
+            streakRef.current += 1
+            if (streakRef.current % 10 === 0) {
+                setFireLevel(lv => lv + 1)
+                setFireMilestones(m => m + 1)
+            }
+        } else {
+            streakRef.current = 0
+            setFireLevel(0)
+        }
+
         const nextQuiz = new Set(quizCorrect)
         const nextSpell = new Set(spellCorrect)
         if (wasCorrect) {
@@ -1058,6 +1161,16 @@ function LegacySession({
     ])
 
     return (
+        <>
+        {/* Fire overlay — portalled so it renders at document.body level,
+            bypassing framer-motion's opacity stacking context. */}
+        <AnimatePresence>
+            {fireLevel > 0 && createPortal(
+                <FireOverlay level={fireLevel} milestones={fireMilestones} />,
+                document.body,
+            )}
+        </AnimatePresence>
+
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
                 <div className="flex justify-between text-[11px] sm:text-xs text-white/40 mb-1.5 gap-2">
@@ -1125,6 +1238,7 @@ function LegacySession({
                 </motion.div>
             </AnimatePresence>
         </div>
+        </>
     )
 }
 
