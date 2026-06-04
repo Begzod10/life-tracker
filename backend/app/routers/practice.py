@@ -34,6 +34,10 @@ def _serialize_practice_word(word: models.DictionaryWord, all_words: list) -> di
         "source_sentence": word.source_sentence,
         "source_book_id": word.source_book_id,
         "source_page": word.source_page,
+        # SRS state — used by the frontend word-status preview list.
+        "interval_days": word.interval_days,
+        "lapses": word.lapses,
+        "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
     }
 
 

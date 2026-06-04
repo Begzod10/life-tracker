@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import {
     usePracticeWords,
     usePracticeWordsByIds,
+    useWordPreview,
     useSubmitResult,
     useCreateSession,
     useCompleteSession,
@@ -1489,6 +1490,105 @@ function Results({
     )
 }
 
+// ── Word status list (pick-screen preview) ───────────────────────────────────
+
+type WordStatus = 'new' | 'learning' | 'due' | 'mastered' | 'weak'
+
+function wordStatus(w: PracticeWord): WordStatus {
+    if ((w.lapses ?? 0) >= 2) return 'weak'
+    const days = w.interval_days ?? 0
+    if (days === 0) return 'new'
+    const next = w.next_review_at ? new Date(w.next_review_at) : null
+    if (next && next <= new Date()) return 'due'
+    if (days >= 21) return 'mastered'
+    return 'learning'
+}
+
+const STATUS_META: Record<WordStatus, { label: string; dot: string; text: string }> = {
+    new:      { label: 'New',      dot: 'bg-blue-400',    text: 'text-blue-300'    },
+    learning: { label: 'Learning', dot: 'bg-amber-400',   text: 'text-amber-300'   },
+    due:      { label: 'Due',      dot: 'bg-green-400',   text: 'text-green-300'   },
+    mastered: { label: 'Mastered', dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    weak:     { label: 'Weak',     dot: 'bg-red-400',     text: 'text-red-300'     },
+}
+
+function WordStatusList({ folderId, moduleId, dueOnly, weakOnly }: {
+    folderId?: number
+    moduleId?: number
+    dueOnly: boolean
+    weakOnly: boolean
+}) {
+    const { data: words = [], isLoading } = useWordPreview({
+        moduleId,
+        folderId: moduleId ? undefined : folderId,
+        dueOnly,
+        weakOnly,
+    })
+
+    // Tally status counts across the fetched sample for the summary row.
+    const counts = useMemo(() => {
+        const c: Record<WordStatus, number> = { new: 0, learning: 0, due: 0, mastered: 0, weak: 0 }
+        for (const w of words) c[wordStatus(w)]++
+        return c
+    }, [words])
+
+    if (isLoading) {
+        return (
+            <Card className="p-4 bg-white/2.5 border border-white/5">
+                <div className="flex gap-2 flex-wrap">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-6 w-20 bg-white/5 rounded-md animate-pulse" />
+                    ))}
+                </div>
+            </Card>
+        )
+    }
+
+    if (words.length === 0) return null
+
+    return (
+        <Card className="p-4 bg-white/2.5 border border-white/5">
+            <div className="flex items-center justify-between mb-3 gap-2">
+                <p className="text-sm text-white/60">Word sample</p>
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                    {(Object.entries(counts) as [WordStatus, number][])
+                        .filter(([, n]) => n > 0)
+                        .map(([s, n]) => (
+                            <span key={s} className={`flex items-center gap-1 text-[11px] ${STATUS_META[s].text}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${STATUS_META[s].dot}`} />
+                                {n} {STATUS_META[s].label}
+                            </span>
+                        ))
+                    }
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {words.map(w => {
+                    const s = wordStatus(w)
+                    const meta = STATUS_META[s]
+                    return (
+                        <motion.span
+                            key={w.id}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            title={`${w.word} — ${meta.label}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-colors
+                                ${s === 'due'      ? 'border-green-500/30 bg-green-500/8 text-green-200'    :
+                                  s === 'weak'     ? 'border-red-500/30 bg-red-500/8 text-red-200'          :
+                                  s === 'mastered' ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200' :
+                                  s === 'learning' ? 'border-amber-500/30 bg-amber-500/8 text-amber-200'    :
+                                  'border-blue-500/30 bg-blue-500/8 text-blue-200'}`}
+                        >
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${meta.dot}`} />
+                            <span className="font-medium truncate max-w-[8rem]">{w.word}</span>
+                        </motion.span>
+                    )
+                })}
+            </div>
+        </Card>
+    )
+}
+
 // ── Scope picker (folder/module) ─────────────────────────────────────────────
 
 function ScopePicker({
@@ -2421,6 +2521,13 @@ function PracticePageInner() {
                                 </p>
                             </Card>
 
+                            {/* Random word-status preview */}
+                            <WordStatusList
+                                folderId={scopeFolderId}
+                                moduleId={scopeModuleId}
+                                dueOnly={dueOnly}
+                                weakOnly={weakOnly}
+                            />
 
                             {startError && (
                                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-start gap-3">

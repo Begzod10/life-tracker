@@ -13,12 +13,13 @@ export type PracticeWord = {
     examples?: string[]
     difficulty: string
     options: string[]
-    // Sentence captured at reader-save time. When present, cloze mode
-    // blanks the target word inside this real sentence instead of
-    // falling back to a generic example.
     source_sentence?: string | null
     source_book_id?: number | null
     source_page?: number | null
+    // SRS state — present in responses from /practice/words
+    interval_days?: number
+    lapses?: number
+    next_review_at?: string | null
 }
 
 export type PracticeSession = {
@@ -45,6 +46,22 @@ export function usePracticeWords(args: {
         queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(count, difficulty, moduleId, folderId, { dueOnly, weakOnly })),
         enabled: false,
         retry: false,
+    })
+}
+
+/** Auto-fetched sample used by the pick-screen word-status preview list. */
+export function useWordPreview(args: {
+    moduleId?: number
+    folderId?: number
+    dueOnly?: boolean
+    weakOnly?: boolean
+} = {}) {
+    const { moduleId, folderId, dueOnly, weakOnly } = args
+    const { request } = useHttp()
+    return useQuery<PracticeWord[]>({
+        queryKey: ['practice', 'preview', moduleId ?? '', folderId ?? '', dueOnly ?? false, weakOnly ?? false],
+        queryFn: () => request(API_ENDPOINTS.PRACTICE.WORDS(20, undefined, moduleId, folderId, { dueOnly, weakOnly })),
+        staleTime: 30_000,
     })
 }
 
