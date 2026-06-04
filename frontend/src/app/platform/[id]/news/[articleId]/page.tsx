@@ -151,6 +151,21 @@ export default function ArticleProfilePage() {
                         </div>
                     )}
 
+                    {/* Full article text */}
+                    {item.content ? (
+                        <div className="space-y-3">
+                            <p className="text-xs text-white/35 uppercase tracking-wide">Full article</p>
+                            <div className="text-sm text-white/75 leading-relaxed whitespace-pre-line">
+                                {item.content}
+                            </div>
+                        </div>
+                    ) : item.description && item.description !== item.summary && (
+                        <div className="space-y-1.5">
+                            <p className="text-xs text-white/35 uppercase tracking-wide">From source</p>
+                            <p className="text-sm text-white/60 leading-relaxed">{item.description}</p>
+                        </div>
+                    )}
+
                     {/* Read original article CTA */}
                     <a
                         href={item.url}

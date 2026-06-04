@@ -65,3 +65,6 @@ python-telegram-bot[job-queue]>=21.0
 
 # Weekly share card renderer (services/weekly_card.py)
 Pillow==11.0.0
+
+# Article full-text extraction (news pipeline)
+trafilatura>=1.12.0

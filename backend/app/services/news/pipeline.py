@@ -32,6 +32,27 @@ from app.services.news.newsapi import NewsAPIProvider
 from app.services.news.summarizer import summarize_article, fallback_summary
 
 
+def _scrape_content(url: str) -> Optional[str]:
+    """Attempt to extract full article text from the URL using trafilatura.
+    Returns None on any error so callers can fall back gracefully."""
+    try:
+        import trafilatura  # lazy import — not critical path
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            return None
+        text = trafilatura.extract(
+            downloaded,
+            include_comments=False,
+            include_tables=False,
+            no_fallback=False,
+            favor_precision=True,
+        )
+        return text or None
+    except Exception as exc:  # network error, blocked, etc.
+        logger.debug("content scrape failed for %s: %s", url, exc)
+        return None
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -126,9 +147,14 @@ def _persist(
             result.skipped_dup += 1
             continue
 
-        summary = summarize_article(raw.headline, raw.description)
+        # Try to scrape full article body. Falls back gracefully when blocked.
+        content = _scrape_content(raw.url)
+
+        # AI summary uses full content when available, otherwise the snippet.
+        source_text = content or raw.description
+        summary = summarize_article(raw.headline, source_text)
         if not summary:
-            summary = fallback_summary(raw.description)
+            summary = fallback_summary(source_text)
 
         item = models.NewsItem(
             category_id=category.id,
@@ -136,6 +162,7 @@ def _persist(
             headline=raw.headline[:500],
             summary=summary,
             description=raw.description,
+            content=content,
             url=raw.url,
             image_url=raw.image_url,
             source_name=(raw.source_name or "")[:200] or None,

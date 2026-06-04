@@ -1073,6 +1073,7 @@ class NewsItem(Base):
     headline = Column(String(500), nullable=False)
     summary = Column(Text, nullable=True)            # AI-generated
     description = Column(Text, nullable=True)        # raw provider description
+    content = Column(Text, nullable=True)            # full article body scraped from URL
     url = Column(String(2000), nullable=False, index=True)
     image_url = Column(String(2000), nullable=True)
     source_name = Column(String(200), nullable=True)

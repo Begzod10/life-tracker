@@ -47,6 +47,8 @@ def _serialize_item(item: models.NewsItem, cat: models.NewsCategory) -> dict:
         "date": item.date,
         "headline": item.headline,
         "summary": item.summary,
+        "description": item.description,
+        "content": item.content,
         "url": item.url,
         "image_url": item.image_url,
         "source_name": item.source_name,

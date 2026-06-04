@@ -20,7 +20,9 @@ export interface NewsItem {
     category_color?: string | null
     date: string                // YYYY-MM-DD
     headline: string
-    summary?: string | null
+    summary?: string | null     // AI-generated summary
+    description?: string | null // raw provider snippet (~180 chars)
+    content?: string | null     // full article body scraped from URL
     url: string
     image_url?: string | null
     source_name?: string | null
