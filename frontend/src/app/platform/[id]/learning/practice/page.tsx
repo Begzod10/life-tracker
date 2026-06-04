@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react'
-import { createPortal } from 'react-dom'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion'
 import { ArrowLeft, Brain, BookOpen, Keyboard, RefreshCw, Check, X, Volume2, Shuffle, Zap, Headphones, Clock, AlertCircle, Flame, Type, Play, Trash2 } from 'lucide-react'
@@ -882,84 +881,53 @@ function Listening({ word, onAnswer }: {
     )
 }
 
-// ── Fire overlay (portal — renders directly under document.body) ─────────────
-// Using a portal bypasses framer-motion's opacity stacking context so the
-// fixed overlay always sits at the correct viewport z-level.
+// ── Fire background (body-style hook + inline badge) ─────────────────────────
+// Sets backgroundImage directly on document.body so it's never clipped by
+// framer-motion's opacity stacking context. Badge renders inline with a
+// very high z-index so it floats above all content.
 
-function FireOverlay({ level, milestones }: { level: number; milestones: number }) {
+function useFireBackground(level: number) {
+    useEffect(() => {
+        if (level === 0) {
+            document.body.style.backgroundImage = ''
+            return
+        }
+        const alpha1 = Math.min(0.45 + level * 0.06, 0.65)
+        const alpha2 = Math.min(0.25 + level * 0.04, 0.40)
+        document.body.style.backgroundImage = [
+            `radial-gradient(ellipse at 50% 115%, rgba(255,55,0,${alpha1}) 0%, rgba(255,120,0,${alpha2}) 28%, rgba(180,30,0,0.08) 55%, transparent 78%)`,
+            `radial-gradient(ellipse at 18% 108%, rgba(255,70,0,${alpha2 * 0.7}) 0%, transparent 38%)`,
+            `radial-gradient(ellipse at 82% 108%, rgba(255,70,0,${alpha2 * 0.7}) 0%, transparent 38%)`,
+        ].join(', ')
+        return () => { document.body.style.backgroundImage = '' }
+    }, [level])
+}
+
+function FireBadge({ milestones }: { milestones: number }) {
     return (
-        <>
-            {/* Base fire glow from bottom — intensity grows with level */}
-            <motion.div
-                key="fire-base"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1.0 }}
-                className="fixed inset-0 pointer-events-none"
-                style={{ zIndex: 2 }}
-            >
-                <div className="absolute inset-0" style={{
-                    background: [
-                        `radial-gradient(ellipse at 50% 110%, rgba(255,65,0,${Math.min(0.22 + level * 0.04, 0.38)}) 0%, rgba(255,130,0,${Math.min(0.12 + level * 0.02, 0.22)}) 32%, rgba(180,40,0,0.04) 58%, transparent 80%)`,
-                        `radial-gradient(ellipse at 15% 100%, rgba(255,80,0,${Math.min(0.08 + level * 0.02, 0.16)}) 0%, transparent 38%)`,
-                        `radial-gradient(ellipse at 85% 100%, rgba(255,80,0,${Math.min(0.08 + level * 0.02, 0.16)}) 0%, transparent 38%)`,
-                    ].join(', ')
-                }} />
-            </motion.div>
-
-            {/* Flicker layer — breathing animation mimics flame movement */}
-            <motion.div
-                className="fixed inset-0 pointer-events-none"
-                animate={{ opacity: [0.45, 0.9, 0.55, 0.85, 0.45] }}
-                transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ zIndex: 2 }}
-            >
-                <div className="absolute inset-0" style={{
-                    background: 'radial-gradient(ellipse at 50% 115%, rgba(255,45,0,0.13) 0%, transparent 52%)'
-                }} />
-            </motion.div>
-
-            {/* Edge shimmer — second flicker slightly out of phase */}
-            <motion.div
-                className="fixed inset-0 pointer-events-none"
-                animate={{ opacity: [0.3, 0.65, 0.3] }}
-                transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
-                style={{ zIndex: 2 }}
-            >
-                <div className="absolute inset-0" style={{
-                    background: [
-                        'radial-gradient(ellipse at 25% 105%, rgba(255,100,0,0.09) 0%, transparent 35%)',
-                        'radial-gradient(ellipse at 75% 105%, rgba(255,100,0,0.09) 0%, transparent 35%)',
-                    ].join(', ')
-                }} />
-            </motion.div>
-
-            {/* Streak badge — re-keys on milestone so it pops on each new one */}
-            <motion.div
-                key={`badge-${milestones}`}
-                initial={{ scale: 0.4, opacity: 0, y: -12 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.4, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 340, damping: 22 }}
-                className="fixed pointer-events-none flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-                style={{
-                    top: '5.5rem',
-                    right: '1rem',
-                    zIndex: 60,
-                    background: 'rgba(255, 80, 0, 0.18)',
-                    border: '1px solid rgba(255, 155, 0, 0.55)',
-                    color: 'rgb(255, 210, 100)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                }}
-            >
-                <span style={{ fontSize: '1rem', lineHeight: 1 }}>🔥</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                    {milestones > 1 ? `${milestones}×` : 'On fire!'}
-                </span>
-            </motion.div>
-        </>
+        <motion.div
+            key={milestones}
+            initial={{ scale: 0.4, opacity: 0, y: -10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 22 }}
+            className="fixed pointer-events-none flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            style={{
+                top: '5.5rem',
+                right: '1rem',
+                zIndex: 9999,
+                background: 'rgba(220, 60, 0, 0.25)',
+                border: '1px solid rgba(255, 140, 0, 0.6)',
+                color: 'rgb(255, 210, 80)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                boxShadow: '0 0 20px rgba(255,80,0,0.4)',
+            }}
+        >
+            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>🔥</span>
+            <span style={{ fontSize: '0.875rem', fontWeight: 700 }}>
+                {milestones > 1 ? `${milestones}× streak` : 'On fire!'}
+            </span>
+        </motion.div>
     )
 }
 
@@ -1161,16 +1129,11 @@ function LegacySession({
         submitResult, finish, onPositionChange,
     ])
 
+    useFireBackground(fireLevel)
+
     return (
         <>
-        {/* Fire overlay — portalled so it renders at document.body level,
-            bypassing framer-motion's opacity stacking context. */}
-        <AnimatePresence>
-            {fireLevel > 0 && createPortal(
-                <FireOverlay level={fireLevel} milestones={fireMilestones} />,
-                document.body,
-            )}
-        </AnimatePresence>
+        {fireLevel > 0 && <FireBadge milestones={fireMilestones} />}
 
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
