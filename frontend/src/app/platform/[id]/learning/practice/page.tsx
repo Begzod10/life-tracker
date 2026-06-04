@@ -534,17 +534,11 @@ function Spelling({ word, onAnswer }: {
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
-    // "revealed" = user gave up via Show answer. Counts as wrong but shows
-    // the target so they learn it instead of just seeing a red border.
     const [revealed, setRevealed] = useState(false)
-    // While the server-side AI judge is deciding (only used when the local
-    // matcher rejects). Disables the Check/Show-answer buttons so a double
-    // click can't double-submit.
     const [judging, setJudging] = useState(false)
-    // Final verdict shown to the user. Starts from the local matcher and
-    // is overwritten when the AI judge accepts an answer the local one
-    // rejected. Synonym-match handled here too so the "Synonym — target
-    // was X" hint matches what was actually accepted.
+    // When true the answer was wrong — pause auto-advance and wait for the
+    // user to click Continue so they have time to read the correct word.
+    const [awaitingContinue, setAwaitingContinue] = useState(false)
     const [finalVerdict, setFinalVerdict] = useState<{
         ok: boolean
         exact: boolean
@@ -552,8 +546,6 @@ function Spelling({ word, onAnswer }: {
         aiAccepted?: boolean
     } | null>(null)
 
-    // Local verdict — re-derived each render so the live input border tracks
-    // it (the *final* verdict overrides only after submit).
     const localVerdict = isAcceptableSpelling(input, word.word, word.definition)
     const verdict: { ok: boolean; exact: boolean; matchedSynonym?: string; aiAccepted?: boolean } =
         finalVerdict ?? localVerdict
@@ -561,29 +553,25 @@ function Spelling({ word, onAnswer }: {
     const submit = async () => {
         if (!input.trim() || submitted || judging) return
 
-        // Local matcher first — costs nothing, handles exact + synonym +
-        // off-by-one. Only fall through to AI when it rejects, and only
-        // when the user typed something non-trivial (two chars or more,
-        // otherwise we'd burn API calls on stray keystrokes).
         if (localVerdict.ok || input.trim().length < 2) {
             setSubmitted(true)
             setFinalVerdict(localVerdict)
-            if (localVerdict.ok) playCorrect()
-            else playWrong()
-            setTimeout(() => onAnswer(localVerdict.ok, localVerdict), 900)
+            if (localVerdict.ok) {
+                playCorrect()
+                setTimeout(() => onAnswer(true, localVerdict), 900)
+            } else {
+                playWrong()
+                setAwaitingContinue(true)
+            }
             return
         }
 
-        // AI fallback. Don't lock the UI as "submitted" yet so the input
-        // border doesn't flash red before the AI verdict comes back.
         setJudging(true)
         const ai = await judgeTypedAnswer(input, word.word, word.definition)
         setJudging(false)
         setSubmitted(true)
 
         if (ai && ai.ok) {
-            // Treat "yes" as exact, "close" as partial credit (same shape
-            // the SRS layer already understands for off-by-one matches).
             const v = { ok: true, exact: ai.verdict === 'yes', aiAccepted: true }
             setFinalVerdict(v)
             playCorrect()
@@ -591,7 +579,7 @@ function Spelling({ word, onAnswer }: {
         } else {
             setFinalVerdict(localVerdict)
             playWrong()
-            setTimeout(() => onAnswer(false, localVerdict), 900)
+            setAwaitingContinue(true)
         }
     }
 
@@ -601,9 +589,12 @@ function Spelling({ word, onAnswer }: {
         setRevealed(true)
         setFinalVerdict({ ok: false, exact: false })
         playWrong()
-        // Slightly longer pause than submit() so the learner has time to
-        // read the revealed word before the next prompt slides in.
-        setTimeout(() => onAnswer(false, { ok: false, exact: false }), 1500)
+        setAwaitingContinue(true)
+    }
+
+    const continueToNext = () => {
+        const v = finalVerdict ?? { ok: false, exact: false }
+        onAnswer(v.ok, { ok: v.ok, exact: v.exact })
     }
 
     return (
@@ -622,7 +613,7 @@ function Spelling({ word, onAnswer }: {
                     autoFocus
                     value={input}
                     onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    onKeyDown={e => e.key === 'Enter' && !awaitingContinue && submit()}
                     disabled={submitted}
                     placeholder="Type the word…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
@@ -681,6 +672,14 @@ function Spelling({ word, onAnswer }: {
                         </button>
                     </div>
                 )}
+                {awaitingContinue && (
+                    <Button
+                        onClick={continueToNext}
+                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
+                    >
+                        Continue →
+                    </Button>
+                )}
             </div>
         </div>
     )
@@ -694,6 +693,7 @@ function Cloze({ word, onAnswer }: {
 }) {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
+    const [awaitingContinue, setAwaitingContinue] = useState(false)
 
     // Build the cloze prompt once per word. If the word has no example
     // containing it, we degrade to a plain spelling prompt rather than
@@ -710,9 +710,13 @@ function Cloze({ word, onAnswer }: {
     const submit = () => {
         if (!input.trim() || submitted) return
         setSubmitted(true)
-        if (verdict.ok) playCorrect()
-        else playWrong()
-        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
+        if (verdict.ok) {
+            playCorrect()
+            setTimeout(() => onAnswer(true, verdict), 900)
+        } else {
+            playWrong()
+            setAwaitingContinue(true)
+        }
     }
 
     return (
@@ -742,7 +746,7 @@ function Cloze({ word, onAnswer }: {
                     autoFocus
                     value={input}
                     onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    onKeyDown={e => e.key === 'Enter' && !awaitingContinue && submit()}
                     disabled={submitted}
                     placeholder="Type the missing word…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
@@ -770,6 +774,14 @@ function Cloze({ word, onAnswer }: {
                         Check
                     </Button>
                 )}
+                {awaitingContinue && (
+                    <Button
+                        onClick={() => onAnswer(false, verdict)}
+                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
+                    >
+                        Continue →
+                    </Button>
+                )}
             </div>
         </div>
     )
@@ -784,23 +796,25 @@ function Listening({ word, onAnswer }: {
     const [input, setInput] = useState('')
     const [submitted, setSubmitted] = useState(false)
     const [revealed, setRevealed] = useState(false)
+    const [awaitingContinue, setAwaitingContinue] = useState(false)
 
     useEffect(() => {
         speak(word.word)
         // re-speak on every new word; cleanup not needed since speak() cancels prior utterance
     }, [word.id, word.word])
 
-    // Same close-but-not-exact tolerance as Spelling/Cloze — typed
-    // listening answers get partial credit (grade=1) instead of a
-    // hard lapse on a single-letter slip.
     const verdict = isCloseSpelling(input, word.word)
 
     const submit = () => {
         if (!input.trim() || submitted) return
         setSubmitted(true)
-        if (verdict.ok) playCorrect()
-        else playWrong()
-        setTimeout(() => onAnswer(verdict.ok, verdict), 900)
+        if (verdict.ok) {
+            playCorrect()
+            setTimeout(() => onAnswer(true, verdict), 900)
+        } else {
+            playWrong()
+            setAwaitingContinue(true)
+        }
     }
 
     return (
@@ -827,7 +841,7 @@ function Listening({ word, onAnswer }: {
                     autoFocus
                     value={input}
                     onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    onKeyDown={e => e.key === 'Enter' && !awaitingContinue && submit()}
                     disabled={submitted}
                     placeholder="Type what you heard…"
                     className={`w-full px-4 py-3 rounded-xl border text-white text-center text-lg font-medium bg-white/5 focus:outline-none transition-colors ${
@@ -851,6 +865,14 @@ function Listening({ word, onAnswer }: {
                 {!submitted && (
                     <Button onClick={submit} className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={!input.trim()}>
                         Check
+                    </Button>
+                )}
+                {awaitingContinue && (
+                    <Button
+                        onClick={() => onAnswer(false, verdict)}
+                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
+                    >
+                        Continue →
                     </Button>
                 )}
             </div>
