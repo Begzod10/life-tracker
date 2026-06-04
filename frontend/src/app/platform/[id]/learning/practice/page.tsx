@@ -921,6 +921,22 @@ function LegacySession({
     const subIndex = (isQuizPlus && subMode === 'spelling' ? words.length : 0) + index
     const progress = (subIndex / totalSubQuestions) * 100
 
+    // Per-word status for the current pass — used by the status strip.
+    // Keyed by word ID so advancing through the list is O(1).
+    const [wordStatuses, setWordStatuses] = useState<Record<number, 'correct' | 'wrong'>>(() => {
+        if (!initialPosition) return {}
+        const m: Record<number, 'correct' | 'wrong'> = {}
+        const correctIds = subMode === 'spelling'
+            ? (initialPosition.spellCorrectIds ?? [])
+            : (initialPosition.quizCorrectIds ?? [])
+        // Mark answered-but-wrong words as wrong (any word before the current
+        // index that isn't in the correct set was wrong in this pass).
+        words.slice(0, initialPosition.index).forEach(w => {
+            m[w.id] = correctIds.includes(w.id) ? 'correct' : 'wrong'
+        })
+        return m
+    })
+
     // Drill-wide counter — in quiz+ mode each word generates two
     // sub-questions, so 31 words means 62 drill items. Scale both the
     // total and the running index so the user sees "Drill 17 / 62"
@@ -963,6 +979,10 @@ function LegacySession({
         const nextCorrectCount = correctCount + (wasCorrect ? 1 : 0)
         if (wasCorrect) setCorrectCount(nextCorrectCount)
 
+        // Update the word-status strip immediately so the dot flips colour
+        // in sync with the sound/colour feedback, before the next card slides in.
+        setWordStatuses(prev => ({ ...prev, [word.id]: wasCorrect ? 'correct' : 'wrong' }))
+
         const nextQuiz = new Set(quizCorrect)
         const nextSpell = new Set(spellCorrect)
         if (wasCorrect) {
@@ -980,6 +1000,8 @@ function LegacySession({
             setIndex(nextIndex)
         } else if (isQuizPlus && subMode === 'quiz') {
             // End of quiz pass → spelling pass on the same chunk.
+            // Reset statuses for the spelling pass.
+            setWordStatuses({})
             nextSubMode = 'spelling'
             nextIndex = 0
             setSubMode('spelling')
@@ -1034,6 +1056,31 @@ function LegacySession({
                         animate={{ width: `${progress}%` }}
                         transition={{ duration: 0.3 }}
                     />
+                </div>
+
+                {/* Word-status strip — one dot per word in this pass */}
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                    {words.map((w, i) => {
+                        const status = wordStatuses[w.id]
+                        const isCurrent = i === index
+                        return (
+                            <motion.div
+                                key={w.id}
+                                title={w.word}
+                                initial={false}
+                                animate={{
+                                    scale: isCurrent ? 1.25 : 1,
+                                    backgroundColor:
+                                        isCurrent ? 'rgb(96 165 250)'   // blue-400
+                                        : status === 'correct' ? 'rgb(74 222 128)'  // green-400
+                                        : status === 'wrong'   ? 'rgb(248 113 113)' // red-400
+                                        : 'rgba(255,255,255,0.12)',
+                                }}
+                                transition={{ duration: 0.2 }}
+                                className="w-2 h-2 rounded-full cursor-default"
+                            />
+                        )
+                    })}
                 </div>
             </div>
 
@@ -1555,9 +1602,12 @@ function PracticePageInner() {
         | { kind: 'legacy'; index: number; subMode: 'quiz' | 'spelling'; quizCorrectIds: number[]; spellCorrectIds: number[]; correctCount: number }
         | { kind: 'flashcard'; index: number; knowIds: number[]; learningIds: number[] }
     const [chunkPosition, setChunkPosition] = useState<ChunkPosition | null>(null)
-    // Cleared when resume hands off `initialPosition` to the wrapper so the
-    // *next* mount of the same wrapper (after a chunk review) starts fresh.
-    const [resumePosition, setResumePosition] = useState<ChunkPosition | null>(null)
+    // Ref (not state) so clearing it never triggers a re-render.
+    // State-based clearing raced with AnimatePresence mode="wait": that
+    // delays mounting the session child until the pick panel exits, by
+    // which time the old [words] effect had already nulled the value and
+    // LegacySession received initialPosition=undefined, starting at 0.
+    const resumePositionRef = useRef<ChunkPosition | null>(null)
 
     const wordsById = useMemo(() => {
         const m = new Map<number, PracticeWord>()
@@ -1674,17 +1724,6 @@ function PracticePageInner() {
         scheduleSave()
     }, [phase, sessionId, chunkPosition, buildSnapshot, scheduleSave])
 
-    // Clear resumePosition once the wrapper has mounted with it — its lazy
-    // initial state has already captured the value, so dropping the prop
-    // prevents the next chunk from accidentally re-using a stale offset.
-    // chunkPosition is NOT cleared here: the resume() path deliberately
-    // seeds it so the first auto-save reflects the user's actual offset
-    // instead of a default index=0. Fresh chunks (start/continueChunk)
-    // clear chunkPosition inside startChunk() before setWords runs.
-    useEffect(() => {
-        setResumePosition(null)
-    }, [words])
-
     // Flush the latest snapshot directly to the server, bypassing the
     // debounce. Used by the tab-close handler AND by the unmount cleanup
     // so SPA navigation (Back button, route change) doesn't drop the
@@ -1755,6 +1794,7 @@ function PracticePageInner() {
         // from a prior chunk or resume so the next snapshot reflects the
         // new chunk truthfully.
         setChunkPosition(null)
+        resumePositionRef.current = null
         setWords(chunk)
         // One backend "session" record per drill run is enough; only create
         // it on the very first chunk so the completion stats roll up cleanly.
@@ -1878,12 +1918,13 @@ function PracticePageInner() {
                 setUnseenQueue(unseen)
                 setMistakesPool(mistakes)
                 setWords(chunkWords)
-                // Seed BOTH chunkPosition (so the next auto-save reflects
-                // where the user actually was, not a default index=0) and
-                // resumePosition (so the wrapper's lazy initial state
-                // picks up the same offset on mount). The [words] effect
-                // clears resumePosition after one render; chunkPosition
-                // sticks until the user answers and emits a new one.
+                // Seed chunkPosition (so the next auto-save reflects the
+                // user's actual offset, not a default index=0) and the
+                // resumePositionRef (so the wrapper's lazy initial state
+                // picks it up on mount without a state-race against
+                // AnimatePresence). chunkPosition sticks until the user
+                // answers and emits a new one; the ref is cleared by
+                // startChunk() when the next fresh chunk begins.
                 const seeded: ChunkPosition = snap.mode === 'flashcard'
                     ? {
                         kind: 'flashcard',
@@ -1899,7 +1940,7 @@ function PracticePageInner() {
                         spellCorrectIds: snap.chunk.spellCorrectIds ?? [],
                         correctCount: snap.chunk.correctCount ?? 0,
                     }
-                setResumePosition(seeded)
+                resumePositionRef.current = seeded
                 setChunkPosition(seeded)
                 setPhase('session')
                 return
@@ -2288,11 +2329,11 @@ function PracticePageInner() {
                                         drillTotal={drillTotal}
                                         autoTts
                                         initialPosition={
-                                            resumePosition?.kind === 'flashcard'
+                                            resumePositionRef.current?.kind === 'flashcard'
                                                 ? {
-                                                    index: resumePosition.index,
-                                                    knowIds: resumePosition.knowIds,
-                                                    learningIds: resumePosition.learningIds,
+                                                    index: resumePositionRef.current.index,
+                                                    knowIds: resumePositionRef.current.knowIds,
+                                                    learningIds: resumePositionRef.current.learningIds,
                                                 }
                                                 : undefined
                                         }
@@ -2312,13 +2353,13 @@ function PracticePageInner() {
                                         drillStartIndex={drillStartIndex}
                                         drillTotal={drillTotal}
                                         initialPosition={
-                                            resumePosition?.kind === 'legacy'
+                                            resumePositionRef.current?.kind === 'legacy'
                                                 ? {
-                                                    index: resumePosition.index,
-                                                    subMode: resumePosition.subMode,
-                                                    quizCorrectIds: resumePosition.quizCorrectIds,
-                                                    spellCorrectIds: resumePosition.spellCorrectIds,
-                                                    correctCount: resumePosition.correctCount,
+                                                    index: resumePositionRef.current.index,
+                                                    subMode: resumePositionRef.current.subMode,
+                                                    quizCorrectIds: resumePositionRef.current.quizCorrectIds,
+                                                    spellCorrectIds: resumePositionRef.current.spellCorrectIds,
+                                                    correctCount: resumePositionRef.current.correctCount,
                                                 }
                                                 : undefined
                                         }
