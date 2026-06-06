@@ -16,16 +16,33 @@ class AuthRepository {
         data: {'username': email, 'password': password},
         options: Options(contentType: 'application/x-www-form-urlencoded'),
       );
-      final accessToken = res.data['access_token'] as String;
-      final refreshToken = res.data['refresh_token'] as String? ?? accessToken;
-      await SecureStorage.saveTokens(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-      );
+      await _saveTokens(res.data as Map<String, dynamic>);
       return getMe();
     } on DioException catch (e) {
       throw apiError(e);
     }
+  }
+
+  Future<AuthUser> loginWithGoogle(String idToken) async {
+    try {
+      final res = await _dio.post(
+        ApiEndpoints.googleAuth,
+        data: {'token': idToken},
+      );
+      await _saveTokens(res.data as Map<String, dynamic>);
+      return getMe();
+    } on DioException catch (e) {
+      throw apiError(e);
+    }
+  }
+
+  Future<void> _saveTokens(Map<String, dynamic> data) async {
+    final accessToken = data['access_token'] as String;
+    final refreshToken = data['refresh_token'] as String? ?? accessToken;
+    await SecureStorage.saveTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
   }
 
   Future<AuthUser> getMe() async {
