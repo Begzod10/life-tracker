@@ -1,7 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/auth/auth_provider.dart';
+
+bool get _googleSupported =>
+    defaultTargetPlatform == TargetPlatform.android ||
+    defaultTargetPlatform == TargetPlatform.iOS;
 
 final _googleSignIn = GoogleSignIn(
   serverClientId: const String.fromEnvironment('GOOGLE_CLIENT_ID'),
@@ -27,6 +32,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
+  }
+
+  String _friendlyError(String raw) {
+    if (raw.contains('Google')) return 'This account uses Google Sign-In. Use the button above.';
+    if (raw.contains('incorrect') || raw.contains('401')) return 'Incorrect email or password.';
+    if (raw.contains('500')) return 'Server error. Try Google Sign-In instead.';
+    return raw;
   }
 
   Future<void> _login() async {
@@ -100,21 +112,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const Spacer(),
                 // Google button
-                OutlinedButton.icon(
-                  onPressed: isLoading ? null : _loginWithGoogle,
-                  icon: _googleLoading
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const _GoogleLogo(),
-                  label: const Text('Continue with Google'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    textStyle: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                Tooltip(
+                  message: _googleSupported ? '' : 'Available on Android & iOS',
+                  child: OutlinedButton.icon(
+                    onPressed: (isLoading || !_googleSupported)
+                        ? null
+                        : _loginWithGoogle,
+                    icon: _googleLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const _GoogleLogo(),
+                    label: Text(_googleSupported
+                        ? 'Continue with Google'
+                        : 'Continue with Google (Android only)'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -164,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(
-                      authState.error.toString(),
+                      _friendlyError(authState.error.toString()),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.error),
                     ),
