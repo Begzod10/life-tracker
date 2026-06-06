@@ -13,8 +13,7 @@ class AuthRepository {
     try {
       final res = await _dio.post(
         ApiEndpoints.login,
-        data: {'username': email, 'password': password},
-        options: Options(contentType: 'application/x-www-form-urlencoded'),
+        data: {'email': email, 'password': password},
       );
       await _saveTokens(res.data as Map<String, dynamic>);
       return getMe();
