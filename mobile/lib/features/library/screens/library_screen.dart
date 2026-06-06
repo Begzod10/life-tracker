@@ -44,7 +44,8 @@ class _Book {
 final _booksProvider = FutureProvider.autoDispose<List<_Book>>((ref) async {
   final dio = ref.watch(dioProvider);
   final res = await dio.get(ApiEndpoints.books);
-  final list = res.data as List<dynamic>;
+  final data = res.data as Map<String, dynamic>;
+  final list = data['items'] as List<dynamic>;
   return list.map((e) => _Book.fromJson(e as Map<String, dynamic>)).toList();
 });
 
