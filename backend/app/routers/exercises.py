@@ -1,8 +1,8 @@
 """Exercises — write a sentence using a dictionary word.
 
 Workflow:
-    1. Client calls GET /exercises/words to fetch N target words (SRS-aware by
-       default; filterable by folder/module/difficulty).
+    1. Client calls GET /exercises/words to fetch N target words (source-aware
+       by default; filterable by folder/module/difficulty).
     2. Client calls POST /exercises/start to open a PracticeSession with
        mode='exercise' (so the existing streak/history surfaces include it).
     3. User writes one sentence per word; client calls POST /exercises/grade
@@ -13,8 +13,7 @@ Workflow:
 Falls back gracefully when GROQ_API_KEY is not configured by returning a clear
 503 — the front-end surfaces that as a non-blocking error.
 """
-from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import List, Optional
 import json
 import re
@@ -33,20 +32,28 @@ from app.services import srs
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
 
+_VALID_SOURCES = {"smart", "due", "weak", "all"}
+_MAX_ITEMS = 10
 
-# ─── Word selection (mirrors practice.py with examples preserved) ───────────
+
+# ─── Word selection ──────────────────────────────────────────────────────────
 
 @router.get("/words")
 def get_exercise_words(
-    count: int = Query(default=5, ge=1, le=30),
+    count: int = Query(default=5, ge=1, le=_MAX_ITEMS),
     difficulty: Optional[str] = Query(None),
     module_id: Optional[int] = Query(None),
     folder_id: Optional[int] = Query(None),
-    due_only: bool = Query(default=False),
-    weak_only: bool = Query(default=False),
+    source: str = Query(default="smart"),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
+    if source not in _VALID_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source must be one of: {', '.join(sorted(_VALID_SOURCES))}",
+        )
+
     q = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.person_id == current_user.id,
         models.DictionaryWord.deleted == False,
@@ -60,7 +67,8 @@ def get_exercise_words(
         ).filter(models.DictionaryModule.folder_id == folder_id)
     if difficulty:
         q = q.filter(models.DictionaryWord.difficulty == difficulty)
-    if due_only:
+
+    if source == "due":
         q = q.filter(or_(
             models.DictionaryWord.next_review_at.is_(None),
             models.DictionaryWord.next_review_at <= datetime.utcnow(),
@@ -68,7 +76,7 @@ def get_exercise_words(
 
     all_words = q.all()
 
-    if weak_only:
+    if source == "weak":
         def is_weak(w: models.DictionaryWord) -> bool:
             if w.review_count == 0:
                 return True
@@ -85,9 +93,9 @@ def get_exercise_words(
 
     def priority_bucket(w: models.DictionaryWord) -> int:
         if w.next_review_at is not None and w.next_review_at <= now:
-            return 0  # due (includes just-missed)
+            return 0
         if w.review_count == 0:
-            return 1  # never seen
+            return 1
         return 2
 
     all_words.sort(key=lambda w: (
@@ -119,7 +127,6 @@ def start_exercise_session(
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Open a PracticeSession row with mode='exercise' for this run."""
     session = models.PracticeSession(
         person_id=current_user.id,
         mode="exercise",
@@ -188,7 +195,6 @@ def _grader_user_prompt(items: list[dict]) -> str:
 
 
 def _coerce_grade(raw: dict, fallback_id: int) -> dict:
-    """Normalise a single grader item, tolerating missing keys."""
     word_id = int(raw.get("word_id") or fallback_id)
     is_correct = bool(raw.get("is_correct"))
     score = raw.get("usage_score")
@@ -221,11 +227,8 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
     )
 
     client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-    # Budget ~150 output tokens per item for feedback + suggested_revision,
-    # plus ~150 for the JSON envelope. A 10-item batch needs ~1.6k; the prior
-    # 900-cap silently truncated and made `message.content` None, which then
-    # crashed `.strip()` as an unhandled AttributeError → generic 500.
-    max_tokens = max(700, 200 + 150 * len(grader_items))
+    # Raised to 250 tokens per item to prevent json_object truncation on large batches.
+    max_tokens = max(900, 250 + 250 * len(grader_items))
     try:
         response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -236,8 +239,6 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
             max_tokens=max_tokens,
             temperature=0.2,
             stream=False,
-            # Force a valid JSON object — eliminates the markdown-fence /
-            # prose-leak class of parse failures entirely.
             response_format={"type": "json_object"},
         )
     except AuthenticationError as exc:
@@ -279,7 +280,6 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
             ),
         )
     raw = raw.strip()
-    # Defensive: even with response_format set, strip any stray fences.
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
     raw = re.sub(r'\s*```$', '', raw)
     try:
@@ -307,7 +307,6 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
         coerced = _coerce_grade(raw_item, grader_items[i]["word_id"] if i < len(grader_items) else 0)
         grades_by_id[coerced["word_id"]] = coerced
 
-    # Fill missing word_ids with a defensive default so we never lose attempts.
     result = []
     for src in grader_items:
         g = grades_by_id.get(src["word_id"])
@@ -336,8 +335,32 @@ async def grade_exercises(
         )
     if not request.items:
         raise HTTPException(status_code=400, detail="No sentences submitted.")
+    if len(request.items) > _MAX_ITEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many items. Maximum {_MAX_ITEMS} sentences per grading request.",
+        )
 
-    # Load words and verify ownership.
+    # ── Ownership + idempotency check (before calling Groq) ──────────────────
+    session: Optional[models.PracticeSession] = None
+    if request.session_id is not None:
+        session = db.query(models.PracticeSession).filter(
+            models.PracticeSession.id == request.session_id,
+            models.PracticeSession.person_id == current_user.id,
+            models.PracticeSession.mode == "exercise",
+        ).first()
+        if session is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Exercise session not found or does not belong to you.",
+            )
+        if session.completed_at is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="This session has already been graded. Start a new session to try again.",
+            )
+
+    # ── Ownership check on words ─────────────────────────────────────────────
     word_ids = [it.word_id for it in request.items]
     words = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.id.in_(word_ids),
@@ -348,10 +371,10 @@ async def grade_exercises(
     if missing:
         raise HTTPException(
             status_code=404,
-            detail=f"Words not found or not yours: {missing}",
+            detail=f"Words not found or do not belong to you: {missing}",
         )
 
-    # Build grader input.
+    # ── Call Groq (outside transaction — may raise; no DB changes yet) ───────
     grader_items = [
         {
             "word_id": it.word_id,
@@ -362,69 +385,59 @@ async def grade_exercises(
         }
         for it in request.items
     ]
-
     grades = await _grade_via_groq(grader_items)
     grade_by_word: dict[int, dict] = {g["word_id"]: g for g in grades}
 
-    # Verify session if supplied.
-    session: Optional[models.PracticeSession] = None
-    if request.session_id is not None:
-        session = db.query(models.PracticeSession).filter(
-            models.PracticeSession.id == request.session_id,
-            models.PracticeSession.person_id == current_user.id,
-            models.PracticeSession.mode == "exercise",
-        ).first()
-        if not session:
-            raise HTTPException(status_code=404, detail="Exercise session not found")
-
+    # ── Single atomic transaction: SRS + attempts + close session ────────────
     now = datetime.utcnow()
     results: list[dict] = []
     correct_count = 0
 
-    for it in request.items:
-        word = word_by_id[it.word_id]
-        grade = grade_by_word[it.word_id]
-        was_correct = bool(grade["is_correct"])
-        if was_correct:
-            correct_count += 1
+    try:
+        for it in request.items:
+            word = word_by_id[it.word_id]
+            grade = grade_by_word[it.word_id]
+            was_correct = bool(grade["is_correct"])
+            if was_correct:
+                correct_count += 1
 
-        # Persist the attempt.
-        attempt = models.ExerciseAttempt(
-            person_id=current_user.id,
-            session_id=session.id if session else None,
-            word_id=word.id,
-            sentence=it.sentence.strip(),
-            is_correct=was_correct,
-            usage_score=grade["usage_score"],
-            feedback=grade["feedback"],
-            suggested_revision=grade["suggested_revision"],
-            created_at=now,
+            attempt = models.ExerciseAttempt(
+                person_id=current_user.id,
+                session_id=session.id if session else None,
+                word_id=word.id,
+                sentence=it.sentence.strip(),
+                is_correct=was_correct,
+                usage_score=grade["usage_score"],
+                feedback=grade["feedback"],
+                suggested_revision=grade["suggested_revision"],
+                created_at=now,
+            )
+            db.add(attempt)
+            srs.apply_result(word, was_correct=was_correct, now=now)
+
+            results.append({
+                "word_id": word.id,
+                "word": word.word,
+                "sentence": it.sentence.strip(),
+                "is_correct": was_correct,
+                "usage_score": grade["usage_score"],
+                "feedback": grade["feedback"],
+                "suggested_revision": grade["suggested_revision"],
+                "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
+            })
+
+        if session is not None:
+            session.total_questions = len(request.items)
+            session.correct_answers = correct_count
+            session.completed_at = now
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save grading results. Please try again.",
         )
-        db.add(attempt)
-
-        # Update SRS on the word. apply_result handles review_count,
-        # correct_count, last_reviewed_at, interval_days, next_review_at,
-        # and the per-card ease_factor/reps/lapses.
-        srs.apply_result(word, was_correct=was_correct, now=now)
-
-        results.append({
-            "word_id": word.id,
-            "word": word.word,
-            "sentence": it.sentence.strip(),
-            "is_correct": was_correct,
-            "usage_score": grade["usage_score"],
-            "feedback": grade["feedback"],
-            "suggested_revision": grade["suggested_revision"],
-            "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
-        })
-
-    # Close session.
-    if session is not None:
-        session.total_questions = len(request.items)
-        session.correct_answers = correct_count
-        session.completed_at = now
-
-    db.commit()
 
     return {
         "session_id": session.id if session else None,
@@ -476,14 +489,13 @@ def get_exercise_history(
     ]
 
 
-# ─── Stats — used by the learning-landing card ───────────────────────────────
+# ─── Stats ───────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
 def get_exercise_stats(
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Aggregate exercise activity for the learning landing card."""
     total = db.query(models.ExerciseAttempt).filter(
         models.ExerciseAttempt.person_id == current_user.id,
     ).count()

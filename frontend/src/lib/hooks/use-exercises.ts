@@ -4,6 +4,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useHttp } from './use-http'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 
+export type Source = 'smart' | 'due' | 'weak' | 'all'
+
 export type ExerciseWord = {
     id: number
     word: string
@@ -55,13 +57,18 @@ export type ExerciseStats = {
     last_7d_correct: number
 }
 
+/** Single source of truth for the 0–100 scale. */
+export function formatUsageScore(score: number | null): string {
+    if (score == null) return '—'
+    return `${score}/100`
+}
+
 export function useExerciseWords(args: {
     count?: number
     difficulty?: string
     moduleId?: number
     folderId?: number
-    dueOnly?: boolean
-    weakOnly?: boolean
+    source?: Source
 } = {}) {
     const { request } = useHttp()
     return useQuery<ExerciseWord[]>({
@@ -71,8 +78,7 @@ export function useExerciseWords(args: {
             args.difficulty ?? '',
             args.moduleId ?? '',
             args.folderId ?? '',
-            args.dueOnly ?? false,
-            args.weakOnly ?? false,
+            args.source ?? 'smart',
         ],
         queryFn: () => request(API_ENDPOINTS.EXERCISES.WORDS(args)),
         enabled: false,

@@ -303,15 +303,13 @@ export const API_ENDPOINTS = {
             difficulty?: string
             moduleId?: number
             folderId?: number
-            dueOnly?: boolean
-            weakOnly?: boolean
+            source?: string
         } = {}) => {
             const p = new URLSearchParams({ count: String(args.count ?? 5) })
             if (args.difficulty) p.append('difficulty', args.difficulty)
             if (args.moduleId) p.append('module_id', String(args.moduleId))
             if (args.folderId) p.append('folder_id', String(args.folderId))
-            if (args.dueOnly) p.append('due_only', 'true')
-            if (args.weakOnly) p.append('weak_only', 'true')
+            if (args.source && args.source !== 'smart') p.append('source', args.source)
             return `${API_URL}/exercises/words?${p}`
         },
         START: `${API_URL}/exercises/start`,
