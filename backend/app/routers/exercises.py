@@ -1,17 +1,15 @@
-"""Exercises — write a sentence using a dictionary word.
+"""Exercises — multi-type vocabulary practice with SRS.
 
 Workflow:
-    1. Client calls GET /exercises/words to fetch N target words (source-aware
-       by default; filterable by folder/module/difficulty).
-    2. Client calls POST /exercises/start to open a PracticeSession with
-       mode='exercise' (so the existing streak/history surfaces include it).
-    3. User writes one sentence per word; client calls POST /exercises/grade
-       with the full payload. Groq evaluates each sentence, the SRS is
-       updated per word, individual ExerciseAttempt rows are persisted, and
-       the session row is closed.
-
-Falls back gracefully when GROQ_API_KEY is not configured by returning a clear
-503 — the front-end surfaces that as a non-blocking error.
+    1. Client calls GET /exercises/words to browse words (legacy / setup preview).
+    2. Client calls POST /exercises/start with {source, count, mode, ...}.
+       Server selects words, assigns exercise types (SRS-driven), persists
+       items_plan on the session, and returns rendered questions (no answers).
+    3. User answers; client calls POST /exercises/grade with responses.
+       Deterministic types (MC, cloze, spelling, anagram) are graded locally.
+       Production types (sentence variants) go to Groq.
+       SRS is updated, attempts are persisted, session is closed — all in one
+       atomic transaction.
 """
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -28,6 +26,15 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.services import srs
+from app.services.exercise_types import (
+    DETERMINISTIC_TYPES,
+    PRODUCTION_TYPES,
+    VALID_MODES,
+    assign_groups,
+    build_question,
+    grade_deterministic,
+    pick_exercise_type,
+)
 
 
 router = APIRouter(prefix="/exercises", tags=["exercises"])
@@ -36,24 +43,17 @@ _VALID_SOURCES = {"smart", "due", "weak", "all"}
 _MAX_ITEMS = 10
 
 
-# ─── Word selection ──────────────────────────────────────────────────────────
+# ─── Word selection helper (shared by GET /words and POST /start) ────────────
 
-@router.get("/words")
-def get_exercise_words(
-    count: int = Query(default=5, ge=1, le=_MAX_ITEMS),
-    difficulty: Optional[str] = Query(None),
-    module_id: Optional[int] = Query(None),
-    folder_id: Optional[int] = Query(None),
-    source: str = Query(default="smart"),
-    db: Session = Depends(get_db),
-    current_user: models.Person = Depends(get_current_user),
-):
-    if source not in _VALID_SOURCES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"source must be one of: {', '.join(sorted(_VALID_SOURCES))}",
-        )
-
+def _select_words(
+    db: Session,
+    current_user: models.Person,
+    count: int,
+    source: str,
+    module_id: Optional[int] = None,
+    folder_id: Optional[int] = None,
+    difficulty: Optional[str] = None,
+) -> list[models.DictionaryWord]:
     q = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.person_id == current_user.id,
         models.DictionaryWord.deleted == False,
@@ -86,7 +86,7 @@ def get_exercise_words(
     if not all_words:
         raise HTTPException(
             status_code=400,
-            detail="No words available for exercises. Add some words or relax the filters.",
+            detail="No words available. Add some words or relax the filters.",
         )
 
     now = datetime.utcnow()
@@ -103,8 +103,27 @@ def get_exercise_words(
         w.review_count,
         w.last_reviewed_at or w.created_at,
     ))
-    selected = all_words[:count]
+    return all_words[:count]
 
+
+# ─── Word browse (legacy / setup preview) ────────────────────────────────────
+
+@router.get("/words")
+def get_exercise_words(
+    count: int = Query(default=5, ge=1, le=_MAX_ITEMS),
+    difficulty: Optional[str] = Query(None),
+    module_id: Optional[int] = Query(None),
+    folder_id: Optional[int] = Query(None),
+    source: str = Query(default="smart"),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    if source not in _VALID_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source must be one of: {', '.join(sorted(_VALID_SOURCES))}",
+        )
+    words = _select_words(db, current_user, count, source, module_id, folder_id, difficulty)
     return [
         {
             "id": w.id,
@@ -116,32 +135,92 @@ def get_exercise_words(
             "examples": json.loads(w.examples) if w.examples else [],
             "difficulty": w.difficulty,
         }
-        for w in selected
+        for w in words
     ]
 
 
-# ─── Session bookkeeping ────────────────────────────────────────────────────
+# ─── Session start (word selection + type assignment) ────────────────────────
+
+class StartRequest(BaseModel):
+    source: str = "smart"
+    count: int = Field(default=5, ge=1, le=10)
+    mode: str = "auto"
+    folder_id: Optional[int] = None
+    module_id: Optional[int] = None
+
+
+def _serialize_item_for_client(plan_item: dict, word: models.DictionaryWord) -> dict:
+    """Strip correct_answer; return only what the client needs to render the question."""
+    out = {k: v for k, v in plan_item.items() if k != "correct_answer"}
+    return out
+
 
 @router.post("/start")
 def start_exercise_session(
+    request: StartRequest,
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
+    if request.source not in _VALID_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"source must be one of: {', '.join(sorted(_VALID_SOURCES))}",
+        )
+    if request.mode not in VALID_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown mode '{request.mode}'.",
+        )
+
+    words = _select_words(
+        db, current_user,
+        request.count, request.source,
+        request.module_id, request.folder_id,
+    )
+
+    # Distractor pool: all non-deleted words for this user
+    pool = db.query(models.DictionaryWord).filter(
+        models.DictionaryWord.person_id == current_user.id,
+        models.DictionaryWord.deleted == False,
+    ).all()
+
+    items_plan: list[dict] = []
+    for position, word in enumerate(words):
+        exercise_type = pick_exercise_type(word, request.mode, position)
+        question = build_question(exercise_type, word, pool, position)
+        items_plan.append(question)
+
+    # Assign group_ids and enrich payloads for match/cloze_bank grouped types.
+    assign_groups(items_plan)
+
     session = models.PracticeSession(
         person_id=current_user.id,
         mode="exercise",
+        items_plan=items_plan,
     )
     db.add(session)
     db.commit()
     db.refresh(session)
-    return {"id": session.id, "started_at": session.started_at.isoformat()}
+
+    word_by_id = {w.id: w for w in words}
+    client_items = [
+        _serialize_item_for_client(plan, word_by_id[plan["word_id"]])
+        for plan in items_plan
+        if plan.get("word_id") in word_by_id
+    ]
+
+    return {
+        "session_id": session.id,
+        "started_at": session.started_at.isoformat(),
+        "items": client_items,
+    }
 
 
-# ─── Grading via Groq ───────────────────────────────────────────────────────
+# ─── Grading ─────────────────────────────────────────────────────────────────
 
 class GradeItem(BaseModel):
     word_id: int
-    sentence: str = Field(..., min_length=1, max_length=400)
+    response: str = Field(..., min_length=1, max_length=400)
 
 
 class GradeRequest(BaseModel):
@@ -149,15 +228,23 @@ class GradeRequest(BaseModel):
     items: List[GradeItem]
 
 
-_GRADER_SYSTEM = """You are a meticulous English-as-a-second-language teacher grading short sentences.
+_GRADER_SYSTEM = """You are a meticulous English-as-a-second-language teacher grading learner responses.
 
-For each (word, sentence) pair, judge whether the learner has used the target word correctly. Be strict about MEANING and PART OF SPEECH, lenient about minor punctuation or capitalisation.
+You will receive a list of items. Each item has an exercise_type, target word, definition, and the learner's response.
 
-A sentence is correct (is_correct=true) only when ALL hold:
+Exercise types you may see:
+- sentence: Learner wrote a sentence using the word. Grade on correct usage, meaning, grammar.
+- constrained_sentence: Same as sentence but must follow a constraint (e.g., past tense, as a question). Grade on usage AND constraint.
+- paraphrase: Learner rewrote a provided sentence using the target word. Grade on meaning preservation AND correct usage.
+- prompt_response: Learner responded to an open prompt using the word. Grade on relevance AND correct usage.
+
+A response is correct (is_correct=true) only when ALL hold:
 - The target word (or an obvious inflection: -s, -ed, -ing, comparative/superlative) appears.
 - It's used with the intended meaning from the provided definition.
-- The grammar is acceptable for an English learner — no broken syntax.
-- The sentence is a real sentence, not a 1-2 word fragment.
+- Grammar is acceptable for an English learner.
+- For constrained_sentence: the constraint is met.
+- For paraphrase: the source sentence meaning is preserved.
+- The response is a real sentence, not a fragment.
 
 usage_score is 0–100. A score of 80+ implies is_correct=true.
 
@@ -175,21 +262,26 @@ Return ONLY a JSON object — no markdown, no prose:
 }
 
 Feedback rules:
-- Be specific. Cite the actual word from the sentence.
+- Be specific. Cite the actual word from the response.
 - One sentence, max ~25 words.
-- If correct: confirm what made it work (collocation, register, structure).
-- If wrong: name the issue (wrong sense, wrong part of speech, ungrammatical, missing word) and how to fix it."""
+- If correct: confirm what made it work.
+- If wrong: name the issue and how to fix it."""
 
 
 def _grader_user_prompt(items: list[dict]) -> str:
     lines = ["Grade the following:\n"]
     for it in items:
         lines.append(f"- word_id: {it['word_id']}")
+        lines.append(f"  exercise_type: {it['exercise_type']}")
         lines.append(f"  word: {it['word']}")
         if it.get("part_of_speech"):
             lines.append(f"  part_of_speech: {it['part_of_speech']}")
         lines.append(f"  definition: {it['definition']}")
-        lines.append(f"  sentence: {it['sentence']}")
+        if it.get("constraint"):
+            lines.append(f"  constraint: {it['constraint']}")
+        if it.get("source_sentence"):
+            lines.append(f"  source_sentence: {it['source_sentence']}")
+        lines.append(f"  response: {it['response']}")
         lines.append("")
     return "\n".join(lines)
 
@@ -227,7 +319,6 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
     )
 
     client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-    # Raised to 250 tokens per item to prevent json_object truncation on large batches.
     max_tokens = max(900, 250 + 250 * len(grader_items))
     try:
         response = await client.chat.completions.create(
@@ -267,17 +358,13 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Grader returned no choices.",
         )
-
     choice = response.choices[0]
     raw = choice.message.content
     if not raw:
         finish = getattr(choice, "finish_reason", "unknown")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                f"Grader returned empty content (finish_reason={finish}). "
-                "Try fewer items or shorter sentences."
-            ),
+            detail=f"Grader returned empty content (finish_reason={finish}).",
         )
     raw = raw.strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
@@ -288,10 +375,7 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
         finish = getattr(choice, "finish_reason", "unknown")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                f"Grader returned invalid JSON (finish_reason={finish}): "
-                f"{raw[:200]}"
-            ),
+            detail=f"Grader returned invalid JSON (finish_reason={finish}): {raw[:200]}",
         )
     items = data.get("items") or []
     if not isinstance(items, list):
@@ -299,7 +383,6 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Grader payload missing 'items' list",
         )
-
     grades_by_id: dict[int, dict] = {}
     for i, raw_item in enumerate(items):
         if not isinstance(raw_item, dict):
@@ -328,21 +411,17 @@ async def grade_exercises(
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    if not settings.GROQ_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Exercises grader is not configured. Set GROQ_API_KEY.",
-        )
     if not request.items:
-        raise HTTPException(status_code=400, detail="No sentences submitted.")
+        raise HTTPException(status_code=400, detail="No responses submitted.")
     if len(request.items) > _MAX_ITEMS:
         raise HTTPException(
             status_code=400,
-            detail=f"Too many items. Maximum {_MAX_ITEMS} sentences per grading request.",
+            detail=f"Too many items. Maximum {_MAX_ITEMS} per grading request.",
         )
 
-    # ── Ownership + idempotency check (before calling Groq) ──────────────────
+    # ── Session ownership + idempotency (before any expensive work) ──────────
     session: Optional[models.PracticeSession] = None
+    plan_by_word: dict[int, dict] = {}
     if request.session_id is not None:
         session = db.query(models.PracticeSession).filter(
             models.PracticeSession.id == request.session_id,
@@ -357,10 +436,24 @@ async def grade_exercises(
         if session.completed_at is not None:
             raise HTTPException(
                 status_code=409,
-                detail="This session has already been graded. Start a new session to try again.",
+                detail="This session has already been graded.",
             )
+        if session.items_plan:
+            for plan in session.items_plan:
+                wid = plan.get("word_id")
+                if wid is not None:
+                    plan_by_word[wid] = plan
 
-    # ── Ownership check on words ─────────────────────────────────────────────
+        # Validate all submitted word_ids are in the plan
+        if plan_by_word:
+            invalid = [it.word_id for it in request.items if it.word_id not in plan_by_word]
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Word IDs not in this session's plan: {invalid}",
+                )
+
+    # ── Word ownership check ─────────────────────────────────────────────────
     word_ids = [it.word_id for it in request.items]
     words = db.query(models.DictionaryWord).filter(
         models.DictionaryWord.id.in_(word_ids),
@@ -374,19 +467,55 @@ async def grade_exercises(
             detail=f"Words not found or do not belong to you: {missing}",
         )
 
-    # ── Call Groq (outside transaction — may raise; no DB changes yet) ───────
-    grader_items = [
-        {
-            "word_id": it.word_id,
-            "word": word_by_id[it.word_id].word,
-            "definition": word_by_id[it.word_id].definition,
-            "part_of_speech": word_by_id[it.word_id].part_of_speech,
-            "sentence": it.sentence.strip(),
-        }
-        for it in request.items
-    ]
-    grades = await _grade_via_groq(grader_items)
-    grade_by_word: dict[int, dict] = {g["word_id"]: g for g in grades}
+    # ── Separate deterministic vs production items ───────────────────────────
+    deterministic_items: list[GradeItem] = []
+    production_items: list[GradeItem] = []
+
+    for it in request.items:
+        plan = plan_by_word.get(it.word_id, {})
+        etype = plan.get("exercise_type", "sentence")
+        if etype in DETERMINISTIC_TYPES:
+            deterministic_items.append(it)
+        else:
+            production_items.append(it)
+
+    # ── Grade deterministic items ────────────────────────────────────────────
+    det_grades: dict[int, dict] = {}
+    for it in deterministic_items:
+        plan = plan_by_word.get(it.word_id, {})
+        etype = plan.get("exercise_type", "spelling")
+        result = grade_deterministic(etype, word_by_id[it.word_id], it.response.strip(), plan)
+        det_grades[it.word_id] = {**result, "word_id": it.word_id}
+
+    # ── Grade production items via Groq ──────────────────────────────────────
+    prod_grades: dict[int, dict] = {}
+    if production_items:
+        if not settings.GROQ_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Grader not configured. Set GROQ_API_KEY.",
+            )
+        grader_items = []
+        for it in production_items:
+            w = word_by_id[it.word_id]
+            plan = plan_by_word.get(it.word_id, {})
+            grader_items.append({
+                "word_id": it.word_id,
+                "exercise_type": plan.get("exercise_type", "sentence"),
+                "word": w.word,
+                "definition": w.definition,
+                "part_of_speech": w.part_of_speech,
+                "constraint": plan.get("constraint"),
+                "source_sentence": plan.get("source_sentence"),
+                "response": it.response.strip(),
+            })
+        groq_results = await _grade_via_groq(grader_items)
+        for g in groq_results:
+            prod_grades[g["word_id"]] = {
+                **g,
+                "correct_answer": None,
+                "srs_grade": 2 if g.get("is_correct") else 0,
+            }
 
     # ── Single atomic transaction: SRS + attempts + close session ────────────
     now = datetime.utcnow()
@@ -396,8 +525,16 @@ async def grade_exercises(
     try:
         for it in request.items:
             word = word_by_id[it.word_id]
-            grade = grade_by_word[it.word_id]
-            was_correct = bool(grade["is_correct"])
+            plan = plan_by_word.get(it.word_id, {})
+            etype = plan.get("exercise_type", "sentence")
+
+            if it.word_id in det_grades:
+                grade = det_grades[it.word_id]
+            else:
+                grade = prod_grades[it.word_id]
+
+            was_correct = bool(grade.get("is_correct"))
+            srs_grade = grade.get("srs_grade", 2 if was_correct else 0)
             if was_correct:
                 correct_count += 1
 
@@ -405,24 +542,29 @@ async def grade_exercises(
                 person_id=current_user.id,
                 session_id=session.id if session else None,
                 word_id=word.id,
-                sentence=it.sentence.strip(),
+                sentence=None,
+                exercise_type=etype,
+                response=it.response.strip(),
+                question_payload=plan if plan else None,
                 is_correct=was_correct,
-                usage_score=grade["usage_score"],
-                feedback=grade["feedback"],
-                suggested_revision=grade["suggested_revision"],
+                usage_score=grade.get("usage_score"),
+                feedback=grade.get("feedback"),
+                suggested_revision=grade.get("suggested_revision"),
                 created_at=now,
             )
             db.add(attempt)
-            srs.apply_result(word, was_correct=was_correct, now=now)
+            srs.apply_result(word, grade=srs_grade, now=now)
 
             results.append({
                 "word_id": word.id,
                 "word": word.word,
-                "sentence": it.sentence.strip(),
+                "exercise_type": etype,
+                "response": it.response.strip(),
                 "is_correct": was_correct,
-                "usage_score": grade["usage_score"],
-                "feedback": grade["feedback"],
-                "suggested_revision": grade["suggested_revision"],
+                "usage_score": grade.get("usage_score"),
+                "feedback": grade.get("feedback"),
+                "suggested_revision": grade.get("suggested_revision"),
+                "correct_answer": grade.get("correct_answer"),
                 "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
             })
 
@@ -432,6 +574,8 @@ async def grade_exercises(
             session.completed_at = now
 
         db.commit()
+    except HTTPException:
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(
@@ -448,7 +592,7 @@ async def grade_exercises(
     }
 
 
-# ─── History ────────────────────────────────────────────────────────────────
+# ─── History ─────────────────────────────────────────────────────────────────
 
 @router.get("/history")
 def get_exercise_history(
@@ -478,7 +622,8 @@ def get_exercise_history(
             "session_id": a.session_id,
             "word_id": a.word_id,
             "word": word_map[a.word_id].word if a.word_id in word_map else None,
-            "sentence": a.sentence,
+            "exercise_type": a.exercise_type,
+            "response": a.response or a.sentence,
             "is_correct": a.is_correct,
             "usage_score": a.usage_score,
             "feedback": a.feedback,
@@ -489,7 +634,7 @@ def get_exercise_history(
     ]
 
 
-# ─── Stats ───────────────────────────────────────────────────────────────────
+# ─── Stats ────────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
 def get_exercise_stats(

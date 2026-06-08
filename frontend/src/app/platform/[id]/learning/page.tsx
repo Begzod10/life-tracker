@@ -709,7 +709,7 @@ function ExercisesPanel({
     onGenerate,
 }: {
     stats?: { total: number; correct: number; accuracy: number; last_7d_total: number }
-    recent: { id: number; word: string | null; sentence: string; is_correct: boolean }[]
+    recent: { id: number; word: string | null; response: string; is_correct: boolean }[]
     canStart: boolean
     onGenerate: () => void
 }) {
@@ -754,7 +754,7 @@ function ExercisesPanel({
                                         </span>
                                     )}
                                     <span className="text-white/60 italic">
-                                        “{r.sentence.length > 80 ? r.sentence.slice(0, 77) + '…' : r.sentence}”
+                                        {`”${r.response.length > 80 ? r.response.slice(0, 77) + '...' : r.response}”`}
                                     </span>
                                 </div>
                             </li>

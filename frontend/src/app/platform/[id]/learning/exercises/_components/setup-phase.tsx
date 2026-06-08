@@ -5,12 +5,14 @@ import { Loader2, PenLine, Sparkles, X } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
-import type { Source } from '@/lib/hooks/use-exercises'
+import type { ExerciseMode, Source } from '@/lib/hooks/use-exercises'
 import { COUNT_OPTIONS } from './shared'
 
 interface SetupPhaseProps {
     source: Source
     setSource: (v: Source) => void
+    mode: ExerciseMode
+    setMode: (v: ExerciseMode) => void
     count: number
     setCount: (v: number) => void
     folderId: number | undefined
@@ -29,8 +31,17 @@ const SOURCE_OPTIONS: { id: Source; label: string; hint: string }[] = [
     { id: 'all', label: 'All words', hint: 'Random' },
 ]
 
+const MODE_OPTIONS: { id: ExerciseMode; label: string; hint: string }[] = [
+    { id: 'auto', label: 'Smart', hint: 'SRS-driven' },
+    { id: 'recognition', label: 'Recognition', hint: 'MC only' },
+    { id: 'cloze', label: 'Fill-in', hint: 'Cloze/Spelling' },
+    { id: 'production', label: 'Writing', hint: 'Sentences' },
+    { id: 'mixed', label: 'Mixed', hint: 'Variety' },
+]
+
 export function SetupPhase({
     source, setSource,
+    mode, setMode,
     count, setCount,
     folderId, setFolderId,
     moduleId, setModuleId,
@@ -54,11 +65,32 @@ export function SetupPhase({
                     <h1 className="text-2xl sm:text-3xl font-bold text-white">Exercises</h1>
                 </div>
                 <p className="text-sm text-white/50">
-                    Write a sentence using each target word. AI grades meaning, grammar, and naturalness — correct usage strengthens the word&apos;s SRS interval.
+                    Practice vocabulary with different question types. Correct answers strengthen SRS intervals.
                 </p>
             </div>
 
             <Card className="p-5 sm:p-6 bg-white/2.5 border border-white/5 space-y-6">
+                {/* Mode */}
+                <section>
+                    <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">Exercise mode</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {MODE_OPTIONS.map((opt) => (
+                            <button
+                                key={opt.id}
+                                onClick={() => setMode(opt.id)}
+                                className={`px-3 py-3 rounded-lg border text-left transition-colors ${
+                                    mode === opt.id
+                                        ? 'border-amber-500/50 bg-amber-500/10 text-white'
+                                        : 'border-white/10 hover:border-white/20 bg-white/2.5 text-white/70'
+                                }`}
+                            >
+                                <div className="text-sm font-medium">{opt.label}</div>
+                                <div className="text-[11px] text-white/40 mt-0.5">{opt.hint}</div>
+                            </button>
+                        ))}
+                    </div>
+                </section>
+
                 {/* Source */}
                 <section>
                     <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">Word source</h2>
@@ -147,7 +179,7 @@ export function SetupPhase({
                     {isLoading ? (
                         <>
                             <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            Loading words…
+                            Loading…
                         </>
                     ) : (
                         <>

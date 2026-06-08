@@ -748,6 +748,8 @@ class DictionaryWord(Base):
     )
     source_page = Column(Integer, nullable=True)
     source_sentence = Column(Text, nullable=True)
+    # Phase B: synonyms, antonyms, word forms — populated by offline generator script.
+    word_meta = Column(JSON, nullable=True)
     deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -772,6 +774,9 @@ class PracticeSession(Base):
     # marked completed_at. Shape lives in the frontend; backend treats
     # it as an opaque JSON blob.
     progress = Column(JSON, nullable=True)
+    # Server-side source of truth for what exercise_type each word was assigned.
+    # Prevents client from spoofing types and drives grading dispatch.
+    items_plan = Column(JSON, nullable=True)
 
     person = relationship("Person", back_populates="practice_sessions")
 
@@ -1001,7 +1006,10 @@ class ExerciseAttempt(Base):
         nullable=False,
         index=True,
     )
-    sentence = Column(Text, nullable=False)
+    sentence = Column(Text, nullable=True)
+    exercise_type = Column(String(50), nullable=False, server_default='sentence')
+    response = Column(Text, nullable=False, server_default='')
+    question_payload = Column(JSON, nullable=True)
     is_correct = Column(Boolean, nullable=False, default=False)
     usage_score = Column(Integer, nullable=True)        # 0..100
     feedback = Column(Text, nullable=True)
