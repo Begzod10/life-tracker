@@ -259,9 +259,10 @@ You will receive items with: exercise_type, target word, definition, and the lea
 ## Exercise types
 
 - sentence: Learner wrote a sentence using the target word. Focus: word used with correct meaning in a sensible context.
-- constrained_sentence: Same as sentence PLUS a structural constraint (e.g., "as a question", "in past tense", "using negative form", "describing a specific person"). BOTH word usage AND constraint must be checked.
+- constrained_sentence: Same as sentence PLUS a structural constraint (e.g., "as a question", "using passive voice", "as a conditional", "using a relative clause"). Check BOTH word usage AND that the constraint is followed.
 - paraphrase: Learner rewrote a sentence using the target word. Check: original meaning preserved AND word used correctly.
 - prompt_response: Learner answered an open question using the target word. Check: response is on-topic AND word is used correctly.
+- error_correction: A sentence with ONE deliberate grammar mistake was shown (source_sentence). The learner rewrote it correctly. The correct_version field shows the original correct sentence. is_correct=true if the grammar error was fixed AND the rewrite is grammatically sound (exact wording not required). grammar_errors should name the type of error that was in the original errored sentence.
 
 ## Scoring rubric (usage_score 0–100)
 
@@ -338,6 +339,8 @@ def _grader_user_prompt(items: list[dict]) -> str:
             lines.append(f"  constraint: {it['constraint']}")
         if it.get("source_sentence"):
             lines.append(f"  source_sentence: {it['source_sentence']}")
+        if it.get("correct_version"):
+            lines.append(f"  correct_version: {it['correct_version']}")
         lines.append(f"  response: {it['response']}")
         lines.append("")
     return "\n".join(lines)
@@ -581,6 +584,7 @@ async def grade_exercises(
                 "part_of_speech": w.part_of_speech,
                 "constraint": plan.get("constraint"),
                 "source_sentence": plan.get("source_sentence"),
+                "correct_version": plan.get("correct_answer") if plan.get("exercise_type") == "error_correction" else None,
                 "response": it.response.strip(),
             })
         groq_results = await _grade_via_openai(grader_items)

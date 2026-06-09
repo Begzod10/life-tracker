@@ -7,6 +7,7 @@ import { SpellingInput } from './spelling-input'
 import { AnagramInput } from './anagram-input'
 import { SentenceInput } from './sentence-input'
 import { WordFormationInput } from './word-formation-input'
+import { ErrorCorrectionInput } from './error-correction-input'
 
 interface Props {
     item: ExerciseItem
@@ -30,6 +31,8 @@ export function ExerciseWidget({ item, value, onChange, disabled }: Props) {
             return <AnagramInput item={item} value={value} onChange={onChange} disabled={disabled} />
         case 'word_formation':
             return <WordFormationInput item={item} value={value} onChange={onChange} disabled={disabled} />
+        case 'error_correction':
+            return <ErrorCorrectionInput item={item} value={value} onChange={onChange} disabled={disabled} />
         default:
             // sentence, constrained_sentence, paraphrase, prompt_response
             // match / cloze_bank are never routed here — they render as GroupCard in answer-phase

@@ -21,6 +21,7 @@ export type ExerciseType =
     | 'word_formation'
     | 'synonym_antonym'
     | 'odd_one_out'
+    | 'error_correction'
 
 export type ExerciseMode =
     | 'auto'

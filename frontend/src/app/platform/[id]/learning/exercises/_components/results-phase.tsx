@@ -15,6 +15,7 @@ import {
 const DETERMINISTIC_TYPES = new Set<ExerciseType>([
     'meaning_mc', 'reverse_mc', 'cloze', 'spelling', 'anagram',
     'match', 'cloze_bank', 'word_formation', 'synonym_antonym', 'odd_one_out',
+    'error_correction',
 ])
 
 interface ResultsPhaseProps {

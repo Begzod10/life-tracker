@@ -25,6 +25,7 @@ const TYPE_LABEL: Record<string, string> = {
     word_formation: 'Word formation',
     synonym_antonym: 'Synonym / antonym',
     odd_one_out: 'Odd one out',
+    error_correction: 'Error correction',
 }
 
 // ─── Render-unit types ────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ _log = logging.getLogger(__name__)
 
 # ─── Type catalog ─────────────────────────────────────────────────────────────
 
-PRODUCTION_TYPES = frozenset({"sentence", "constrained_sentence", "paraphrase", "prompt_response"})
+PRODUCTION_TYPES = frozenset({"sentence", "constrained_sentence", "paraphrase", "prompt_response", "error_correction"})
 RECOGNITION_TYPES = frozenset({"meaning_mc", "reverse_mc"})
 CLOZE_TYPES = frozenset({"cloze"})
 FORM_TYPES = frozenset({"spelling", "anagram"})
@@ -43,6 +43,12 @@ _CONSTRAINTS = [
     "about a work situation",
     "comparing two things",
     "using a negative construction",
+    # IELTS-targeted structures
+    "using passive voice (e.g., 'The task was completed by...')",
+    "as a conditional sentence (If ..., ... .)",
+    "using a relative clause (which / who / that)",
+    "linking two ideas with a cohesive device (however / furthermore / therefore / as a result)",
+    "using reported speech (She said that... / He mentioned that...)",
 ]
 
 # Grammar-targeted constraints: keyed by grammar error category.
@@ -59,6 +65,11 @@ GRAMMAR_ERROR_LABELS: dict[str, str] = {
     "spelling":               "Spelling",
     "pronoun":                "Pronouns",
     "constraint_not_met":     "Constraint Not Met",
+    "passive_voice":          "Passive Voice",
+    "relative_clause":        "Relative Clauses",
+    "conditional":            "Conditionals",
+    "cohesive_device":        "Cohesive Devices",
+    "reported_speech":        "Reported Speech",
 }
 
 _GRAMMAR_CONSTRAINTS: dict[str, str] = {
@@ -72,6 +83,11 @@ _GRAMMAR_CONSTRAINTS: dict[str, str] = {
     "pronoun":                "replacing a noun with the correct pronoun (he/she/they/it)",
     "spelling":               "spelled correctly — double-check every word before submitting",
     "constraint_not_met":     "following all sentence constraints given in the prompt",
+    "passive_voice":          "using passive voice (e.g., 'The task was completed by...')",
+    "relative_clause":        "using a relative clause (which / who / that) to add detail",
+    "conditional":            "as a conditional sentence (If ..., then ... .)",
+    "cohesive_device":        "linking two ideas with a cohesive device (however / furthermore / therefore)",
+    "reported_speech":        "using reported speech (She said that... / He mentioned that...)",
 }
 
 # ─── Prompt templates for prompt_response ─────────────────────────────────────
@@ -123,8 +139,61 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
         cued = ["cloze", "spelling", "anagram"]
         return cued[position % len(cued)]
 
-    production = ["sentence", "constrained_sentence", "prompt_response"]
+    production = ["sentence", "constrained_sentence", "prompt_response", "error_correction"]
     return production[position % len(production)]
+
+
+# ─── Error injection (error_correction type) ──────────────────────────────────
+
+_ARTICLE_RE = re.compile(r'\b(the|a|an)\s+([A-Za-z])', re.IGNORECASE)
+_SV_RE = re.compile(r'\b(he|she|it)\s+([a-z]{3,}s)\b', re.IGNORECASE)
+_TENSE_MAP = {
+    'went': 'go', 'was': 'is', 'were': 'are', 'had': 'have',
+    'said': 'say', 'made': 'make', 'took': 'take', 'came': 'come',
+    'helped': 'help', 'used': 'use', 'showed': 'show', 'worked': 'work',
+    'played': 'play', 'studied': 'study', 'wanted': 'want', 'started': 'start',
+    'needed': 'need', 'allowed': 'allow', 'required': 'require',
+}
+
+
+def _error_article(sentence: str) -> str | None:
+    m = _ARTICLE_RE.search(sentence)
+    if not m:
+        return None
+    # Remove article + trailing space
+    return sentence[:m.start()] + sentence[m.start(2):]
+
+
+def _error_sv_agreement(sentence: str) -> str | None:
+    m = _SV_RE.search(sentence)
+    if not m:
+        return None
+    verb = m.group(2)
+    # Only strip -s (not -es edge cases like 'does') to keep it reliable
+    if verb.endswith('es') and len(verb) > 3:
+        base = verb[:-2]
+    else:
+        base = verb[:-1]
+    return sentence[:m.start(2)] + base + sentence[m.end(2):]
+
+
+def _error_tense(sentence: str) -> str | None:
+    for past, present in _TENSE_MAP.items():
+        m = re.search(r'\b' + re.escape(past) + r'\b', sentence, re.IGNORECASE)
+        if m:
+            return sentence[:m.start()] + present + sentence[m.end():]
+    return None
+
+
+def _inject_error(sentence: str, position: int) -> str | None:
+    """Return errored sentence or None if no injection succeeded."""
+    strategies = [_error_article, _error_sv_agreement, _error_tense]
+    n = len(strategies)
+    for i in range(n):
+        result = strategies[(position + i) % n](sentence)
+        if result and result != sentence:
+            return result
+    return None
 
 
 # ─── Distractor selection ──────────────────────────────────────────────────────
@@ -392,6 +461,20 @@ def build_question(
                 "prompt": prompt_text,
                 "instruction": definition,
                 "correct_answer": None}
+
+    if exercise_type == "error_correction":
+        # Requires a real example sentence to inject an error into.
+        # Falls back to sentence if no usable example or injection fails.
+        if examples:
+            source = examples[0]
+            errored = _inject_error(source, position)
+            if errored and errored != source:
+                return {**base,
+                        "prompt": "Find and correct the grammar mistake in this sentence:",
+                        "source_sentence": errored,
+                        "instruction": "Rewrite the full sentence with the error corrected.",
+                        "correct_answer": source}
+        return build_question("sentence", w, distractor_pool, position, grammar_focus)
 
     # ── Grouped types ────────────────────────────────────────────────────────
     # build_question returns a stub; assign_groups() enriches these with group_id
