@@ -317,13 +317,14 @@ Return ONLY valid JSON — no markdown, no prose:
 }
 
 grammar_errors must be an array (can be empty []) containing only values from this list:
-articles, plural_singular, verb_tense, subject_verb_agreement, prepositions, word_form, word_order, spelling, pronoun, constraint_not_met
+articles, plural_singular, verb_tense, subject_verb_agreement, prepositions, word_form, word_order, spelling, pronoun, constraint_not_met, passive_voice, relative_clause, conditional, cohesive_device, reported_speech
 
 Rules for grammar_errors:
-- Include only errors actually present in the learner's response.
+- Include grammar errors actually present in the learner's response — even if is_correct=false because the target word is missing.
 - "constraint_not_met" only for constrained_sentence where the constraint was ignored.
 - Empty array [] if grammar is fine.
-- Max 3 errors per item — list only the most impactful ones."""
+- Max 3 errors per item — list only the most impactful ones.
+- IMPORTANT: Never return null for grammar_errors — always return an array (empty if no errors)."""
 
 
 def _grader_user_prompt(items: list[dict]) -> str:
@@ -362,8 +363,11 @@ def _coerce_grade(raw: dict, fallback_id: int) -> dict:
         revision = revision.strip() or None
     else:
         revision = None
-    raw_errors = raw.get("grammar_errors") or []
-    grammar_errors = [e for e in raw_errors if isinstance(e, str) and e in _VALID_GRAMMAR_ERRORS] or None
+    raw_errors = raw.get("grammar_errors")
+    if isinstance(raw_errors, list):
+        grammar_errors = [e for e in raw_errors if isinstance(e, str) and e in _VALID_GRAMMAR_ERRORS] or None
+    else:
+        grammar_errors = None
     return {
         "word_id": word_id,
         "is_correct": is_correct,
@@ -589,9 +593,13 @@ async def grade_exercises(
             })
         groq_results = await _grade_via_openai(grader_items)
         for g in groq_results:
-            prod_grades[g["word_id"]] = {
+            wid = g["word_id"]
+            plan = plan_by_word.get(wid, {})
+            # For error_correction, surface the original correct sentence as correct_answer.
+            ec_answer = plan.get("correct_answer") if plan.get("exercise_type") == "error_correction" else None
+            prod_grades[wid] = {
                 **g,
-                "correct_answer": None,
+                "correct_answer": ec_answer,
                 "srs_grade": 2 if g.get("is_correct") else 0,
             }
 
