@@ -80,6 +80,7 @@ export type ExerciseGradeResult = {
     feedback: string | null
     suggested_revision: string | null
     correct_answer: string | null
+    grammar_errors: string[] | null
     next_review_at: string
 }
 
@@ -111,6 +112,37 @@ export type ExerciseStats = {
     accuracy: number
     last_7d_total: number
     last_7d_correct: number
+}
+
+export type GrammarWeakArea = {
+    type: string
+    label: string
+    count: number
+}
+
+export type AccuracyTrendPoint = {
+    date: string
+    attempts: number
+    correct: number
+    accuracy: number
+}
+
+export type ExerciseTypeStats = {
+    type: ExerciseType
+    attempts: number
+    correct: number
+    accuracy: number
+}
+
+export type ExerciseAnalytics = {
+    period_days: number
+    total_attempts: number
+    total_correct: number
+    overall_accuracy: number
+    avg_usage_score: number | null
+    accuracy_trend: AccuracyTrendPoint[]
+    grammar_weak_areas: GrammarWeakArea[]
+    exercise_type_stats: ExerciseTypeStats[]
 }
 
 export type StartExerciseRequest = {
@@ -195,5 +227,14 @@ export function useExerciseStats() {
     return useQuery<ExerciseStats>({
         queryKey: ['exercises', 'stats'],
         queryFn: () => request(API_ENDPOINTS.EXERCISES.STATS),
+    })
+}
+
+export function useExerciseAnalytics(days = 30) {
+    const { request } = useHttp()
+    return useQuery<ExerciseAnalytics>({
+        queryKey: ['exercises', 'analytics', days],
+        queryFn: () => request(API_ENDPOINTS.EXERCISES.ANALYTICS(days)),
+        staleTime: 5 * 60 * 1000,
     })
 }

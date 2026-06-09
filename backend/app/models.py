@@ -1010,6 +1010,7 @@ class ExerciseAttempt(Base):
     exercise_type = Column(String(50), nullable=False, server_default='sentence')
     response = Column(Text, nullable=False, server_default='')
     question_payload = Column(JSON, nullable=True)
+    grammar_errors = Column(JSON, nullable=True)   # list of error category strings
     is_correct = Column(Boolean, nullable=False, default=False)
     usage_score = Column(Integer, nullable=True)        # 0..100
     feedback = Column(Text, nullable=True)

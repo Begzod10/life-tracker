@@ -45,6 +45,35 @@ _CONSTRAINTS = [
     "using a negative construction",
 ]
 
+# Grammar-targeted constraints: keyed by grammar error category.
+# When a learner has a known weakness in a category, constrained_sentence
+# exercises will use the matching constraint to give focused practice.
+GRAMMAR_ERROR_LABELS: dict[str, str] = {
+    "articles":               "Articles (a/an/the)",
+    "plural_singular":        "Plural/Singular",
+    "verb_tense":             "Verb Tenses",
+    "subject_verb_agreement": "Subject-Verb Agreement",
+    "prepositions":           "Prepositions",
+    "word_form":              "Word Form",
+    "word_order":             "Word Order",
+    "spelling":               "Spelling",
+    "pronoun":                "Pronouns",
+    "constraint_not_met":     "Constraint Not Met",
+}
+
+_GRAMMAR_CONSTRAINTS: dict[str, str] = {
+    "articles":               "paying close attention to correct article usage (a, an, the)",
+    "plural_singular":        "using the correct singular or plural form of nouns",
+    "verb_tense":             "using the past simple tense",
+    "subject_verb_agreement": "ensuring the subject and verb agree in number",
+    "prepositions":           "using a preposition correctly (in, on, at, for, with, etc.)",
+    "word_form":              "using the correct word form (noun, verb, adjective, or adverb)",
+    "word_order":             "with correct subject-verb-object word order",
+    "pronoun":                "replacing a noun with the correct pronoun (he/she/they/it)",
+    "spelling":               "spelled correctly — double-check every word before submitting",
+    "constraint_not_met":     "following all sentence constraints given in the prompt",
+}
+
 # ─── Prompt templates for prompt_response ─────────────────────────────────────
 
 _PROMPTS = [
@@ -245,6 +274,7 @@ def build_question(
     word: Any,
     distractor_pool: list[Any],
     position: int = 0,
+    grammar_focus: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Returns a dict with:
@@ -332,7 +362,15 @@ def build_question(
                 "correct_answer": None}
 
     if exercise_type == "constrained_sentence":
-        constraint = _CONSTRAINTS[position % len(_CONSTRAINTS)]
+        # If the learner has known grammar weaknesses, target one of them.
+        constraint = None
+        if grammar_focus:
+            for err in grammar_focus:
+                if err in _GRAMMAR_CONSTRAINTS:
+                    constraint = _GRAMMAR_CONSTRAINTS[err]
+                    break
+        if constraint is None:
+            constraint = _CONSTRAINTS[position % len(_CONSTRAINTS)]
         return {**base,
                 "prompt": f"Write a sentence using \"{target}\" — {constraint}.",
                 "instruction": definition,

@@ -32,6 +32,7 @@ from app.dependencies import get_current_user
 from app.services import srs
 from app.services.exercise_types import (
     DETERMINISTIC_TYPES,
+    GRAMMAR_ERROR_LABELS,
     PRODUCTION_TYPES,
     VALID_MODES,
     assign_groups,
@@ -188,10 +189,27 @@ def start_exercise_session(
         models.DictionaryWord.deleted == False,
     ).all()
 
+    # Fetch top grammar weaknesses from recent attempts to target constrained exercises.
+    recent_attempts = (
+        db.query(models.ExerciseAttempt)
+        .filter(
+            models.ExerciseAttempt.person_id == current_user.id,
+            models.ExerciseAttempt.grammar_errors.isnot(None),
+        )
+        .order_by(models.ExerciseAttempt.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    error_counts: dict[str, int] = {}
+    for attempt in recent_attempts:
+        for err in (attempt.grammar_errors or []):
+            error_counts[err] = error_counts.get(err, 0) + 1
+    grammar_focus = sorted(error_counts, key=lambda k: -error_counts[k])[:3] or None
+
     items_plan: list[dict] = []
     for position, word in enumerate(words):
         exercise_type = pick_exercise_type(word, request.mode, position)
-        question = build_question(exercise_type, word, pool, position)
+        question = build_question(exercise_type, word, pool, position, grammar_focus)
         items_plan.append(question)
 
     # Assign group_ids and enrich payloads for match/cloze_bank grouped types.
@@ -291,10 +309,20 @@ Return ONLY valid JSON — no markdown, no prose:
       "is_correct": <bool>,
       "usage_score": <0..100 int>,
       "feedback": "<one sentence>",
-      "suggested_revision": "<corrected version of their sentence, or null>"
+      "suggested_revision": "<corrected version of their sentence, or null>",
+      "grammar_errors": ["<error_type>", ...]
     }
   ]
-}"""
+}
+
+grammar_errors must be an array (can be empty []) containing only values from this list:
+articles, plural_singular, verb_tense, subject_verb_agreement, prepositions, word_form, word_order, spelling, pronoun, constraint_not_met
+
+Rules for grammar_errors:
+- Include only errors actually present in the learner's response.
+- "constraint_not_met" only for constrained_sentence where the constraint was ignored.
+- Empty array [] if grammar is fine.
+- Max 3 errors per item — list only the most impactful ones."""
 
 
 def _grader_user_prompt(items: list[dict]) -> str:
@@ -316,6 +344,8 @@ def _grader_user_prompt(items: list[dict]) -> str:
 
 
 def _coerce_grade(raw: dict, fallback_id: int) -> dict:
+    _VALID_GRAMMAR_ERRORS = frozenset(GRAMMAR_ERROR_LABELS.keys())
+
     word_id = int(raw.get("word_id") or fallback_id)
     is_correct = bool(raw.get("is_correct"))
     score = raw.get("usage_score")
@@ -329,12 +359,15 @@ def _coerce_grade(raw: dict, fallback_id: int) -> dict:
         revision = revision.strip() or None
     else:
         revision = None
+    raw_errors = raw.get("grammar_errors") or []
+    grammar_errors = [e for e in raw_errors if isinstance(e, str) and e in _VALID_GRAMMAR_ERRORS] or None
     return {
         "word_id": word_id,
         "is_correct": is_correct,
         "usage_score": score_int,
         "feedback": feedback,
         "suggested_revision": revision,
+        "grammar_errors": grammar_errors,
     }
 
 
@@ -587,6 +620,7 @@ async def grade_exercises(
                 exercise_type=etype,
                 response=it.response.strip(),
                 question_payload=plan if plan else None,
+                grammar_errors=grade.get("grammar_errors"),
                 is_correct=was_correct,
                 usage_score=grade.get("usage_score"),
                 feedback=grade.get("feedback"),
@@ -606,6 +640,7 @@ async def grade_exercises(
                 "feedback": grade.get("feedback"),
                 "suggested_revision": grade.get("suggested_revision"),
                 "correct_answer": grade.get("correct_answer"),
+                "grammar_errors": grade.get("grammar_errors"),
                 "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
             })
 
@@ -708,4 +743,93 @@ def get_exercise_stats(
         "accuracy": round(correct / total * 100) if total else 0,
         "last_7d_total": last_7d_total,
         "last_7d_correct": last_7d_correct,
+    }
+
+
+# ─── Analytics ────────────────────────────────────────────────────────────────
+
+@router.get("/analytics")
+def get_exercise_analytics(
+    days: int = Query(default=30, ge=7, le=90),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    from collections import defaultdict
+
+    since = datetime.utcnow() - timedelta(days=days)
+    attempts = (
+        db.query(models.ExerciseAttempt)
+        .filter(
+            models.ExerciseAttempt.person_id == current_user.id,
+            models.ExerciseAttempt.created_at >= since,
+        )
+        .order_by(models.ExerciseAttempt.created_at)
+        .all()
+    )
+
+    total = len(attempts)
+    correct = sum(1 for a in attempts if a.is_correct)
+    scored = [a.usage_score for a in attempts if a.usage_score is not None]
+    avg_score = round(sum(scored) / len(scored)) if scored else None
+
+    # Daily accuracy trend
+    daily: dict[str, dict] = defaultdict(lambda: {"attempts": 0, "correct": 0})
+    for a in attempts:
+        if a.created_at:
+            day = a.created_at.date().isoformat()
+            daily[day]["attempts"] += 1
+            if a.is_correct:
+                daily[day]["correct"] += 1
+    accuracy_trend = sorted(
+        [
+            {
+                "date": d,
+                "attempts": v["attempts"],
+                "correct": v["correct"],
+                "accuracy": round(v["correct"] / v["attempts"] * 100) if v["attempts"] else 0,
+            }
+            for d, v in daily.items()
+        ],
+        key=lambda x: x["date"],
+    )
+
+    # Grammar weak areas
+    error_counts: dict[str, int] = defaultdict(int)
+    for a in attempts:
+        for err in (a.grammar_errors or []):
+            error_counts[err] += 1
+    grammar_weak_areas = sorted(
+        [
+            {"type": k, "label": GRAMMAR_ERROR_LABELS.get(k, k), "count": v}
+            for k, v in error_counts.items()
+        ],
+        key=lambda x: -x["count"],
+    )[:5]
+
+    # Exercise type breakdown
+    type_stats: dict[str, dict] = defaultdict(lambda: {"attempts": 0, "correct": 0})
+    for a in attempts:
+        t = a.exercise_type or "sentence"
+        type_stats[t]["attempts"] += 1
+        if a.is_correct:
+            type_stats[t]["correct"] += 1
+    exercise_type_stats = [
+        {
+            "type": t,
+            "attempts": v["attempts"],
+            "correct": v["correct"],
+            "accuracy": round(v["correct"] / v["attempts"] * 100) if v["attempts"] else 0,
+        }
+        for t, v in type_stats.items()
+    ]
+
+    return {
+        "period_days": days,
+        "total_attempts": total,
+        "total_correct": correct,
+        "overall_accuracy": round(correct / total * 100) if total else 0,
+        "avg_usage_score": avg_score,
+        "accuracy_trend": accuracy_trend,
+        "grammar_weak_areas": grammar_weak_areas,
+        "exercise_type_stats": exercise_type_stats,
     }

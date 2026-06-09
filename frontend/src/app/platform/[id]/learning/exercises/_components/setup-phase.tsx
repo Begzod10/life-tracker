@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
 import type { ExerciseMode, Source } from '@/lib/hooks/use-exercises'
 import { COUNT_OPTIONS } from './shared'
+import { AnalyticsPanel } from './analytics-panel'
 
 interface SetupPhaseProps {
     source: Source
@@ -57,6 +58,7 @@ export function SetupPhase({
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
         >
+            <AnalyticsPanel />
             <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2.5 rounded-lg bg-amber-500/10">

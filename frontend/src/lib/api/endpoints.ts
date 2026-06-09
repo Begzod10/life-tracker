@@ -320,6 +320,7 @@ export const API_ENDPOINTS = {
             return `${API_URL}/exercises/history?${p}`
         },
         STATS: `${API_URL}/exercises/stats`,
+        ANALYTICS: (days = 30) => `${API_URL}/exercises/analytics?days=${days}`,
     },
 
     TIMETABLE: {
