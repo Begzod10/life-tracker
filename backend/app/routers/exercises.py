@@ -16,8 +16,12 @@ from typing import List, Optional
 import json
 import re
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -576,11 +580,12 @@ async def grade_exercises(
         db.commit()
     except HTTPException:
         raise
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        logger.exception("grade_exercises DB error: %s", exc)
         raise HTTPException(
             status_code=500,
-            detail="Failed to save grading results. Please try again.",
+            detail=f"Failed to save grading results: {exc}",
         )
 
     return {
