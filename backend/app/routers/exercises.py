@@ -313,49 +313,57 @@ def _coerce_grade(raw: dict, fallback_id: int) -> dict:
     }
 
 
-async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
-    from groq import (
-        AsyncGroq,
+async def _grade_via_openai(grader_items: list[dict]) -> list[dict]:
+    from openai import (
+        AsyncOpenAI,
         APIConnectionError,
         APIError,
         AuthenticationError,
         RateLimitError,
     )
+    import httpx
 
-    client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+    http_client = None
+    if settings.OPENAI_PROXY_URL:
+        http_client = httpx.AsyncClient(proxy=settings.OPENAI_PROXY_URL)
+
+    client = AsyncOpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        base_url=settings.OPENAI_BASE_URL or None,
+        http_client=http_client,
+    )
     max_tokens = max(900, 250 + 250 * len(grader_items))
     try:
         response = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=settings.OPENAI_MODEL,
             messages=[
                 {"role": "system", "content": _GRADER_SYSTEM},
                 {"role": "user", "content": _grader_user_prompt(grader_items)},
             ],
             max_tokens=max_tokens,
             temperature=0.2,
-            stream=False,
             response_format={"type": "json_object"},
         )
     except AuthenticationError as exc:
-        logger.error("Groq auth failed: %s", exc)
+        logger.error("OpenAI auth failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Grader auth failed: {exc}",
         ) from exc
     except RateLimitError as exc:
-        logger.error("Groq rate-limited: %s", exc)
+        logger.error("OpenAI rate-limited: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Grader rate-limited: {exc}",
         ) from exc
     except APIConnectionError as exc:
-        logger.error("Groq unreachable: %s", exc)
+        logger.error("OpenAI unreachable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"Grader unreachable: {exc}",
         ) from exc
     except APIError as exc:
-        logger.error("Groq API error: %s", exc)
+        logger.error("OpenAI API error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Grader API error: {exc}",
@@ -498,10 +506,10 @@ async def grade_exercises(
     # ── Grade production items via Groq ──────────────────────────────────────
     prod_grades: dict[int, dict] = {}
     if production_items:
-        if not settings.GROQ_API_KEY:
+        if not settings.OPENAI_API_KEY:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Grader not configured. Set GROQ_API_KEY.",
+                detail="Grader not configured. Set OPENAI_API_KEY.",
             )
         grader_items = []
         for it in production_items:
@@ -517,7 +525,7 @@ async def grade_exercises(
                 "source_sentence": plan.get("source_sentence"),
                 "response": it.response.strip(),
             })
-        groq_results = await _grade_via_groq(grader_items)
+        groq_results = await _grade_via_openai(grader_items)
         for g in groq_results:
             prod_grades[g["word_id"]] = {
                 **g,
