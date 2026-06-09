@@ -337,21 +337,25 @@ async def _grade_via_groq(grader_items: list[dict]) -> list[dict]:
             response_format={"type": "json_object"},
         )
     except AuthenticationError as exc:
+        logger.error("Groq auth failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Grader auth failed: {exc}",
         ) from exc
     except RateLimitError as exc:
+        logger.error("Groq rate-limited: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Grader rate-limited: {exc}",
         ) from exc
     except APIConnectionError as exc:
+        logger.error("Groq unreachable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"Grader unreachable: {exc}",
         ) from exc
     except APIError as exc:
+        logger.error("Groq API error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Grader API error: {exc}",
