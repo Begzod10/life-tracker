@@ -31,6 +31,17 @@
   --radius-lg: 0.75rem;
 }
 
+/* Sidebar push — desktop only. JS sets --sidebar-w; transitions off during drag. */
+@media (min-width: 1024px) {
+  .sidebar-push {
+    padding-left: var(--sidebar-w, 240px);
+    transition: padding-left 220ms ease;
+  }
+  :root.sidebar-resizing .sidebar-push {
+    transition: none;
+  }
+}
+
 /* Базовые стили */
 * {
   border-color: var(--color-border);

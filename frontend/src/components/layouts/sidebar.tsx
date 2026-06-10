@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
@@ -28,19 +28,14 @@ import {
     Menu,
     Newspaper,
     X,
+    PanelLeftClose,
 } from 'lucide-react'
 
 type NavItem = {
     name: string
     href: string
     icon: React.ComponentType<{ className?: string }>
-    /** active when current path starts with this prefix (in addition to exact match) */
     matchPrefix?: boolean
-    /**
-     * Hub-category items render under /platform with a ?category=… query.
-     * They never match by pathname alone (because the pathname is shared)
-     * so we activate them by query string instead.
-     */
     hubCategory?: string
 }
 
@@ -94,8 +89,6 @@ function isItemActive(
     item: NavItem,
     hubCategoryParam: string | null,
 ): boolean {
-    // Hub-category items share the /platform pathname, so they must match
-    // by ?category=… instead of by path. Without this two items collide.
     if (item.hubCategory) {
         return pathname === '/platform' && hubCategoryParam === item.hubCategory
     }
@@ -109,25 +102,38 @@ function SidebarContent({
     pathname,
     hubCategoryParam,
     onNavigate,
+    onCollapse,
     weather,
 }: {
     sections: NavSection[]
     pathname: string
     hubCategoryParam: string | null
     onNavigate?: () => void
-    /** Only rendered when provided — used by the mobile drawer variant. */
+    onCollapse?: () => void
     weather?: WeatherData | null
 }) {
     return (
         <>
             {/* Brand + back to hub */}
             <div className="flex flex-col gap-3 p-4 border-b border-white/5">
-                <Link href="/platform" onClick={onNavigate} className="flex items-center gap-2 group">
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                        <LayoutGrid className="h-4 w-4 text-white" />
-                    </div>
-                    <span className="text-base font-semibold tracking-tight text-white">LifeTrack</span>
-                </Link>
+                <div className="flex items-center justify-between">
+                    <Link href="/platform" onClick={onNavigate} className="flex items-center gap-2 group">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+                            <LayoutGrid className="h-4 w-4 text-white" />
+                        </div>
+                        <span className="text-base font-semibold tracking-tight text-white truncate">LifeTrack</span>
+                    </Link>
+                    {onCollapse && (
+                        <button
+                            type="button"
+                            onClick={onCollapse}
+                            title="Collapse sidebar"
+                            className="text-white/30 hover:text-white/70 hover:bg-white/5 rounded-lg p-1.5 transition-colors shrink-0"
+                        >
+                            <PanelLeftClose className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
 
                 <Link
                     href="/platform"
@@ -177,16 +183,12 @@ function SidebarContent({
                 ))}
             </nav>
 
-            {/* Weather widget — only shown in the mobile drawer (caller
-                passes `weather`). On desktop the layout renders the same
-                widget pinned top-center so it isn't duplicated here. */}
             {weather && (
                 <div className="px-3 pb-3 pt-1">
                     <WeatherWidget data={weather} />
                 </div>
             )}
 
-            {/* Footer */}
             <div className="border-t border-white/5 p-3">
                 <Link
                     href="/platform/profile"
@@ -201,6 +203,12 @@ function SidebarContent({
     )
 }
 
+const MIN_W = 180
+const MAX_W = 420
+const DEFAULT_W = 240
+const LS_WIDTH = 'sidebar-w'
+const LS_COLLAPSED = 'sidebar-collapsed'
+
 export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
@@ -208,15 +216,63 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
     const hubCategoryParam = searchParams?.get('category') ?? null
     const { data: user } = useUser()
     const [mobileOpen, setMobileOpen] = useState(false)
+    const [collapsed, setCollapsed] = useState(false)
+    const [width, setWidth] = useState(DEFAULT_W)
+    const [resizing, setResizing] = useState(false)
+    const isResizing = useRef(false)
+    const startX = useRef(0)
+    const startW = useRef(0)
 
-    // Auto-close the drawer whenever the route changes — otherwise clicking
-    // a link on mobile leaves the drawer open over the new page.
+    // Restore persisted state on mount
     useEffect(() => {
-        setMobileOpen(false)
-    }, [pathname, hubCategoryParam])
+        const w = parseInt(localStorage.getItem(LS_WIDTH) ?? '', 10)
+        const c = localStorage.getItem(LS_COLLAPSED) === 'true'
+        if (!isNaN(w)) setWidth(Math.min(MAX_W, Math.max(MIN_W, w)))
+        setCollapsed(c)
+    }, [])
 
-    // Lock body scroll while the mobile drawer is open so the underlying
-    // page doesn't scroll under it.
+    // Sync CSS variable used by layout to offset the main content
+    useEffect(() => {
+        const w = collapsed ? 0 : width
+        document.documentElement.style.setProperty('--sidebar-w', `${w}px`)
+        localStorage.setItem(LS_COLLAPSED, String(collapsed))
+        if (!collapsed) localStorage.setItem(LS_WIDTH, String(width))
+    }, [collapsed, width])
+
+    // Resize drag listeners
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isResizing.current) return
+            document.documentElement.classList.add('sidebar-resizing')
+            const newW = Math.min(MAX_W, Math.max(MIN_W, startW.current + e.clientX - startX.current))
+            setWidth(newW)
+        }
+        const onUp = () => {
+            if (!isResizing.current) return
+            document.documentElement.classList.remove('sidebar-resizing')
+            isResizing.current = false
+            setResizing(false)
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+    }, [])
+
+    const startResize = (e: React.MouseEvent) => {
+        e.preventDefault()
+        isResizing.current = true
+        startX.current = e.clientX
+        startW.current = width
+        setResizing(true)
+    }
+
+    // Auto-close mobile drawer on route change
+    useEffect(() => { setMobileOpen(false) }, [pathname, hubCategoryParam])
+
+    // Lock body scroll while mobile drawer is open
     useEffect(() => {
         if (!mobileOpen) return
         const prev = document.body.style.overflow
@@ -224,21 +280,14 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
         return () => { document.body.style.overflow = prev }
     }, [mobileOpen])
 
-    // Prefer URL param so the sidebar reflects the route you're already on;
-    // fall back to the authenticated user when the route has no [id]
-    // (e.g. /platform, /platform/profile).
     const id = params?.id ?? (user?.id != null ? String(user.id) : undefined)
-
-    if (!id) {
-        return null
-    }
+    if (!id) return null
 
     const sections = buildSections(String(id))
 
     return (
         <>
-            {/* Mobile hamburger — fixed top-left, only visible <lg. Sits above
-                the platform header so it's reachable on every page. */}
+            {/* Mobile hamburger */}
             <button
                 type="button"
                 onClick={() => setMobileOpen(true)}
@@ -247,6 +296,18 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
             >
                 <Menu className="h-5 w-5" />
             </button>
+
+            {/* Desktop hamburger — shown only when sidebar is collapsed */}
+            {collapsed && (
+                <button
+                    type="button"
+                    onClick={() => setCollapsed(false)}
+                    aria-label="Open sidebar"
+                    className="hidden lg:flex fixed top-3 left-3 z-40 w-10 h-10 rounded-lg bg-white/10 backdrop-blur-md border border-white/10 text-white/80 hover:text-white hover:bg-white/15 items-center justify-center shadow-lg transition-colors"
+                >
+                    <Menu className="h-5 w-5" />
+                </button>
+            )}
 
             {/* Mobile backdrop */}
             {mobileOpen && (
@@ -258,7 +319,7 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                 />
             )}
 
-            {/* Mobile drawer — slides in from the left below lg. */}
+            {/* Mobile drawer */}
             <aside
                 className={cn(
                     'lg:hidden fixed left-0 top-0 bottom-0 z-50 w-[min(17rem,85vw)] flex flex-col bg-[#0a0a14] border-r border-white/10 shadow-2xl transition-transform duration-200',
@@ -282,15 +343,29 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                 />
             </aside>
 
-            {/* Desktop sidebar — unchanged behaviour. Weather is rendered
-                pinned top-right in the platform layout on desktop, so we
-                don't repeat it inside this aside. */}
-            <aside className="hidden lg:flex h-screen w-60 flex-col fixed left-0 top-0 z-30 bg-white/[0.03] border-r border-white/5 backdrop-blur-xl">
+            {/* Desktop sidebar */}
+            <aside
+                className={cn(
+                    'hidden lg:flex flex-col fixed left-0 top-0 z-30 h-screen',
+                    'bg-white/[0.03] border-r border-white/5 backdrop-blur-xl overflow-hidden',
+                    !resizing && 'transition-[width] duration-200 ease-in-out',
+                )}
+                style={{ width: collapsed ? 0 : width }}
+            >
                 <SidebarContent
                     sections={sections}
                     pathname={pathname}
                     hubCategoryParam={hubCategoryParam}
+                    onCollapse={() => setCollapsed(true)}
                 />
+
+                {/* Resize drag handle */}
+                <div
+                    onMouseDown={startResize}
+                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group"
+                >
+                    <div className="absolute inset-y-0 right-0 w-px bg-white/5 group-hover:bg-indigo-400/50 group-hover:w-0.5 transition-all" />
+                </div>
             </aside>
         </>
     )
