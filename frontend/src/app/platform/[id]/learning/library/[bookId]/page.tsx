@@ -470,9 +470,38 @@ export default function ReaderPage() {
     const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null)
     const [fileError, setFileError] = useState<string | null>(null)
 
+    const [panelWidth, setPanelWidth] = useState(320)
+    const isPanelResizing = useRef(false)
+    const panelStartX = useRef(0)
+    const panelStartW = useRef(0)
+
     const containerRef = useRef<HTMLDivElement>(null)
     const pageRef = useRef<HTMLDivElement>(null)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // ─── Right-panel resize ──────────────────────────────────────────────────
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isPanelResizing.current) return
+            // Panel is on the right; dragging left (smaller x) → wider panel
+            const delta = panelStartX.current - e.clientX
+            setPanelWidth(Math.min(520, Math.max(240, panelStartW.current + delta)))
+        }
+        const onUp = () => { isPanelResizing.current = false }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+    }, [])
+
+    const startPanelResize = (e: React.MouseEvent) => {
+        e.preventDefault()
+        isPanelResizing.current = true
+        panelStartX.current = e.clientX
+        panelStartW.current = panelWidth
+    }
 
     // ─── PDF runtime ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -1187,14 +1216,20 @@ export default function ReaderPage() {
                 {showHighlights && (
                     <aside
                         className={
-                            // Mobile: fixed drawer pinned to right edge, above backdrop.
-                            // Desktop: regular flow column.
-                            'flex flex-col shrink-0 ' +
-                            'fixed top-[52px] sm:top-[68px] right-0 bottom-0 z-50 w-[min(22rem,90vw)] ' +
+                            'relative flex flex-col shrink-0 ' +
+                            'fixed top-[52px] sm:top-[68px] right-0 bottom-0 z-50 ' +
                             'bg-[#0a0a14] border-l border-white/10 p-3 ' +
-                            'lg:static lg:w-80 lg:bg-transparent lg:border-l-0 lg:p-0 lg:z-auto'
+                            'lg:static lg:bg-transparent lg:border-l-0 lg:p-0 lg:z-auto'
                         }
+                        style={{ width: panelWidth }}
                     >
+                        {/* Drag handle — desktop only, on the left edge */}
+                        <div
+                            onMouseDown={startPanelResize}
+                            className="hidden lg:block absolute left-0 top-0 bottom-0 w-1 cursor-col-resize group z-10"
+                        >
+                            <div className="absolute inset-y-0 left-0 w-px bg-white/5 group-hover:bg-indigo-400/50 group-hover:w-0.5 transition-all" />
+                        </div>
                         <div className="flex items-center justify-between mb-2 lg:hidden">
                             <span className="text-xs uppercase tracking-wider text-white/40">Panel</span>
                             <button

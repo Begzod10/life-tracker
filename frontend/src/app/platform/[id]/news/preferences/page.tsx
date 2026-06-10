@@ -52,7 +52,7 @@ export default function NewsPreferencesPage() {
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black text-white">
-            <header className="sticky top-0 z-20 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+            <header className="sticky top-[52px] sm:top-[68px] z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
                 <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
                     <Link
                         href={`/platform/${platformId}/news`}
@@ -82,7 +82,7 @@ export default function NewsPreferencesPage() {
                 </div>
             </header>
 
-            <main className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6">
+            <main className="mx-auto max-w-3xl px-4 pb-32 pt-6 sm:px-6">
                 <div className="mb-6 flex items-start gap-3">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500/30 to-violet-500/20 ring-1 ring-white/10">
                         <Newspaper className="h-4 w-4 text-indigo-200" />
@@ -141,6 +141,22 @@ export default function NewsPreferencesPage() {
                     </>
                 )}
             </main>
+            {/* Sticky bottom save bar — always visible */}
+            {dirty && (
+                <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center p-4 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent pointer-events-none">
+                    <button
+                        onClick={save}
+                        disabled={setMutation.isPending}
+                        className="pointer-events-auto inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-6 py-3 text-sm font-semibold text-white shadow-2xl shadow-indigo-500/30 transition hover:bg-indigo-400 disabled:opacity-60"
+                    >
+                        {setMutation.isPending ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
+                        ) : (
+                            <><Check className="h-4 w-4" />Save changes</>
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
