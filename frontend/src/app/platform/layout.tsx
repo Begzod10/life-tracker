@@ -27,7 +27,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 <Suspense fallback={null}>
                     <Header />
                 </Suspense>
-                <main className="h-[92.9vh]">
+                <main className="min-h-screen">
                     {children}
                 </main>
             </div>

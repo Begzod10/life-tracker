@@ -12,6 +12,10 @@ export function Header() {
 
     const isRoot = location === '/platform' && searchParams.size === 0
     const isHome = location === '/'
+    // Book reader has its own full-screen chrome — hide the platform header there
+    const isBookReader = /\/platform\/[^/]+\/learning\/library\/[^/]+$/.test(location ?? '')
+
+    if (isBookReader) return null
 
     return (
         <motion.header
