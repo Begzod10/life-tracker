@@ -15,27 +15,21 @@ jobs:
   tests:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: "123"
-          POSTGRES_DB: life_tracker_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     defaults:
       run:
         working-directory: backend
 
     steps:
       - uses: actions/checkout@v4
+
+      # Install postgres directly via apt — avoids Docker Hub pull entirely.
+      - uses: ankane/setup-postgres@v1
+        with:
+          postgres-version: 16
+          database: life_tracker_test
+
+      - name: Create test user
+        run: psql life_tracker_test -c "ALTER USER runner WITH PASSWORD '123';"
 
       - uses: actions/setup-python@v5
         with:
@@ -52,7 +46,7 @@ jobs:
       - name: Run critical-path tests
         env:
           # Same connection string conftest.py uses for the test DB.
-          DATABASE_URL: postgresql://postgres:123@localhost:5432/life_tracker_test
+          DATABASE_URL: postgresql://runner:123@localhost:5432/life_tracker_test
           SECRET_KEY: ci-only-secret-key-not-used-for-anything-real
           # Settings flags these as required at import-time even though the
           # OAuth flow is not exercised by these tests. Feed dummy values so
