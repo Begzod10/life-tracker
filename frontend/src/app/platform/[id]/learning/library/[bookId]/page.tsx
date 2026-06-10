@@ -699,7 +699,9 @@ export default function ReaderPage() {
     const captureSelection = useCallback(() => {
         const sel = window.getSelection()
         if (!sel || sel.rangeCount === 0) return setSelection(null)
-        const text = sel.toString().trim()
+        // Normalize PDF soft-hyphens: "pin- nacle" / "pin-\nnacle" → "pinnacle"
+        const raw = sel.toString().trim()
+        const text = raw.replace(/(\w)-[\s\n]+(\w)/g, '$1$2')
         if (!text) return setSelection(null)
         if (text.length > 1500) return setSelection(null) // sanity guard
         // Only capture selections inside the page surface.
