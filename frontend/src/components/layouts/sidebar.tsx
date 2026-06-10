@@ -232,12 +232,20 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
     }, [])
 
     // Sync CSS variable used by layout to offset the main content
+    const isBookReader = /\/platform\/[^/]+\/learning\/library\/[^/]+$/.test(pathname)
     useEffect(() => {
         const w = collapsed ? 0 : width
         document.documentElement.style.setProperty('--sidebar-w', `${w}px`)
         localStorage.setItem(LS_COLLAPSED, String(collapsed))
         if (!collapsed) localStorage.setItem(LS_WIDTH, String(width))
-    }, [collapsed, width])
+        // On the book reader, collapsing the sidebar also hides the platform
+        // header to give a distraction-free reading mode.
+        if (collapsed && isBookReader) {
+            document.documentElement.classList.add('reader-fullscreen')
+        } else {
+            document.documentElement.classList.remove('reader-fullscreen')
+        }
+    }, [collapsed, width, isBookReader])
 
     // Resize drag listeners
     useEffect(() => {

@@ -40,6 +40,13 @@
   :root.sidebar-resizing .sidebar-push {
     transition: none;
   }
+  /* Book reader fullscreen mode — hide platform header when sidebar collapsed */
+  :root.reader-fullscreen .platform-header {
+    display: none;
+  }
+  :root.reader-fullscreen .reader-bar {
+    top: 0 !important;
+  }
 }
 
 /* Базовые стили */

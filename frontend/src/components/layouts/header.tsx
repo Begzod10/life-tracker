@@ -16,7 +16,7 @@ export function Header() {
         <motion.header
             initial={{ y: -100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="sticky top-0 z-50 bg-white/[0.03] backdrop-blur-xl border-b border-white/5"
+            className="platform-header sticky top-0 z-50 bg-white/[0.03] backdrop-blur-xl border-b border-white/5"
         >
             <div className="container mx-auto px-4 sm:px-6 py-2 sm:py-4">
                 <div className="flex items-center justify-between gap-4">

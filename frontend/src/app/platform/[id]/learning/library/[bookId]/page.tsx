@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, ChevronLeft, ChevronRight, Loader2, Plus, Sparkles, X,
     BookOpen, Highlighter, Bookmark, ZoomIn, ZoomOut, Trash2, ListChecks,
-    MapPin, Languages, RefreshCw,
+    MapPin, Languages, RefreshCw, FolderOpen, Check,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -455,6 +455,11 @@ export default function ReaderPage() {
     // when the cursor enters a marked vocab span, cleared on mouseout.
     const [vocabTooltip, setVocabTooltip] = useState<{ x: number; y: number; text: string } | null>(null)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+    // Quick-save target: if a folder/module is linked to this book, "Save word"
+    // skips the dialog and saves directly. Seeded from localStorage on mount.
+    const [quickSaveTarget, setQuickSaveTarget] = useState<{ folderId?: number; moduleId?: number }>({})
+    const [quickSaveToast, setQuickSaveToast] = useState<string | null>(null)
+    const [bookTargetOpen, setBookTargetOpen] = useState(false)
     // Bump this to force the resume flash effect to re-run even when the
     // page/text didn't change — used by the header chip's onClick.
     const [resumeFlashTick, setResumeFlashTick] = useState(0)
@@ -478,6 +483,13 @@ export default function ReaderPage() {
     const containerRef = useRef<HTMLDivElement>(null)
     const pageRef = useRef<HTMLDivElement>(null)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Seed quick-save target from localStorage once the bookId is known
+    useEffect(() => {
+        if (!bookId) return
+        const stored = readLastVocabTargetForBook(bookId)
+        setQuickSaveTarget(stored)
+    }, [bookId])
 
     // ─── Right-panel resize ──────────────────────────────────────────────────
     useEffect(() => {
@@ -982,7 +994,7 @@ export default function ReaderPage() {
                 this reader-specific bar by its height to stack below it.
                 Header height: ~52px mobile (py-2 + button), ~68px desktop
                 (py-4 + button). Both stay visible while scrolling the PDF. */}
-            <div className="border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[52px] sm:top-[68px] z-40">
+            <div className="reader-bar border-b border-white/5 bg-[#0a0a14]/60 backdrop-blur sticky top-[52px] sm:top-[68px] z-40">
                 <div className="max-w-7xl mx-auto px-2 sm:px-4 py-1.5 sm:py-3 flex items-center gap-1.5 sm:gap-3 flex-wrap">
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning/library`)}
@@ -1112,7 +1124,28 @@ export default function ReaderPage() {
                         <Bookmark className="w-3.5 h-3.5" />
                         {sidebarHighlights.length}
                     </button>
+
+                    {/* Quick-save folder link button */}
+                    <button
+                        onClick={() => setBookTargetOpen(v => !v)}
+                        title={quickSaveTarget.folderId ? 'Quick-save folder set — click to change' : 'Link book to a dictionary folder for instant saves'}
+                        className={`flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs border transition-all shrink-0 ${
+                            quickSaveTarget.folderId
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+                                : 'bg-white/[0.04] border-white/10 text-white/40 hover:text-white'
+                        }`}
+                    >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                    </button>
                 </div>
+
+                {/* Quick-save toast */}
+                {quickSaveToast && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-1.5 z-50 pointer-events-none shadow-lg">
+                        <Check className="w-3 h-3 shrink-0" />
+                        Saved: "{quickSaveToast}{quickSaveToast.length >= 40 ? '…' : ''}"
+                    </div>
+                )}
 
                 {/* Progress line */}
                 <div className="h-0.5 bg-white/5">
@@ -1419,7 +1452,31 @@ export default function ReaderPage() {
             <SelectionPopover
                 selection={selection}
                 onHighlight={handleQuickHighlight}
-                onSaveWord={() => setSaveDialogOpen(true)}
+                onSaveWord={() => {
+                    if (!selection) return
+                    if (quickSaveTarget.folderId) {
+                        const isPhrase = isPhraseText(selection.text)
+                        createHighlight.mutate({
+                            bookId: book.id,
+                            data: {
+                                page,
+                                text: selection.text,
+                                kind: 'vocab',
+                                module_id: quickSaveTarget.moduleId,
+                                save_to_dictionary: true,
+                                source_sentence: isPhrase ? undefined : (selection.sentence?.trim() || undefined),
+                            },
+                        }, {
+                            onSuccess: () => {
+                                setSelection(null)
+                                setQuickSaveToast(selection.text.slice(0, 40))
+                                setTimeout(() => setQuickSaveToast(null), 2200)
+                            },
+                        })
+                    } else {
+                        setSaveDialogOpen(true)
+                    }
+                }}
                 onResumeHere={handleResumeHere}
                 onDismiss={() => setSelection(null)}
                 isSaving={createHighlight.isPending}
@@ -1435,6 +1492,22 @@ export default function ReaderPage() {
                         bookId={book.id}
                         onClose={() => setSaveDialogOpen(false)}
                         onDone={() => { setSaveDialogOpen(false); setSelection(null) }}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Book target picker */}
+            <AnimatePresence>
+                {bookTargetOpen && (
+                    <BookTargetPicker
+                        bookId={book.id}
+                        current={quickSaveTarget}
+                        onSave={(t) => {
+                            setQuickSaveTarget(t)
+                            rememberLastVocabTargetForBook(book.id, t.folderId, t.moduleId)
+                            setBookTargetOpen(false)
+                        }}
+                        onClose={() => setBookTargetOpen(false)}
                     />
                 )}
             </AnimatePresence>
@@ -2113,6 +2186,93 @@ function SaveToDictionaryDialog({
                             ? "We'll highlight this sentence on the page and keep it in the book's Sentences panel with an English paraphrase."
                             : "We'll create a dictionary entry tagged with this book + page. Fill the full definition from the Dictionary page when you have a moment."}
                     </p>
+                </div>
+            </motion.div>
+        </motion.div>
+    )
+}
+
+function BookTargetPicker({
+    bookId, current, onSave, onClose,
+}: {
+    bookId: number
+    current: { folderId?: number; moduleId?: number }
+    onSave: (t: { folderId?: number; moduleId?: number }) => void
+    onClose: () => void
+}) {
+    const [folderId, setFolderId] = useState<number | undefined>(current.folderId)
+    const [moduleId, setModuleId] = useState<number | undefined>(current.moduleId)
+    const { data: folders = [] } = useFolders()
+    const { data: modules = [] } = useModules(folderId)
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-sm bg-[#0a0a14] border border-white/10 rounded-2xl p-5 shadow-2xl"
+            >
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-emerald-300" />
+                        Quick-save folder
+                    </h2>
+                    <button onClick={onClose} className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <p className="text-xs text-white/45 mb-4 leading-relaxed">
+                    Link this book to a folder (and optional module). After that, tapping <strong className="text-white/70">Save word</strong> skips the dialog and saves instantly.
+                </p>
+
+                <div className="space-y-3">
+                    <div>
+                        <label className="block text-xs text-white/50 mb-1">Folder</label>
+                        <SelectInput
+                            value={folderId ? String(folderId) : ''}
+                            onChange={(v: string) => { setFolderId(v ? Number(v) : undefined); setModuleId(undefined) }}
+                            options={[
+                                { value: '', label: 'None — show dialog every time' },
+                                ...folders.map((f: DictionaryFolder) => ({ value: String(f.id), label: f.name })),
+                            ]}
+                        />
+                    </div>
+                    {folderId && (
+                        <div>
+                            <label className="block text-xs text-white/50 mb-1">Module (optional)</label>
+                            <SelectInput
+                                value={moduleId ? String(moduleId) : ''}
+                                onChange={(v: string) => setModuleId(v ? Number(v) : undefined)}
+                                options={[
+                                    { value: '', label: 'No module' },
+                                    ...modules.map((m: DictionaryModule) => ({ value: String(m.id), label: m.name })),
+                                ]}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-5 flex justify-end gap-2">
+                    <button
+                        onClick={() => onSave({ folderId: undefined, moduleId: undefined })}
+                        className="px-3 py-2 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition"
+                    >
+                        Clear
+                    </button>
+                    <button
+                        onClick={() => onSave({ folderId, moduleId })}
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-emerald-500/80 hover:bg-emerald-500 rounded-lg transition shadow-lg shadow-emerald-500/20"
+                    >
+                        <Check className="w-3.5 h-3.5" />
+                        Save
+                    </button>
                 </div>
             </motion.div>
         </motion.div>
