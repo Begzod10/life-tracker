@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input'
 import { FormField, SelectInput, TextareaInput } from '@/components/modals/form-components'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { fetchWithAuth } from '@/lib/api/fetch-with-auth'
+import { useWeather } from '@/lib/hooks/use-weather'
+import { WeatherWidget } from '@/components/features/weather/weather-background'
 import {
     useBook, useBookUpdate, useBookHighlights, useHighlightCreate, useHighlightDelete, useHighlightRefreshDefinition,
     type BookHighlight,
@@ -373,6 +375,7 @@ export default function ReaderPage() {
     const deepLinkConsumedRef = useRef(false)
     const bookId = Number(params.bookId)
 
+    const { data: weather } = useWeather()
     const { data: book, isLoading } = useBook(bookId)
     const updateBook = useBookUpdate()
     const { data: highlights = [] } = useBookHighlights(bookId)
@@ -480,6 +483,18 @@ export default function ReaderPage() {
     const panelStartX = useRef(0)
     const panelStartW = useRef(0)
 
+    // Book page width override. null = fill the column (default). When set,
+    // the page is clamped between 300px and the column width.
+    const [bookWidth, setBookWidth] = useState<number | null>(() => {
+        if (typeof window === 'undefined') return null
+        const v = parseInt(localStorage.getItem('lt:reader:bookWidth') ?? '', 10)
+        return Number.isFinite(v) && v >= 300 ? v : null
+    })
+    const isBookResizing = useRef(false)
+    const bookResizeSide = useRef<'left' | 'right'>('right')
+    const bookResizeStartX = useRef(0)
+    const bookResizeStartW = useRef(0)
+
     const containerRef = useRef<HTMLDivElement>(null)
     const pageRef = useRef<HTMLDivElement>(null)
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -513,6 +528,35 @@ export default function ReaderPage() {
         isPanelResizing.current = true
         panelStartX.current = e.clientX
         panelStartW.current = panelWidth
+    }
+
+    // Book width drag
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isBookResizing.current) return
+            const delta = e.clientX - bookResizeStartX.current
+            const dir = bookResizeSide.current === 'right' ? 1 : -1
+            const base = bookResizeStartW.current
+            const col = containerRef.current?.offsetWidth ?? base
+            const next = Math.min(col, Math.max(300, base + delta * dir * 2))
+            setBookWidth(next)
+            localStorage.setItem('lt:reader:bookWidth', String(Math.round(next)))
+        }
+        const onUp = () => { isBookResizing.current = false }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+    }, [])
+
+    const startBookResize = (side: 'left' | 'right') => (e: React.MouseEvent) => {
+        e.preventDefault()
+        isBookResizing.current = true
+        bookResizeSide.current = side
+        bookResizeStartX.current = e.clientX
+        bookResizeStartW.current = bookWidth ?? containerRef.current?.offsetWidth ?? 600
     }
 
     // ─── PDF runtime ────────────────────────────────────────────────────────
@@ -1063,6 +1107,13 @@ export default function ReaderPage() {
                         </button>
                     </div>
 
+                    {/* Weather — only visible in fullscreen mode (platform header hidden) */}
+                    {weather && (
+                        <div className="reader-weather hidden shrink-0">
+                            <WeatherWidget data={weather} />
+                        </div>
+                    )}
+
                     {book.resume_text && book.resume_page && (
                         <button
                             onClick={() => {
@@ -1161,16 +1212,31 @@ export default function ReaderPage() {
                     page horizontally inside this column without making the
                     whole reader page scroll sideways. */}
                 <div ref={containerRef} className="flex-1 min-w-0 relative overflow-x-auto">
+                    {/* Left resize handle — drag to narrow, double-click to reset */}
+                    <div
+                        onMouseDown={startBookResize('left')}
+                        onDoubleClick={() => { setBookWidth(null); localStorage.removeItem('lt:reader:bookWidth') }}
+                        title="Drag to resize · Double-click to reset"
+                        className="hidden sm:flex absolute left-0 top-0 bottom-0 w-3 items-center justify-center cursor-col-resize z-10 group"
+                    >
+                        <div className="w-px h-16 rounded-full bg-white/10 group-hover:bg-indigo-400/60 group-hover:h-24 transition-all" />
+                    </div>
+                    {/* Right resize handle */}
+                    <div
+                        onMouseDown={startBookResize('right')}
+                        onDoubleClick={() => { setBookWidth(null); localStorage.removeItem('lt:reader:bookWidth') }}
+                        title="Drag to resize · Double-click to reset"
+                        className="hidden sm:flex absolute right-0 top-0 bottom-0 w-3 items-center justify-center cursor-col-resize z-10 group"
+                    >
+                        <div className="w-px h-16 rounded-full bg-white/10 group-hover:bg-indigo-400/60 group-hover:h-24 transition-all" />
+                    </div>
+
                     <div
                         ref={pageRef}
                         onMouseUp={handleMouseUp}
                         onTouchEnd={handleTouchEnd}
                         className="relative bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden mx-auto"
-                        // Wrapper expands with the rendered PDF so zoomed pages
-                        // don't get clipped by the rounded border. Column has
-                        // overflow-x-auto so any excess scrolls inside the
-                        // column rather than spilling onto the viewport.
-                        style={{ width: Math.round(containerWidth * zoom) }}
+                        style={{ width: Math.round((bookWidth ? Math.min(bookWidth, containerWidth) : containerWidth) * zoom) }}
                     >
                         {fileError ? (
                             <PdfError message={fileError} />

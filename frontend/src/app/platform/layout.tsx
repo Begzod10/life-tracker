@@ -37,7 +37,7 @@ function PlatformLayoutInner({ children }: { children: React.ReactNode }) {
                 that strip, so the widget is rendered inside the sidebar
                 drawer instead (see <Sidebar weather=… />). */}
             {weather && (
-                <div className="hidden lg:block fixed top-4 left-[calc(50%+120px)] -translate-x-1/2 z-30">
+                <div className="layout-weather hidden lg:block fixed top-4 left-[calc(50%+120px)] -translate-x-1/2 z-30">
                     <WeatherWidget data={weather} />
                 </div>
             )}

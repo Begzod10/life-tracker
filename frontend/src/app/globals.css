@@ -47,6 +47,14 @@
   :root.reader-fullscreen .reader-bar {
     top: 0 !important;
   }
+  /* Hide the floating layout weather widget in fullscreen; reader bar shows it instead */
+  :root.reader-fullscreen .layout-weather {
+    display: none;
+  }
+  /* Show the in-bar weather only when platform header is hidden */
+  :root.reader-fullscreen .reader-weather {
+    display: block;
+  }
 }
 
 /* Базовые стили */
