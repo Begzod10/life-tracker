@@ -449,6 +449,7 @@ export default function ReaderPage() {
     const [selection, setSelection] = useState<Selection | null>(null)
     const [showHighlights, setShowHighlights] = useState(true)
     const [showHighlightOverlay, setShowHighlightOverlay] = useState(true)
+    const [showHighlightsModal, setShowHighlightsModal] = useState(false)
     const [showTranslations, setShowTranslations] = useState(true)
     // Hover-driven translation tooltip — populated by the mouseover handler
     // when the cursor enters a marked vocab span, cleared on mouseout.
@@ -1206,13 +1207,18 @@ export default function ReaderPage() {
                         <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
                             {/* Highlights card */}
                             <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
-                                <div className="flex items-center justify-between mb-3">
+                                <button
+                                    onClick={() => sidebarHighlights.length > 0 && setShowHighlightsModal(true)}
+                                    className="flex items-center justify-between mb-3 w-full text-left group"
+                                >
                                     <h2 className="text-sm font-medium text-white flex items-center gap-2">
                                         <Bookmark className="w-4 h-4 text-amber-300" />
                                         Highlights
                                     </h2>
-                                    <span className="text-xs text-white/40">{sidebarHighlights.length}</span>
-                                </div>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-md transition-colors ${sidebarHighlights.length > 0 ? 'text-amber-300/80 bg-amber-500/10 group-hover:bg-amber-500/20' : 'text-white/40'}`}>
+                                        {sidebarHighlights.length}
+                                    </span>
+                                </button>
 
                                 {sidebarHighlights.length === 0 ? (
                                     <p className="text-xs text-white/30 leading-relaxed">
@@ -1395,6 +1401,89 @@ export default function ReaderPage() {
                         onClose={() => setSaveDialogOpen(false)}
                         onDone={() => { setSaveDialogOpen(false); setSelection(null) }}
                     />
+                )}
+            </AnimatePresence>
+
+            {/* Highlights list modal */}
+            <AnimatePresence>
+                {showHighlightsModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+                    >
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                            onClick={() => setShowHighlightsModal(false)}
+                        />
+
+                        {/* Panel */}
+                        <motion.div
+                            initial={{ y: 40, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: 40, opacity: 0 }}
+                            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                            className="relative w-full sm:max-w-lg max-h-[85vh] sm:max-h-[80vh] flex flex-col bg-[#13141f] border border-white/10 rounded-t-2xl sm:rounded-2xl overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <Bookmark className="w-4 h-4 text-amber-300" />
+                                    <h2 className="text-sm font-semibold text-white">All Highlights</h2>
+                                    <span className="text-xs text-amber-300/70 bg-amber-500/10 px-1.5 py-0.5 rounded-md">
+                                        {sidebarHighlights.length}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setShowHighlightsModal(false)}
+                                    className="text-white/40 hover:text-white transition p-1"
+                                >
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                                        <path d="M18 6L6 18M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* List */}
+                            <div className="overflow-y-auto flex-1 px-4 py-3 space-y-2">
+                                {[...sidebarHighlights]
+                                    .sort((a, b) => a.page - b.page)
+                                    .map(h => (
+                                        <div
+                                            key={h.id}
+                                            className="group relative p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] hover:bg-amber-500/[0.08] transition-colors cursor-pointer"
+                                            onClick={() => { goToPage(h.page); setShowHighlightsModal(false) }}
+                                        >
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[11px] uppercase tracking-wider font-semibold text-amber-300/70">
+                                                    P.{h.page}
+                                                </span>
+                                                <button
+                                                    onClick={e => {
+                                                        e.stopPropagation()
+                                                        deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
+                                                        if (sidebarHighlights.length <= 1) setShowHighlightsModal(false)
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 transition text-white/30 hover:text-red-300 p-0.5"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                            <p className="text-sm text-white/85 leading-relaxed">{h.text}</p>
+                                            {h.note && (
+                                                <p className="text-xs text-white/45 italic mt-2 border-t border-white/8 pt-2">{h.note}</p>
+                                            )}
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>
