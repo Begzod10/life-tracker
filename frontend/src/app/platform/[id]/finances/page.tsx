@@ -163,26 +163,66 @@ const categoryColors: Record<string, { bg: string; text: string; badge: string }
     shopping: { bg: 'bg-purple-500/10', text: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300' },
 }
 
+// Finance stat card accent config
+const STAT_ACCENTS = {
+    income: { border: 'border-emerald-500/20', glow: 'bg-emerald-500/5', icon: 'text-emerald-400', value: 'text-emerald-300' },
+    expense: { border: 'border-rose-500/20', glow: 'bg-rose-500/5', icon: 'text-rose-400', value: 'text-rose-300' },
+    net: { border: 'border-sky-500/20', glow: 'bg-sky-500/5', icon: 'text-sky-400', value: 'text-white' },
+    savings: { border: 'border-amber-500/20', glow: 'bg-amber-500/5', icon: 'text-amber-400', value: 'text-amber-300' },
+} as const
+
 // Components
 const FinancesHeader: React.FC<{ id: string }> = ({ id }) => {
     const router = useRouter()
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const { data: summary } = useMonthlyFinancialSummary(currentMonth)
+
+    const netIncome = (summary as any)?.net_income ?? null
+    const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' })
 
     return (
         <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
+            className="mb-8"
         >
-            <div className="flex items-center gap-3">
-                <button
-                    onClick={() => router.push('/platform')}
-                    className="p-2 hover:bg-[#2a2b36] rounded-lg transition-colors"
-                >
-                    <ChevronLeft className="w-5 h-5 text-gray-400" />
-                </button>
-                <div className="flex items-center gap-2 min-w-0">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">Finances</h1>
-                    <div className="text-xl sm:text-2xl shrink-0">💰</div>
+            {/* Back nav */}
+            <button
+                onClick={() => router.push('/platform')}
+                className="flex items-center gap-1.5 text-sm text-emerald-400/70 hover:text-emerald-400 transition-colors mb-6"
+            >
+                <ChevronLeft className="w-4 h-4" />
+                Dashboard
+            </button>
+
+            {/* Hero banner */}
+            <div className="relative rounded-2xl overflow-hidden border border-emerald-500/15 bg-gradient-to-br from-emerald-950/40 via-slate-950/60 to-slate-950/80 p-6 sm:p-8">
+                {/* Decorative glow */}
+                <div className="absolute -top-16 -right-16 w-64 h-64 bg-emerald-500/8 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-8 -left-8 w-48 h-48 bg-emerald-600/5 rounded-full blur-2xl pointer-events-none" />
+
+                <div className="relative">
+                    <div className="flex items-start justify-between flex-wrap gap-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                    <Wallet className="w-4 h-4 text-emerald-400" />
+                                </div>
+                                <span className="text-sm text-emerald-400/70 font-medium tracking-wide uppercase">Finances</span>
+                            </div>
+                            <p className="text-xs text-white/30 mt-1">{monthLabel}</p>
+                        </div>
+
+                        {netIncome !== null && (
+                            <div className="text-right">
+                                <p className="text-xs text-white/40 mb-1">Net this month</p>
+                                <p className={`text-3xl sm:text-4xl font-bold tabular-nums ${netIncome >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                    {netIncome >= 0 ? '+' : ''}{fmt(netIncome)}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </motion.div>
@@ -195,42 +235,45 @@ const OverviewCard: React.FC<{
     trend?: number
     delay: number
     isLoading?: boolean
-}> = ({ label, value, trend, delay, isLoading }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: delay * 0.05 }}
-    >
-        <Card className="bg-white/[0.025] border border-white/5 p-4 sm:p-6 rounded-xl hover:border-white/15 transition-all">
-            <p className="text-xs sm:text-sm text-gray-400 mb-2">{label}</p>
-            {isLoading ? (
-                <div className="space-y-2">
-                    <Skeleton className="h-9 w-32 bg-[#2a2b36]" />
-                    <Skeleton className="h-4 w-16 bg-[#2a2b36]" />
-                </div>
-            ) : (
-                <>
-                    <p className="text-2xl sm:text-3xl font-bold text-white mb-2 break-words">{value}</p>
-                    {trend !== undefined && (
-                        <div className="flex items-center gap-1">
-                            {trend >= 0 ? (
-                                <>
-                                    <TrendingUp className="w-4 h-4 text-green-400" />
-                                    <span className="text-sm text-green-400">+{trend}%</span>
-                                </>
-                            ) : (
-                                <>
-                                    <TrendingDown className="w-4 h-4 text-red-400" />
-                                    <span className="text-sm text-red-400">{trend}%</span>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </>
-            )}
-        </Card>
-    </motion.div>
-)
+    accent?: keyof typeof STAT_ACCENTS
+}> = ({ label, value, trend, delay, isLoading, accent = 'net' }) => {
+    const a = STAT_ACCENTS[accent]
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: delay * 0.05 }}
+        >
+            <Card className={`${a.glow} border ${a.border} p-4 sm:p-5 rounded-xl hover:brightness-110 transition-all`}>
+                <p className={`text-xs font-medium uppercase tracking-wider ${a.icon} mb-3`}>{label}</p>
+                {isLoading ? (
+                    <div className="space-y-2">
+                        <Skeleton className="h-8 w-32 bg-white/8" />
+                    </div>
+                ) : (
+                    <>
+                        <p className={`text-xl sm:text-2xl font-bold tabular-nums ${a.value} mb-1 break-words`}>{value}</p>
+                        {trend !== undefined && (
+                            <div className="flex items-center gap-1">
+                                {trend >= 0 ? (
+                                    <>
+                                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span className="text-xs text-emerald-400">+{trend}%</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+                                        <span className="text-xs text-rose-400">{trend}%</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </>
+                )}
+            </Card>
+        </motion.div>
+    )
+}
 
 const JobCard: React.FC<{ job: Job; onDelete: (id: string | number) => void }> = React.memo(({ job, onDelete }) => (
     <motion.div
@@ -2836,7 +2879,7 @@ export default function FinancesPage() {
     const savingsRate = summary ? summary.savings_rate : 0
 
     return (
-        <div className="min-h-screen p-4 sm:p-8">
+        <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-b from-emerald-950/10 via-transparent to-transparent">
             <div className="max-w-7xl mx-auto">
                 <FinancesHeader id={params.id} />
 
@@ -2844,31 +2887,35 @@ export default function FinancesPage() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
+                    className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
                 >
                     <OverviewCard
-                        label="Net Balance"
-                        value={`${totalBalance.toLocaleString()} UZS`}
+                        label="Income"
+                        value={fmt(monthlyIncome)}
                         delay={0}
                         isLoading={loading}
+                        accent="income"
                     />
                     <OverviewCard
-                        label="Monthly Income"
-                        value={`${monthlyIncome.toLocaleString()} UZS`}
+                        label="Expenses"
+                        value={fmt(monthlyExpenses)}
                         delay={1}
                         isLoading={loading}
+                        accent="expense"
                     />
                     <OverviewCard
-                        label="Monthly Expenses"
-                        value={`${monthlyExpenses.toLocaleString()} UZS`}
+                        label="Net Balance"
+                        value={fmt(totalBalance)}
                         delay={2}
                         isLoading={loading}
+                        accent="net"
                     />
                     <OverviewCard
                         label="Savings Rate"
                         value={`${savingsRate}%`}
                         delay={3}
                         isLoading={loading}
+                        accent="savings"
                     />
                 </motion.div>
 
@@ -2880,14 +2927,14 @@ export default function FinancesPage() {
                 >
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                         <div className="overflow-x-auto mb-6 sm:mb-8 -mx-1 px-1">
-                            <TabsList className="bg-white/[0.025] border border-white/5 w-max min-w-full">
-                                <TabsTrigger value="overview">Overview</TabsTrigger>
-                                <TabsTrigger value="jobs">Jobs</TabsTrigger>
-                                <TabsTrigger value="salary">Salary</TabsTrigger>
-                                <TabsTrigger value="expenses">Expenses</TabsTrigger>
-                                <TabsTrigger value="budgets">Budgets</TabsTrigger>
-                                <TabsTrigger value="income">Income Sources</TabsTrigger>
-                                <TabsTrigger value="savings">Savings</TabsTrigger>
+                            <TabsList className="bg-emerald-950/20 border border-emerald-500/10 w-max min-w-full">
+                                <TabsTrigger value="overview" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Overview</TabsTrigger>
+                                <TabsTrigger value="jobs" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Jobs</TabsTrigger>
+                                <TabsTrigger value="salary" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Salary</TabsTrigger>
+                                <TabsTrigger value="expenses" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Expenses</TabsTrigger>
+                                <TabsTrigger value="budgets" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Budgets</TabsTrigger>
+                                <TabsTrigger value="income" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Income Sources</TabsTrigger>
+                                <TabsTrigger value="savings" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-300">Savings</TabsTrigger>
                             </TabsList>
                         </div>
 
