@@ -255,11 +255,6 @@ export default function DashboardPage() {
                             </button>
                         )}
                     </div>
-                    {books.pages_last_30d > 0 && (
-                        <p className="text-xs text-white/25 mt-3">
-                            {books.pages_last_30d} pages read in the last 30 days
-                        </p>
-                    )}
                 </div>
 
                 {/* Active goals */}
