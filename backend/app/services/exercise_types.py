@@ -225,6 +225,7 @@ def _get_word_distractors(target_word: Any, pool: list[Any], n: int = 3) -> list
         and getattr(w, "word", None)
         and (getattr(w, "word", "") or "").lower() not in synonyms
     ]
+    random.shuffle(base_candidates)
 
     def _is_parallel(w: Any) -> bool:
         return (" " in (getattr(w, "word", "") or "")) == target_multiword
@@ -274,6 +275,43 @@ def _get_word_distractors(target_word: Any, pool: list[Any], n: int = 3) -> list
     while len(chosen) < n:
         chosen.append("—")
     return chosen[:n]
+
+
+def _get_definition_distractors(target_word: Any, pool: list[Any], n: int = 3) -> list[str]:
+    """Pick n definitions from other words to use as wrong options in meaning_mc.
+
+    Prefers same difficulty so options feel plausibly equivalent.
+    Shuffles candidates so different definitions appear each run.
+    """
+    target_id = getattr(target_word, "id", None)
+    target_diff = getattr(target_word, "difficulty", None)
+    target_def = (getattr(target_word, "definition", "") or "").strip().lower()
+
+    candidates = [
+        w for w in pool
+        if getattr(w, "id", None) != target_id
+        and (getattr(w, "definition", "") or "").strip()
+        and (getattr(w, "definition", "") or "").strip().lower() != target_def
+    ]
+
+    same_diff = [w for w in candidates if getattr(w, "difficulty", None) == target_diff]
+    other = [w for w in candidates if getattr(w, "difficulty", None) != target_diff]
+    random.shuffle(same_diff)
+    random.shuffle(other)
+
+    result: list[str] = []
+    seen = {target_def}
+    for w in same_diff + other:
+        defn = (getattr(w, "definition", "") or "").strip()
+        if defn and defn.lower() not in seen:
+            seen.add(defn.lower())
+            result.append(defn)
+        if len(result) >= n:
+            break
+
+    while len(result) < n:
+        result.append("—")
+    return result[:n]
 
 
 # ─── Levenshtein distance ──────────────────────────────────────────────────────
@@ -375,15 +413,16 @@ def build_question(
     }
 
     if exercise_type == "meaning_mc":
-        # Prompt = the definition; options = words (all same POS, parallel form).
-        # One correct answer = the target word.
-        distractors = _get_word_distractors(w, distractor_pool)
-        options = [target] + distractors
+        # Prompt = instruction; options = definitions (correct + 3 plausible wrong ones).
+        # This tests whether the learner knows the meaning — distractors are real
+        # definitions from the pool so they can't be eliminated by gut feel.
+        def_distractors = _get_definition_distractors(w, distractor_pool)
+        options = [definition] + def_distractors
         random.shuffle(options)
         return {**base,
-                "prompt": definition,
+                "prompt": "Choose the correct definition:",
                 "options": options,
-                "correct_answer": target}
+                "correct_answer": definition}
 
     if exercise_type == "reverse_mc":
         # Prompt = translation (or definition if no translation); options = words.

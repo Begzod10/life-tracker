@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { BookOpen, Target, CalendarDays, Newspaper, Brain, ChevronRight, Clock } from 'lucide-react'
+import { BookOpen, Target, CalendarDays, Newspaper, Brain, ChevronRight, Clock, Wallet } from 'lucide-react'
 import { useDashboardSummary, type DashboardTimeblock } from '@/lib/hooks/use-dashboard'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export default function DashboardPage() {
 
     if (!data) return null
 
-    const { user, exercises, goals, books, today, news } = data
+    const { user, exercises, goals, books, today, news, finance } = data
     const todayLabel = new Date(today.date + 'T00:00:00').toLocaleDateString(undefined, {
         weekday: 'long', month: 'long', day: 'numeric',
     })
@@ -292,6 +292,52 @@ export default function DashboardPage() {
                         </div>
                         {goals.active > 3 && (
                             <p className="text-xs text-white/25 mt-3">+{goals.active - 3} more active goals</p>
+                        )}
+                    </div>
+                )}
+
+                {/* Finance */}
+                {(finance.spent > 0 || finance.budget_allocated > 0) && (
+                    <div className="rounded-xl border border-white/8 bg-white/4 p-4">
+                        <SectionHeader
+                            icon={Wallet}
+                            label="This month"
+                            action="Finances"
+                            onAction={() => nav('finances')}
+                        />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="rounded-lg border border-white/8 bg-white/3 px-3 py-2.5">
+                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Spent</p>
+                                <p className="text-base font-bold text-white">
+                                    {finance.spent.toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="rounded-lg border border-white/8 bg-white/3 px-3 py-2.5">
+                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Budget</p>
+                                <p className="text-base font-bold text-white/70">
+                                    {finance.budget_allocated > 0 ? finance.budget_allocated.toLocaleString() : '—'}
+                                </p>
+                            </div>
+                            <div className="rounded-lg border border-white/8 bg-white/3 px-3 py-2.5">
+                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Left</p>
+                                <p className={`text-base font-bold ${finance.budget_remaining < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {finance.budget_allocated > 0 ? finance.budget_remaining.toLocaleString() : '—'}
+                                </p>
+                            </div>
+                        </div>
+                        {finance.budget_allocated > 0 && (
+                            <div className="mt-3">
+                                <div className="flex justify-between text-[10px] text-white/25 mb-1">
+                                    <span>{Math.min(100, Math.round(finance.spent / finance.budget_allocated * 100))}% used</span>
+                                    <span>{finance.month}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${finance.budget_remaining < 0 ? 'bg-red-500/60' : 'bg-emerald-500/50'}`}
+                                        style={{ width: `${Math.min(100, Math.round(finance.spent / finance.budget_allocated * 100))}%` }}
+                                    />
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}

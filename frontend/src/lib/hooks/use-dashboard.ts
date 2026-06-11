@@ -30,6 +30,13 @@ export type DashboardNewsItem = {
     provider: string
 }
 
+export type DashboardFinance = {
+    month: string
+    spent: number
+    budget_allocated: number
+    budget_remaining: number
+}
+
 export type DashboardSummary = {
     user: { name: string }
     exercises: {
@@ -66,6 +73,7 @@ export type DashboardSummary = {
         today_count: number
         latest: DashboardNewsItem[]
     }
+    finance: DashboardFinance
 }
 
 export function useDashboardSummary() {

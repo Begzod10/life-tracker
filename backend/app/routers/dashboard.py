@@ -4,6 +4,7 @@ Returns a single aggregated snapshot used by the /platform/[id] dashboard page.
 One request instead of 6+ separate calls.
 """
 from datetime import datetime, timedelta, date as date_type
+from sqlalchemy import func
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -24,6 +25,7 @@ def get_dashboard_summary(
     today = date_type.today()
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
+    current_month = today.strftime("%Y-%m")
 
     person_id = current_user.id
 
@@ -100,6 +102,29 @@ def get_dashboard_summary(
         .all()
     )
     blocks_done = sum(1 for b in today_blocks if b.is_completed)
+
+    # ── Finance ───────────────────────────────────────────────────────────────
+    month_start = date_type(today.year, today.month, 1)
+    expenses_this_month = (
+        db.query(func.coalesce(func.sum(models.Expense.amount), 0.0))
+        .filter(
+            models.Expense.person_id == person_id,
+            models.Expense.date >= month_start,
+        )
+        .scalar()
+    ) or 0.0
+
+    budgets_this_month = (
+        db.query(models.Budget)
+        .filter(
+            models.Budget.person_id == person_id,
+            models.Budget.period == current_month,
+            models.Budget.deleted == False,
+        )
+        .all()
+    )
+    budget_allocated = sum(b.allocated_amount or 0 for b in budgets_this_month)
+    budget_remaining = budget_allocated - expenses_this_month
 
     # ── News ──────────────────────────────────────────────────────────────────
     today_iso = today.isoformat()
@@ -184,5 +209,11 @@ def get_dashboard_summary(
                 }
                 for n in latest_news
             ],
+        },
+        "finance": {
+            "month": current_month,
+            "spent": round(expenses_this_month, 2),
+            "budget_allocated": round(budget_allocated, 2),
+            "budget_remaining": round(budget_remaining, 2),
         },
     }
