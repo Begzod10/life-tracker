@@ -132,7 +132,16 @@ class Person(Base):
         back_populates="person",
         cascade="all, delete-orphan",
     )
-
+    essay_sessions = relationship(
+        "EssaySession",
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )
+    task2_attempts = relationship(
+        "Task2Attempt",
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )
     def __repr__(self):
         return f"<Person(id={self.id}, email={self.email}, name={self.name})>"
 
@@ -1019,6 +1028,76 @@ class ExerciseAttempt(Base):
 
     person = relationship("Person", back_populates="exercise_attempts")
     word = relationship("DictionaryWord")
+
+
+
+# ─── Task 2 Essay Exercise Tier ───────────────────────────────────────────────
+
+class EssaySession(Base):
+    """Session for one IELTS Task 2 exercise (essay_intro / essay_paragraph /
+    essay_full).  Parallel to PracticeSession but not word-centric."""
+    __tablename__ = "essay_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    # always "essay" — kept for query symmetry with PracticeSession.mode
+    mode = Column(String(20), nullable=False, server_default="essay")
+    essay_type = Column(String(30), nullable=False)   # essay_intro | essay_paragraph | essay_full
+    target_band = Column(Float, nullable=False, server_default="7.0")
+    # Opaque JSON blob the router writes on start and reads on grade.
+    # Shape: {question, question_type, assigned_position, question_seq_id,
+    #         essay_focus_snapshot}
+    question_payload = Column(JSON, nullable=False, default=dict)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    person = relationship("Person", back_populates="essay_sessions")
+    attempt = relationship(
+        "Task2Attempt", back_populates="session", uselist=False
+    )
+
+
+class Task2Attempt(Base):
+    """Graded result for one Task 2 session.
+    criteria_scores stores all four IELTS bands in a single JSON column so
+    ExerciseAttempt.usage_score (scalar) is not polluted with essay concepts."""
+    __tablename__ = "task2_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False, index=True)
+    session_id = Column(
+        Integer,
+        ForeignKey("essay_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    essay_type = Column(String(30), nullable=False)
+    question = Column(Text, nullable=False)
+    question_type = Column(String(30), nullable=False)
+    assigned_position = Column(Text, nullable=True)
+    target_band = Column(Float, nullable=False, server_default="7.0")
+
+    response = Column(Text, nullable=False)
+    word_count = Column(Integer, nullable=False, server_default="0")
+    time_seconds = Column(Integer, nullable=True)   # essay_full only
+
+    # {task_response, coherence_cohesion, lexical_resource, grammatical_range_accuracy}
+    criteria_scores = Column(JSON, nullable=True)
+    overall_band = Column(Float, nullable=True)
+    is_correct = Column(Boolean, nullable=False, default=False)
+
+    # Parallel to ExerciseAttempt.grammar_errors — essay-specific label set
+    essay_errors = Column(JSON, nullable=True)
+    essay_focus_snapshot = Column(JSON, nullable=True)   # top-3 at grading time
+
+    feedback = Column(Text, nullable=True)
+    model_revision = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    person = relationship("Person", back_populates="task2_attempts")
+    session = relationship("EssaySession", back_populates="attempt")
 
 
 # ─── News ────────────────────────────────────────────────────────────────────

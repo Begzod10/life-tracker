@@ -334,6 +334,13 @@ export const API_ENDPOINTS = {
         },
     },
 
+    TASK2: {
+        START:     `${API_URL}/essays/task2/start`,
+        GRADE:     `${API_URL}/essays/task2/grade`,
+        HISTORY:   (page = 1, limit = 20) => `${API_URL}/essays/task2/history?page=${page}&limit=${limit}`,
+        ANALYTICS: `${API_URL}/essays/task2/analytics`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate
