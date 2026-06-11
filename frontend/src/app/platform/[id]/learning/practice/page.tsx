@@ -2314,14 +2314,27 @@ function PracticePageInner() {
             finishRun(nextAggregate)
             return
         }
-        // Round cleared but the drill keeps going — short ladder chime to
-        // mark the checkpoint before the review screen renders.
+
+        // Perfect chunk (0 mistakes) — skip the review screen and immediately
+        // start the next chunk so the user can complete the whole session
+        // without interruption when they're on a streak.
+        if (missedIds.length === 0) {
+            const { chunk, unseenRest, poolRest } = takeChunk(unseenQueue, nextPool, chunkSize)
+            setUnseenQueue(unseenRest)
+            setMistakesPool(poolRest)
+            setLastChunk(null)
+            startChunk(chunk)
+            return
+        }
+
+        // Chunk had mistakes — show review so the user can see which words
+        // to focus on before continuing.
         playCheckpoint()
         setPhase('chunk-review')
     }, [
         aggregate, mistakesPool, unseenQueue, wordsById, finishRun,
         sessionId, mode, chunkSize, scopeFolderId, scopeModuleId,
-        dueOnly, weakOnly, originalWords, updateProgress,
+        dueOnly, weakOnly, originalWords, updateProgress, takeChunk, startChunk,
     ])
 
     const continueChunk = () => {
