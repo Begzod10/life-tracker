@@ -30,6 +30,7 @@ import {
     Newspaper,
     X,
     PanelLeftClose,
+    ChevronDown,
 } from 'lucide-react'
 
 type NavItem = {
@@ -43,7 +44,10 @@ type NavItem = {
 type NavSection = {
     label?: string
     items: NavItem[]
+    collapsible?: boolean
 }
+
+const LS_SECTIONS = 'sidebar-sections-closed'
 
 function buildSections(id: string): NavSection[] {
     const base = `/platform/${id}`
@@ -59,6 +63,7 @@ function buildSections(id: string): NavSection[] {
         },
         {
             label: 'Learning',
+            collapsible: true,
             items: [
                 { name: 'Library', href: `${base}/learning/library`, icon: LibraryIcon, matchPrefix: true },
                 { name: 'Practice', href: `${base}/learning/practice`, icon: Dumbbell, matchPrefix: true },
@@ -71,6 +76,7 @@ function buildSections(id: string): NavSection[] {
         },
         {
             label: 'Money',
+            collapsible: true,
             items: [
                 { name: 'Finances', href: `${base}/finances`, icon: Wallet, matchPrefix: true },
                 { name: 'Salary', href: `${base}/salary`, icon: Coins, matchPrefix: true },
@@ -79,6 +85,7 @@ function buildSections(id: string): NavSection[] {
         },
         {
             label: 'Life',
+            collapsible: true,
             items: [
                 { name: 'Health', href: `${base}/health`, icon: HeartPulse, matchPrefix: true },
             ],
@@ -114,6 +121,27 @@ function SidebarContent({
     onCollapse?: () => void
     weather?: WeatherData | null
 }) {
+    const [closedSections, setClosedSections] = useState<Set<string>>(
+        () => new Set(['Learning', 'Money', 'Life'])
+    )
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(LS_SECTIONS)
+            if (stored) setClosedSections(new Set(JSON.parse(stored)))
+        } catch { /* ignore */ }
+    }, [])
+
+    const toggleSection = (label: string) => {
+        setClosedSections(prev => {
+            const next = new Set(prev)
+            if (next.has(label)) next.delete(label)
+            else next.add(label)
+            try { localStorage.setItem(LS_SECTIONS, JSON.stringify([...next])) } catch { /* ignore */ }
+            return next
+        })
+    }
+
     return (
         <>
             {/* Brand + back to hub */}
@@ -148,41 +176,72 @@ function SidebarContent({
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-                {sections.map((section, sectionIdx) => (
-                    <div key={section.label ?? `section-${sectionIdx}`} className="space-y-1">
-                        {section.label && (
-                            <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
-                                {section.label}
-                            </div>
-                        )}
-                        {section.items.map((item) => {
-                            const Icon = item.icon
-                            const active = isItemActive(pathname, item, hubCategoryParam)
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={onNavigate}
-                                    className={cn(
-                                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
-                                        active
-                                            ? 'bg-white/10 text-white shadow-sm shadow-black/20'
-                                            : 'text-white/55 hover:bg-white/[0.04] hover:text-white'
-                                    )}
-                                >
-                                    <Icon
-                                        className={cn(
-                                            'h-4 w-4 shrink-0 transition-colors',
-                                            active ? 'text-indigo-300' : 'text-white/40 group-hover:text-white/70'
-                                        )}
-                                    />
-                                    <span className="truncate">{item.name}</span>
-                                </Link>
-                            )
-                        })}
-                    </div>
-                ))}
+            <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                {sections.map((section, sectionIdx) => {
+                    const hasActive = section.items.some(item =>
+                        isItemActive(pathname, item, hubCategoryParam)
+                    )
+                    // Force-expand if an item inside is active
+                    const isOpen = !section.collapsible
+                        || hasActive
+                        || !closedSections.has(section.label!)
+
+                    return (
+                        <div key={section.label ?? `section-${sectionIdx}`}>
+                            {section.label && (
+                                section.collapsible ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSection(section.label!)}
+                                        className="w-full flex items-center justify-between px-3 py-2 mt-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-white/30 hover:text-white/50 hover:bg-white/[0.03] transition-colors"
+                                    >
+                                        {section.label}
+                                        <ChevronDown
+                                            className={cn(
+                                                'h-3 w-3 transition-transform duration-200',
+                                                isOpen ? 'rotate-0' : '-rotate-90'
+                                            )}
+                                        />
+                                    </button>
+                                ) : (
+                                    <div className="px-3 pt-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                                        {section.label}
+                                    </div>
+                                )
+                            )}
+
+                            {isOpen && (
+                                <div className="space-y-0.5">
+                                    {section.items.map((item) => {
+                                        const Icon = item.icon
+                                        const active = isItemActive(pathname, item, hubCategoryParam)
+                                        return (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                onClick={onNavigate}
+                                                className={cn(
+                                                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
+                                                    active
+                                                        ? 'bg-white/10 text-white shadow-sm shadow-black/20'
+                                                        : 'text-white/55 hover:bg-white/[0.04] hover:text-white'
+                                                )}
+                                            >
+                                                <Icon
+                                                    className={cn(
+                                                        'h-4 w-4 shrink-0 transition-colors',
+                                                        active ? 'text-indigo-300' : 'text-white/40'
+                                                    )}
+                                                />
+                                                <span className="truncate">{item.name}</span>
+                                            </Link>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
             </nav>
 
             {weather && (
@@ -225,7 +284,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
     const startX = useRef(0)
     const startW = useRef(0)
 
-    // Restore persisted state on mount
     useEffect(() => {
         const w = parseInt(localStorage.getItem(LS_WIDTH) ?? '', 10)
         const c = localStorage.getItem(LS_COLLAPSED) === 'true'
@@ -233,15 +291,12 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
         setCollapsed(c)
     }, [])
 
-    // Sync CSS variable used by layout to offset the main content
     const isBookReader = /\/platform\/[^/]+\/learning\/library\/[^/]+$/.test(pathname)
     useEffect(() => {
         const w = collapsed ? 0 : width
         document.documentElement.style.setProperty('--sidebar-w', `${w}px`)
         localStorage.setItem(LS_COLLAPSED, String(collapsed))
         if (!collapsed) localStorage.setItem(LS_WIDTH, String(width))
-        // On the book reader, collapsing the sidebar also hides the platform
-        // header to give a distraction-free reading mode.
         if (collapsed && isBookReader) {
             document.documentElement.classList.add('reader-fullscreen')
         } else {
@@ -249,7 +304,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
         }
     }, [collapsed, width, isBookReader])
 
-    // Resize drag listeners
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
             if (!isResizing.current) return
@@ -279,10 +333,8 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
         setResizing(true)
     }
 
-    // Auto-close mobile drawer on route change
     useEffect(() => { setMobileOpen(false) }, [pathname, hubCategoryParam])
 
-    // Lock body scroll while mobile drawer is open
     useEffect(() => {
         if (!mobileOpen) return
         const prev = document.body.style.overflow
@@ -307,7 +359,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                 <Menu className="h-5 w-5" />
             </button>
 
-            {/* Desktop hamburger — shown only when sidebar is collapsed */}
             {collapsed && (
                 <button
                     type="button"
@@ -319,7 +370,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                 </button>
             )}
 
-            {/* Mobile backdrop */}
             {mobileOpen && (
                 <button
                     type="button"
@@ -369,7 +419,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                     onCollapse={() => setCollapsed(true)}
                 />
 
-                {/* Resize drag handle */}
                 <div
                     onMouseDown={startResize}
                     className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group"
