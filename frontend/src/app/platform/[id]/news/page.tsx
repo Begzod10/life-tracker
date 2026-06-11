@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
     Calendar,
@@ -66,9 +66,17 @@ function relativeTime(iso?: string | null): string {
 export default function NewsPage() {
     const params = useParams<{ id: string }>()
     const platformId = params.id
+    const router = useRouter()
+    const searchParams = useSearchParams()
 
     const [date, setDate] = useState(tashkentToday())
-    const [activeSlug, setActiveSlug] = useState<string | null>(null)
+    const activeSlug = searchParams.get('cat')
+    const setActiveSlug = (slug: string | null) => {
+        const sp = new URLSearchParams(searchParams.toString())
+        if (slug) sp.set('cat', slug)
+        else sp.delete('cat')
+        router.replace(`?${sp.toString()}`, { scroll: false })
+    }
 
     const categoriesQuery = useNewsCategories()
     const itemsQuery = useNewsItems(date)
