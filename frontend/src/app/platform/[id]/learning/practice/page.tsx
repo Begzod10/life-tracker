@@ -634,14 +634,19 @@ function Spelling({ word, onAnswer }: {
                         Answer: <span className="text-amber-200 font-semibold">{word.word}</span>
                     </p>
                 )}
+                {submitted && !revealed && verdict.ok && verdict.exact && (
+                    <p className="text-center text-sm text-green-400 font-medium">
+                        ✓ Correct!
+                    </p>
+                )}
                 {submitted && !revealed && verdict.ok && verdict.aiAccepted && (
                     <p className="text-center text-sm text-green-300/90">
-                        Accepted — target was <span className="text-green-200 font-semibold">{word.word}</span>
+                        ✓ Accepted — target was <span className="text-green-200 font-semibold">{word.word}</span>
                     </p>
                 )}
                 {submitted && !revealed && verdict.ok && verdict.matchedSynonym && !verdict.aiAccepted && (
                     <p className="text-center text-sm text-green-300/90">
-                        Synonym — target was <span className="text-green-200 font-semibold">{word.word}</span>
+                        ✓ Synonym — target was <span className="text-green-200 font-semibold">{word.word}</span>
                     </p>
                 )}
                 {submitted && !revealed && verdict.ok && !verdict.exact && !verdict.matchedSynonym && !verdict.aiAccepted && (
@@ -760,6 +765,9 @@ function Cloze({ word, onAnswer }: {
                             : 'border-white/10 focus:border-white/25'
                     }`}
                 />
+                {submitted && verdict.ok && verdict.exact && (
+                    <p className="text-center text-sm text-green-400 font-medium">✓ Correct!</p>
+                )}
                 {submitted && verdict.ok && !verdict.exact && (
                     <p className="text-center text-sm text-amber-300/90">
                         Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
@@ -855,6 +863,9 @@ function Listening({ word, onAnswer }: {
                             : 'border-white/10 focus:border-white/25'
                     }`}
                 />
+                {submitted && verdict.ok && verdict.exact && (
+                    <p className="text-center text-sm text-green-400 font-medium">✓ Correct!</p>
+                )}
                 {submitted && verdict.ok && !verdict.exact && (
                     <p className="text-center text-sm text-amber-300/90">
                         Close — it&apos;s <span className="text-amber-200 font-semibold">{word.word}</span>
