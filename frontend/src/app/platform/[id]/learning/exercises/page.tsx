@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AnimatePresence } from 'framer-motion'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, History } from 'lucide-react'
 import {
     useGradeExercises,
     useStartExerciseSession,
@@ -136,6 +136,15 @@ export default function ExercisesPage() {
                                     {answeredCount}/{items.length} answered
                                 </span>
                             </>
+                        )}
+                        {phase === 'setup' && (
+                            <button
+                                onClick={() => router.push(`/platform/${params.id}/learning/exercises/history`)}
+                                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
+                            >
+                                <History className="w-3.5 h-3.5" />
+                                History
+                            </button>
                         )}
                     </div>
                 </div>
