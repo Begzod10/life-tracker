@@ -5,11 +5,7 @@ Five routes:
   * PUT  /news/categories         — replace user's full subscription set
   * GET  /news/?date=YYYY-MM-DD   — items for that date (user's picks only)
   * GET  /news/dates?from=&to=    — days that have content (drives log calendar)
-  * POST /news/fetch?date=        — manual trigger (synchronous, gated)
-
-The fetch route runs the pipeline inline rather than enqueuing the Celery
-task so the caller (admin/dev) gets a real summary back instead of an async
-task ID. Production runs through the daily beat.
+  * POST /news/fetch?date=        — manual trigger (async, returns 202 + task_id)
 """
 from datetime import date, datetime, timedelta
 from typing import List, Optional
@@ -231,39 +227,19 @@ def get_item(
 
 # ─── Manual fetch trigger ───────────────────────────────────────────────────
 
-@router.post("/fetch", response_model=schemas.NewsFetchSummary)
+@router.post("/fetch", status_code=status.HTTP_202_ACCEPTED)
 def trigger_fetch(
     target_date: Optional[date] = Query(None, alias="date"),
-    db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
     """
-    Run the pipeline synchronously for `date` (default: Tashkent today).
-    Idempotent — re-running for the same day inserts only articles not
-    already stored.
+    Enqueue the daily news pipeline as a background Celery task and return
+    202 immediately. The scrape + summarise cycle can take several minutes —
+    running it synchronously in the HTTP request causes 504 timeouts.
     """
-    from app.services.news import run_daily_fetch
+    from app.tasks import fetch_daily_news
 
-    try:
-        summary = run_daily_fetch(db, target_date=target_date)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"News fetch failed: {type(exc).__name__}: {exc}",
-        )
-
-    return schemas.NewsFetchSummary(
-        date=summary.target_date,
-        total_inserted=summary.total_inserted,
-        categories=[
-            {
-                "slug": c.category_slug,
-                "fetched": c.fetched,
-                "inserted": c.inserted,
-                "skipped_dup": c.skipped_dup,
-                "provider": c.provider_used,
-                "error": c.error,
-            }
-            for c in summary.categories
-        ],
+    task = fetch_daily_news.delay(
+        target_date.isoformat() if target_date else None
     )
+    return {"task_id": task.id, "status": "queued"}

@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.services.news.base import NewsProvider, NewsProviderError, RawArticle
-from app.services.news.gnews import GNewsProvider
-from app.services.news.newsapi import NewsAPIProvider
+from app.services.news.newsdata import NewsDataProvider
+from app.services.news.hackernews import HackerNewsProvider
 from app.services.news.summarizer import summarize_article, fallback_summary
 
 
@@ -84,9 +84,10 @@ class FetchSummary:
 
 
 def _default_providers() -> list[NewsProvider]:
-    """GNews first, NewsAPI as fallback. Both are tolerant of missing keys —
-    a provider that isn't configured returns [] without error."""
-    return [GNewsProvider(), NewsAPIProvider()]
+    """NewsData first (general), HackerNews second (tech categories only).
+    Both degrade gracefully when misconfigured or when the category isn't
+    in their supported set — the next provider in the chain takes over."""
+    return [NewsDataProvider(), HackerNewsProvider()]
 
 
 def _existing_urls_for(

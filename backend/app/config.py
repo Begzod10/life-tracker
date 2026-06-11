@@ -90,13 +90,10 @@ class Settings(BaseSettings):
     NOTIFY_EVENING_HOUR_UTC: int = 16  # 21:00 Tashkent (UTC+5)
 
     # News providers
-    # GNews — primary. Free tier: 100 req/day, production-allowed.
-    # Get a key at https://gnews.io. Leave empty to disable provider.
-    GNEWS_API_KEY: Optional[str] = None
-    # NewsAPI.org — fallback. Free tier is dev-only per their terms; leave
-    # empty in production unless you've paid for a commercial plan. The
-    # pipeline degrades gracefully — if this is None, only GNews runs.
-    NEWSAPI_KEY: Optional[str] = None
+    # NewsData.io — primary. Free tier: 200 req/day, production-allowed.
+    # Get a key at https://newsdata.io. Leave empty to disable provider.
+    NEWSDATA_API_KEY: Optional[str] = None
+    # Hacker News — free, no key needed. Serves tech/science/startup categories only.
     # Per-category daily cap. 9 categories × 10 items = at most 90 cards/day
     # for a user who subscribed to everything. Keeps AI summary cost bounded
     # and the log scroll sane.

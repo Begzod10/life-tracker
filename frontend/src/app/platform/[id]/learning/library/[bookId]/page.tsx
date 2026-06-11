@@ -1888,13 +1888,13 @@ function HighlightRow({
     onJump: () => void
     onDelete: () => void
 }) {
-    const kindColor =
-        highlight.kind === 'vocab' ? 'border-indigo-500/30 bg-indigo-500/[0.06]' :
-        highlight.kind === 'note' ? 'border-sky-500/30 bg-sky-500/[0.06]' :
-        'border-amber-500/30 bg-amber-500/[0.06]'
+    const accentColor = highlight.color ?? '#facc15'
     const kindLabel = highlight.kind === 'vocab' ? 'word' : highlight.kind
     return (
-        <div className={`group relative p-2.5 rounded-lg border ${kindColor}`}>
+        <div
+            className="group relative p-2.5 rounded-lg border border-white/8 overflow-hidden"
+            style={{ borderLeftColor: accentColor, borderLeftWidth: 3 }}
+        >
             <div className="flex items-center justify-between mb-1.5">
                 <button
                     onClick={onJump}

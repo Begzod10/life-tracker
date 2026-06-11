@@ -1028,8 +1028,8 @@ class NewsCategory(Base):
     Catalog of news categories the user can subscribe to.
 
     `mode` is either 'native' (the catalog row maps to a built-in topic on
-    each provider via `gnews_topic` / `newsapi_category`) or 'search' (we
-    issue the provider's search endpoint with `search_query`).
+    the provider via `newsdata_category`) or 'search' (we issue the
+    provider's search endpoint with `search_query`).
     """
     __tablename__ = "news_categories"
 
@@ -1040,8 +1040,7 @@ class NewsCategory(Base):
     sort_order = Column(Integer, default=0)
 
     mode = Column(String(10), nullable=False, default="native")  # native | search
-    gnews_topic = Column(String(50), nullable=True)               # for mode=native
-    newsapi_category = Column(String(50), nullable=True)          # for mode=native
+    newsdata_category = Column(String(50), nullable=True)         # for mode=native
     search_query = Column(String(500), nullable=True)             # for mode=search
 
     is_active = Column(Boolean, default=True)
@@ -1086,7 +1085,7 @@ class NewsItem(Base):
     url = Column(String(2000), nullable=False, index=True)
     image_url = Column(String(2000), nullable=True)
     source_name = Column(String(200), nullable=True)
-    provider = Column(String(20), nullable=False)    # gnews | newsapi
+    provider = Column(String(20), nullable=False)    # newsdata | hackernews
     published_at = Column(DateTime, nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow)
 

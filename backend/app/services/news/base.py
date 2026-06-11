@@ -2,7 +2,7 @@
 
 Keeping providers behind one Protocol means the pipeline doesn't care which
 vendor a category resolved to — it just calls `.fetch(category, limit)`. New
-providers (Currents, NewsData, RSS) drop in by implementing the same method.
+providers (RSS, Guardian, NYT) drop in by implementing the same method.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class RawArticle:
     image_url: Optional[str]
     source_name: Optional[str]
     published_at: Optional[datetime]
-    provider: str            # "gnews" | "newsapi" | ...
+    provider: str            # "newsdata" | "hackernews" | ...
 
 
 class NewsProvider(Protocol):
@@ -43,10 +43,9 @@ class NewsProvider(Protocol):
         Return up to `limit` articles for `category`.
 
         `category` is the SQLAlchemy NewsCategory ORM row — providers read
-        whichever of (gnews_topic, newsapi_category, search_query) is
-        relevant to them. A provider that can't serve this category
-        (e.g. NewsAPI on a search-only category for which we want a
-        different query) should return an empty list, not raise.
+        whichever of (newsdata_category, search_query) is relevant to them.
+        A provider that can't serve this category should return an empty
+        list, not raise.
 
         Raise NewsProviderError only on transport/quota failures so the
         pipeline can fall over to the next provider.

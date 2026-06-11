@@ -26,7 +26,7 @@ export interface NewsItem {
     url: string
     image_url?: string | null
     source_name?: string | null
-    provider: 'gnews' | 'newsapi'
+    provider: 'newsdata' | 'hackernews' | string
     published_at?: string | null
 }
 
@@ -34,17 +34,9 @@ export interface NewsDates {
     dates: string[]
 }
 
-export interface NewsFetchSummary {
-    date: string
-    total_inserted: number
-    categories: {
-        slug: string
-        fetched: number
-        inserted: number
-        skipped_dup: number
-        provider: string | null
-        error: string | null
-    }[]
+export interface NewsFetchQueued {
+    task_id: string
+    status: 'queued'
 }
 
 const keys = {
@@ -111,12 +103,15 @@ export function useNewsItem(id: number | null) {
 export function useNewsFetch() {
     const { request } = useHttp()
     const qc = useQueryClient()
-    return useMutation<NewsFetchSummary, Error, string | undefined>({
+    return useMutation<NewsFetchQueued, Error, string | undefined>({
         mutationFn: (date?: string) =>
             request(API_ENDPOINTS.NEWS.FETCH(date), { method: 'POST' }),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['news', 'items'] })
-            qc.invalidateQueries({ queryKey: ['news', 'dates'] })
+            // Delay invalidation slightly so the worker has time to insert rows
+            setTimeout(() => {
+                qc.invalidateQueries({ queryKey: ['news', 'items'] })
+                qc.invalidateQueries({ queryKey: ['news', 'dates'] })
+            }, 5000)
         },
     })
 }
