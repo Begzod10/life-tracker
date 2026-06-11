@@ -118,7 +118,7 @@ export default function DashboardPage() {
     })
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-950 to-black text-white">
+        <div className="min-h-screen text-white">
             <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6 space-y-6">
 
                 {/* Header */}
