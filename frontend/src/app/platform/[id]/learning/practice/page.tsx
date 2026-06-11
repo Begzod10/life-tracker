@@ -2315,10 +2315,11 @@ function PracticePageInner() {
             return
         }
 
-        // Perfect chunk (0 mistakes) — skip the review screen and immediately
-        // start the next chunk so the user can complete the whole session
-        // without interruption when they're on a streak.
-        if (missedIds.length === 0) {
+        // Perfect streak auto-advance: skip the review screen when this chunk
+        // had 0 mistakes, the entire session so far has had 0 mistakes, and
+        // the user has already answered at least 20 words correctly.
+        const sessionStillClean = nextAggregate.missedIds.size === 0
+        if (missedIds.length === 0 && sessionStillClean && nextAggregate.correct >= 20) {
             const { chunk, unseenRest, poolRest } = takeChunk(unseenQueue, nextPool, chunkSize)
             setUnseenQueue(unseenRest)
             setMistakesPool(poolRest)
