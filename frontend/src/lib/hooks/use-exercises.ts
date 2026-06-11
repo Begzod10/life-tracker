@@ -215,11 +215,11 @@ export function useGradeExercises() {
     })
 }
 
-export function useExerciseHistory(limit = 20, wordId?: number) {
+export function useExerciseHistory(limit = 20, wordId?: number, fromDate?: string, toDate?: string) {
     const { request } = useHttp()
     return useQuery<ExerciseAttempt[]>({
-        queryKey: ['exercises', 'history', limit, wordId ?? ''],
-        queryFn: () => request(API_ENDPOINTS.EXERCISES.HISTORY(limit, wordId)),
+        queryKey: ['exercises', 'history', limit, wordId ?? '', fromDate ?? '', toDate ?? ''],
+        queryFn: () => request(API_ENDPOINTS.EXERCISES.HISTORY(limit, wordId, fromDate, toDate)),
     })
 }
 
@@ -231,11 +231,11 @@ export function useExerciseStats() {
     })
 }
 
-export function useExerciseAnalytics(days = 30) {
+export function useExerciseAnalytics(days = 30, fromDate?: string, toDate?: string) {
     const { request } = useHttp()
     return useQuery<ExerciseAnalytics>({
-        queryKey: ['exercises', 'analytics', days],
-        queryFn: () => request(API_ENDPOINTS.EXERCISES.ANALYTICS(days)),
+        queryKey: ['exercises', 'analytics', days, fromDate ?? '', toDate ?? ''],
+        queryFn: () => request(API_ENDPOINTS.EXERCISES.ANALYTICS(days, fromDate, toDate)),
         staleTime: 5 * 60 * 1000,
     })
 }

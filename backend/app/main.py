@@ -13,7 +13,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import goals, person, tasks, subtasks, progresslog, progresslog_task, auth, jobs, expenses, budgets, \
     financial_analytics, savings, salary_months, income_sources, milestones, profile, timetable, ai_coach, bot, \
-    category_budgets, dictionary, practice, essays, books, exercises, news
+    category_budgets, dictionary, practice, essays, books, exercises, news, dashboard
 from app.config import settings
 from app.services.job_service import JobService
 from app.services.telegram_bot import bot_service
@@ -139,6 +139,7 @@ app.include_router(essays.router, prefix="/api")
 app.include_router(books.router, prefix="/api")
 app.include_router(exercises.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 
 # Static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

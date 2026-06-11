@@ -21,6 +21,7 @@ import {
     PiggyBank,
     HeartPulse,
     LayoutGrid,
+    LayoutDashboard,
     ArrowLeft,
     User as UserIcon,
     Target,
@@ -49,6 +50,7 @@ function buildSections(id: string): NavSection[] {
     return [
         {
             items: [
+                { name: 'Dashboard', href: base, icon: LayoutDashboard },
                 { name: 'Goals', href: '/platform?category=goals', icon: Target, hubCategory: 'goals' },
                 { name: 'Tasks', href: '/platform?category=tasks', icon: CheckSquare, hubCategory: 'tasks' },
                 { name: 'Timetable', href: `${base}/timetable`, icon: CalendarClock, matchPrefix: true },

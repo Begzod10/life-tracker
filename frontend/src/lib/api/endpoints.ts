@@ -297,6 +297,10 @@ export const API_ENDPOINTS = {
         STATS: `${API_URL}/books/stats/overview`,
     },
 
+    DASHBOARD: {
+        SUMMARY: `${API_URL}/dashboard/summary`,
+    },
+
     EXERCISES: {
         WORDS: (args: {
             count?: number
@@ -314,13 +318,20 @@ export const API_ENDPOINTS = {
         },
         START: `${API_URL}/exercises/start`,
         GRADE: `${API_URL}/exercises/grade`,
-        HISTORY: (limit = 20, wordId?: number) => {
+        HISTORY: (limit = 20, wordId?: number, fromDate?: string, toDate?: string) => {
             const p = new URLSearchParams({ limit: String(limit) })
             if (wordId) p.append('word_id', String(wordId))
+            if (fromDate) p.append('from_date', fromDate)
+            if (toDate) p.append('to_date', toDate)
             return `${API_URL}/exercises/history?${p}`
         },
         STATS: `${API_URL}/exercises/stats`,
-        ANALYTICS: (days = 30) => `${API_URL}/exercises/analytics?days=${days}`,
+        ANALYTICS: (days = 30, fromDate?: string, toDate?: string) => {
+            const p = new URLSearchParams({ days: String(days) })
+            if (fromDate) p.append('from_date', fromDate)
+            if (toDate) p.append('to_date', toDate)
+            return `${API_URL}/exercises/analytics?${p}`
+        },
     },
 
     TIMETABLE: {

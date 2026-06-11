@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, XCircle, TrendingUp, BarChart2, BookOpen, AlertTriangle, ChevronDown } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, XCircle, TrendingUp, BarChart2, BookOpen, AlertTriangle, ChevronDown, CalendarRange, X } from 'lucide-react'
 import {
     useExerciseStats,
     useExerciseAnalytics,
@@ -166,12 +166,25 @@ export default function ExerciseHistoryPage() {
     const router = useRouter()
 
     const [period, setPeriod] = useState(30)
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
     const [filter, setFilter] = useState<Filter>('all')
     const [historyLimit, setHistoryLimit] = useState(50)
 
+    const dateRangeActive = !!(fromDate && toDate)
+
     const { data: stats } = useExerciseStats()
-    const { data: analytics, isLoading: analyticsLoading } = useExerciseAnalytics(period)
-    const { data: history = [], isLoading: historyLoading } = useExerciseHistory(historyLimit)
+    const { data: analytics, isLoading: analyticsLoading } = useExerciseAnalytics(
+        period,
+        dateRangeActive ? fromDate : undefined,
+        dateRangeActive ? toDate : undefined,
+    )
+    const { data: history = [], isLoading: historyLoading } = useExerciseHistory(
+        historyLimit,
+        undefined,
+        dateRangeActive ? fromDate : undefined,
+        dateRangeActive ? toDate : undefined,
+    )
 
     const filtered = history.filter(a =>
         filter === 'all' ? true : filter === 'correct' ? a.is_correct : !a.is_correct
@@ -205,23 +218,55 @@ export default function ExerciseHistoryPage() {
                     </div>
                 )}
 
-                {/* Period picker */}
-                <div className="flex items-center gap-2 mb-5">
-                    <TrendingUp className="w-4 h-4 text-white/30" />
-                    <span className="text-xs text-white/40 mr-1">Period:</span>
-                    {PERIOD_OPTIONS.map(o => (
-                        <button
-                            key={o.value}
-                            onClick={() => setPeriod(o.value)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                                period === o.value
-                                    ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40'
-                                    : 'text-white/40 hover:text-white/70 border border-white/10'
-                            }`}
-                        >
-                            {o.label}
-                        </button>
-                    ))}
+                {/* Period + date range filter */}
+                <div className="space-y-2 mb-5">
+                    <div className={`flex items-center gap-2 ${dateRangeActive ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <TrendingUp className="w-4 h-4 text-white/30 shrink-0" />
+                        <span className="text-xs text-white/40 mr-1">Period:</span>
+                        {PERIOD_OPTIONS.map(o => (
+                            <button
+                                key={o.value}
+                                onClick={() => setPeriod(o.value)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                    period === o.value
+                                        ? 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/40'
+                                        : 'text-white/40 hover:text-white/70 border border-white/10'
+                                }`}
+                            >
+                                {o.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <CalendarRange className="w-4 h-4 text-white/30 shrink-0" />
+                        <span className="text-xs text-white/40">Range:</span>
+                        <input
+                            type="date"
+                            value={fromDate}
+                            max={toDate || undefined}
+                            onChange={e => setFromDate(e.target.value)}
+                            className="bg-white/5 border border-white/12 rounded-lg px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
+                        />
+                        <span className="text-xs text-white/30">—</span>
+                        <input
+                            type="date"
+                            value={toDate}
+                            min={fromDate || undefined}
+                            onChange={e => setToDate(e.target.value)}
+                            className="bg-white/5 border border-white/12 rounded-lg px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
+                        />
+                        {dateRangeActive && (
+                            <button
+                                onClick={() => { setFromDate(''); setToDate('') }}
+                                className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors ml-1"
+                                title="Clear date range"
+                            >
+                                <X className="w-3 h-3" />
+                                Clear
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Analytics section */}
@@ -230,14 +275,21 @@ export default function ExerciseHistoryPage() {
                 ) : analytics && (
                     <div className="space-y-4 mb-6">
                         {/* Period summary */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <StatCard label="Accuracy" value={`${analytics.overall_accuracy}%`} sub={`last ${period}d`} />
-                            <StatCard label="Attempts" value={analytics.total_attempts} sub={`last ${period}d`} />
-                            <StatCard label="Correct" value={analytics.total_correct} sub={`last ${period}d`} />
-                            {analytics.avg_usage_score !== null && (
-                                <StatCard label="Avg score" value={analytics.avg_usage_score} sub="usage score" />
-                            )}
-                        </div>
+                        {(() => {
+                            const sub = dateRangeActive
+                                ? `${fromDate} → ${toDate}`
+                                : `last ${period}d`
+                            return (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <StatCard label="Accuracy" value={`${analytics.overall_accuracy}%`} sub={sub} />
+                                    <StatCard label="Attempts" value={analytics.total_attempts} sub={sub} />
+                                    <StatCard label="Correct" value={analytics.total_correct} sub={sub} />
+                                    {analytics.avg_usage_score !== null && (
+                                        <StatCard label="Avg score" value={analytics.avg_usage_score} sub="usage score" />
+                                    )}
+                                </div>
+                            )
+                        })()}
 
                         {/* Daily accuracy trend */}
                         {analytics.accuracy_trend.length > 0 && (

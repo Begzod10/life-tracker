@@ -11,7 +11,7 @@ Workflow:
        SRS is updated, attempts are persisted, session is closed — all in one
        atomic transaction.
 """
-from datetime import datetime, timedelta
+from datetime import date as date_type, datetime, time as time_type, timedelta
 from typing import List, Optional
 import json
 import re
@@ -687,6 +687,8 @@ async def grade_exercises(
 def get_exercise_history(
     limit: int = Query(default=20, ge=1, le=100),
     word_id: Optional[int] = Query(None),
+    from_date: Optional[date_type] = Query(None),
+    to_date: Optional[date_type] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
@@ -695,6 +697,10 @@ def get_exercise_history(
     )
     if word_id is not None:
         q = q.filter(models.ExerciseAttempt.word_id == word_id)
+    if from_date is not None:
+        q = q.filter(models.ExerciseAttempt.created_at >= datetime.combine(from_date, time_type.min))
+    if to_date is not None:
+        q = q.filter(models.ExerciseAttempt.created_at < datetime.combine(to_date + timedelta(days=1), time_type.min))
     attempts = q.order_by(models.ExerciseAttempt.created_at.desc()).limit(limit).all()
 
     word_ids = list({a.word_id for a in attempts})
@@ -763,21 +769,25 @@ def get_exercise_stats(
 @router.get("/analytics")
 def get_exercise_analytics(
     days: int = Query(default=30, ge=7, le=90),
+    from_date: Optional[date_type] = Query(None),
+    to_date: Optional[date_type] = Query(None),
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
     from collections import defaultdict
 
-    since = datetime.utcnow() - timedelta(days=days)
-    attempts = (
-        db.query(models.ExerciseAttempt)
-        .filter(
-            models.ExerciseAttempt.person_id == current_user.id,
-            models.ExerciseAttempt.created_at >= since,
-        )
-        .order_by(models.ExerciseAttempt.created_at)
-        .all()
+    q = db.query(models.ExerciseAttempt).filter(
+        models.ExerciseAttempt.person_id == current_user.id,
     )
+    if from_date and to_date:
+        q = q.filter(
+            models.ExerciseAttempt.created_at >= datetime.combine(from_date, time_type.min),
+            models.ExerciseAttempt.created_at < datetime.combine(to_date + timedelta(days=1), time_type.min),
+        )
+    else:
+        since = datetime.utcnow() - timedelta(days=days)
+        q = q.filter(models.ExerciseAttempt.created_at >= since)
+    attempts = q.order_by(models.ExerciseAttempt.created_at).all()
 
     total = len(attempts)
     correct = sum(1 for a in attempts if a.is_correct)
@@ -835,8 +845,13 @@ def get_exercise_analytics(
         for t, v in type_stats.items()
     ]
 
+    computed_days = (
+        (to_date - from_date).days + 1
+        if from_date and to_date
+        else days
+    )
     return {
-        "period_days": days,
+        "period_days": computed_days,
         "total_attempts": total,
         "total_correct": correct,
         "overall_accuracy": round(correct / total * 100) if total else 0,
