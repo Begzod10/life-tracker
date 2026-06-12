@@ -18,6 +18,7 @@ interface Props {
 
 export function ExerciseWidget({ item, value, onChange, disabled }: Props) {
     switch (item.exercise_type) {
+        case 'collocation_mc':
         case 'meaning_mc':
         case 'reverse_mc':
         case 'synonym_antonym':

@@ -26,6 +26,7 @@ const TYPE_LABEL: Record<string, string> = {
     synonym_antonym: 'Synonym / antonym',
     odd_one_out: 'Odd one out',
     error_correction: 'Error correction',
+    collocation_mc: 'Collocation',
 }
 
 // ─── Render-unit types ────────────────────────────────────────────────────────

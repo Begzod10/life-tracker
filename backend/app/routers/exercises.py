@@ -160,6 +160,49 @@ def _serialize_item_for_client(plan_item: dict, word: models.DictionaryWord) -> 
     return out
 
 
+def _generate_collocations(words: list[models.DictionaryWord], db: Session) -> None:
+    needs = [w for w in words if not ((w.word_meta or {}).get("collocations"))]
+    if not needs or not settings.OPENAI_API_KEY:
+        return
+    import json as _json
+    import httpx as _httpx
+    word_list = [w.word for w in needs[:12]]
+    base_url = (settings.OPENAI_BASE_URL or "https://api.groq.com/openai/v1").rstrip("/")
+    body = {
+        "model": settings.OPENAI_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": (
+                "For each English word/phrase below, provide exactly 5 natural collocations "
+                "(short phrases that commonly follow the word). Return ONLY valid JSON.\n"
+                f"Words: {_json.dumps(word_list)}\n"
+                'Format: {"word1": ["collocate1", "collocate2", ...], "word2": [...]}'
+            ),
+        }],
+        "temperature": 0.2,
+        "max_tokens": 700,
+        "response_format": {"type": "json_object"},
+    }
+    try:
+        resp = _httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json=body,
+            timeout=20.0,
+        )
+        resp.raise_for_status()
+        result = _json.loads(resp.json()["choices"][0]["message"]["content"])
+        for w in needs:
+            collocations = result.get(w.word)
+            if collocations and isinstance(collocations, list):
+                current_meta = dict(w.word_meta or {})
+                current_meta["collocations"] = [c for c in collocations if c][:5]
+                w.word_meta = current_meta
+        db.commit()
+    except Exception as exc:
+        logger.warning("collocation generation failed: %s", exc)
+
+
 @router.post("/start")
 def start_exercise_session(
     request: StartRequest,
@@ -206,6 +249,7 @@ def start_exercise_session(
             error_counts[err] = error_counts.get(err, 0) + 1
     grammar_focus = sorted(error_counts, key=lambda k: -error_counts[k])[:3] or None
 
+    _generate_collocations(words, db)
     items_plan: list[dict] = []
     for position, word in enumerate(words):
         exercise_type = pick_exercise_type(word, request.mode, position)
@@ -642,9 +686,16 @@ async def grade_exercises(
             db.add(attempt)
             srs.apply_result(word, grade=srs_grade, now=now)
 
+            import json as _json_local
+            try:
+                ex_list = _json_local.loads(word.examples) if word.examples else []
+            except Exception:
+                ex_list = []
+            word_meta = word.word_meta or {}
             results.append({
                 "word_id": word.id,
                 "word": word.word,
+                "definition": word.definition,
                 "exercise_type": etype,
                 "response": it.response.strip(),
                 "is_correct": was_correct,
@@ -654,6 +705,9 @@ async def grade_exercises(
                 "correct_answer": grade.get("correct_answer"),
                 "grammar_errors": grade.get("grammar_errors"),
                 "next_review_at": word.next_review_at.isoformat() if word.next_review_at else None,
+                "examples": ex_list[:3],
+                "collocations": word_meta.get("collocations") or [],
+                "synonyms": word_meta.get("synonyms") or [],
             })
 
         if session is not None:

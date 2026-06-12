@@ -18,7 +18,7 @@ _log = logging.getLogger(__name__)
 PRODUCTION_TYPES = frozenset({"sentence", "constrained_sentence", "paraphrase", "prompt_response", "error_correction"})
 RECOGNITION_TYPES = frozenset({"meaning_mc", "reverse_mc"})
 CLOZE_TYPES = frozenset({"cloze"})
-FORM_TYPES = frozenset({"spelling", "anagram"})
+FORM_TYPES = frozenset({"spelling", "anagram", "collocation_mc"})
 GROUPED_TYPES = frozenset({"match", "cloze_bank"})
 PHASE_B_TYPES = frozenset({"word_formation", "synonym_antonym", "odd_one_out"})
 
@@ -92,11 +92,24 @@ _GRAMMAR_CONSTRAINTS: dict[str, str] = {
 
 # ─── Prompt templates for prompt_response ─────────────────────────────────────
 
+_IELTS_TOPICS = [
+    "education and technology",
+    "environmental challenges",
+    "healthcare and society",
+    "economic development",
+    "social media and communication",
+    "cultural diversity",
+    "urbanisation and infrastructure",
+    "scientific progress",
+    "government and public policy",
+    "work and employment",
+]
+
 _PROMPTS = [
-    "Describe a time when you used or experienced '{word}'.",
-    "How would you explain '{word}' to a friend?",
-    "Write a short response: Have you encountered a situation involving '{word}'?",
-    "Use '{word}' to describe something from your daily life.",
+    "Write 2–3 academic sentences using '{word}' in an essay about {topic}.",
+    "You are writing an IELTS Task 2 essay about {topic}. Use '{word}' to make a clear argument.",
+    "Use '{word}' to explain a point about {topic} in formal academic English.",
+    "In an IELTS essay about {topic}, write a body-paragraph sentence that naturally uses '{word}'.",
 ]
 
 # ─── Type selection ────────────────────────────────────────────────────────────
@@ -136,7 +149,7 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
         return ["meaning_mc", "reverse_mc"][position % 2]
 
     if reps < _REPS_FOR_PRODUCTION or interval < _INTERVAL_FOR_PRODUCTION:
-        cued = ["cloze", "spelling", "anagram"]
+        cued = ["cloze", "spelling", "collocation_mc", "anagram"]
         return cued[position % len(cued)]
 
     production = ["sentence", "constrained_sentence", "prompt_response", "error_correction"]
@@ -314,6 +327,34 @@ def _get_definition_distractors(target_word: Any, pool: list[Any], n: int = 3) -
     return result[:n]
 
 
+def _get_collocation_distractors(correct_collocate: str, target_word: Any, pool: list[Any], n: int = 3) -> list[str]:
+    bad: list[str] = []
+    target_id = getattr(target_word, "id", None)
+    for w in pool:
+        if getattr(w, "id", None) == target_id:
+            continue
+        meta = getattr(w, "word_meta", None) or {}
+        for c in (meta.get("collocations") or []):
+            if c.lower() != correct_collocate.lower():
+                bad.append(c)
+    random.shuffle(bad)
+    seen = {correct_collocate.lower()}
+    result: list[str] = []
+    for c in bad:
+        if c.lower() not in seen:
+            seen.add(c.lower())
+            result.append(c)
+        if len(result) >= n:
+            break
+    fallbacks = ["a person", "the weather", "quickly", "very much", "a color", "somewhere"]
+    for f in fallbacks:
+        if len(result) >= n:
+            break
+        if f.lower() not in seen:
+            result.append(f)
+    return result[:n]
+
+
 # ─── Levenshtein distance ──────────────────────────────────────────────────────
 
 def _levenshtein(a: str, b: str) -> int:
@@ -464,8 +505,9 @@ def build_question(
                 "correct_answer": target}
 
     if exercise_type == "sentence":
+        topic = _IELTS_TOPICS[position % len(_IELTS_TOPICS)]
         return {**base,
-                "prompt": f"Write a sentence using \"{target}\".",
+                "prompt": f"Write an academic sentence using \"{target}\" — context: {topic}.",
                 "instruction": definition,
                 "correct_answer": None}
 
@@ -495,7 +537,8 @@ def build_question(
 
     if exercise_type == "prompt_response":
         tmpl = _PROMPTS[position % len(_PROMPTS)]
-        prompt_text = tmpl.format(word=target)
+        topic = _IELTS_TOPICS[position % len(_IELTS_TOPICS)]
+        prompt_text = tmpl.format(word=target, topic=topic)
         return {**base,
                 "prompt": prompt_text,
                 "instruction": definition,
@@ -514,6 +557,21 @@ def build_question(
                         "instruction": "Rewrite the full sentence with the error corrected.",
                         "correct_answer": source}
         return build_question("sentence", w, distractor_pool, position, grammar_focus)
+
+    if exercise_type == "collocation_mc":
+        meta = getattr(w, "word_meta", None) or {}
+        collocations = [c for c in (meta.get("collocations") or []) if c]
+        if not collocations:
+            return build_question("spelling", w, distractor_pool, position)
+        correct_collocate = collocations[position % len(collocations)]
+        distractors = _get_collocation_distractors(correct_collocate, w, distractor_pool)
+        options = [correct_collocate] + distractors
+        random.shuffle(options)
+        return {**base,
+                "exercise_type": "collocation_mc",
+                "prompt": f'Complete the phrase: "{target} ___"',
+                "options": options,
+                "correct_answer": correct_collocate}
 
     # ── Grouped types ────────────────────────────────────────────────────────
     # build_question returns a stub; assign_groups() enriches these with group_id
@@ -749,7 +807,7 @@ def grade_deterministic(
 
     # Selection-based exact match (no typos possible) — match, cloze_bank,
     # synonym_antonym, odd_one_out all use click-to-select UI.
-    if exercise_type in ("match", "cloze_bank", "synonym_antonym", "odd_one_out"):
+    if exercise_type in ("match", "cloze_bank", "synonym_antonym", "odd_one_out", "collocation_mc"):
         ca = correct_answer or target
         expected = _normalize(ca)
         is_correct = norm_resp == expected

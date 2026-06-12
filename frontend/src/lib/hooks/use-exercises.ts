@@ -22,6 +22,7 @@ export type ExerciseType =
     | 'synonym_antonym'
     | 'odd_one_out'
     | 'error_correction'
+    | 'collocation_mc'
 
 export type ExerciseMode =
     | 'auto'
@@ -83,6 +84,10 @@ export type ExerciseGradeResult = {
     correct_answer: string | null
     grammar_errors: string[] | null
     next_review_at: string
+    definition: string | null
+    examples: string[]
+    collocations: string[]
+    synonyms: string[]
 }
 
 export type ExerciseGradeResponse = {

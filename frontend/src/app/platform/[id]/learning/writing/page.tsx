@@ -119,6 +119,14 @@ export default function WritingListPage() {
                             Progress
                         </Button>
                         <Button
+                            variant="ghost"
+                            onClick={() => router.push(`/platform/${params.id}/learning/writing/ielts`)}
+                            className="text-indigo-300/70 hover:text-indigo-200 border border-indigo-500/20 bg-indigo-500/5"
+                        >
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            IELTS Task 2
+                        </Button>
+                        <Button
                             onClick={() => { setShowNew(true); setGeneratedPrompt(null); setExistingMatch(null); setError(null); }}
                             className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
                         >

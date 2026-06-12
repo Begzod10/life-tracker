@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # Format: socks5://user:pass@host:port  or  http://user:pass@host:port
     OPENAI_PROXY_URL: Optional[str] = None
 
+    # IELTS Task 2 essay exercise tier
+    IELTS_ESSAY_ENABLED: bool = True
+
     # Redis / Celery
     REDIS_URL: str = "redis://localhost:6379/9"
 
