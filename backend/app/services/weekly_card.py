@@ -63,20 +63,20 @@ BRAND_WORDMARK   = "GENNIS"
 BRAND_TAGLINE    = "WEEKLY"
 FOOTER_LINE      = "gennis · weekly wrapped"
 
-# Uzbek weekday initials (Mon → Sun). Used by the daily bar row.
-WEEKDAY_LABELS_UZ = ("Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya")
+# Weekday initials (Mon → Sun). Used by the daily bar row.
+WEEKDAY_LABELS = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
 
-# Static Uzbek motivation pool — used when the AI provider is unreachable or
+# Static English motivation pool — used when the AI provider is unreachable or
 # returns garbage. Each line is ≤ 8 words and ends without punctuation so
 # it composites cleanly under the chip row.
-UZBEK_FALLBACK_LINES = (
-    "Davom et — natija yaqin",
-    "Hafta sening kuching ortdi",
-    "Har bir kun bir qadam",
-    "Ertaga ham xuddi shu sur'at",
-    "Sen ko‘pchilikdan oldindasan",
-    "Yaxshi bordingsen, davom et",
-    "Bir hafta — yana bir g‘alaba",
+FALLBACK_LINES = (
+    "Keep going — the result is near",
+    "Another strong week in the books",
+    "Every day is one step forward",
+    "Same energy again tomorrow",
+    "You are ahead of most people",
+    "Good work — keep the momentum",
+    "One more week, one more win",
 )
 
 # Bundled font dir. Resolver tries these first; falls back to system DejaVu
@@ -326,28 +326,27 @@ def compute_weekly_stats(
 
 # ── AI motivation line ──────────────────────────────────────────────────────
 
-def generate_uzbek_motivation_line(stats: dict) -> str:
-    """One short Uzbek sentence (≤ 8 words) summarising the week.
+def generate_motivation_line(stats: dict) -> str:
+    """One short English sentence (≤ 8 words) summarising the week.
 
     Calls the existing `_generate_text` helper. Falls back to a static line if
     the AI provider is unreachable, returns nothing, or returns something
-    suspicious (too long, too short, English).
+    suspicious (too long, too short).
     """
     from app.tasks import _generate_text  # local to avoid circular import
 
     # Choose a deterministic fallback up-front so empty-week and AI-failure
     # paths share the same line for the same stats.
-    fallback = UZBEK_FALLBACK_LINES[stats["streak_days"] % len(UZBEK_FALLBACK_LINES)]
+    fallback = FALLBACK_LINES[stats["streak_days"] % len(FALLBACK_LINES)]
 
     if stats["total_blocks"] == 0:
-        # Tone matches the empty-week card.
-        return "Bu hafta hali boshlanmadi"
+        return "This week hasn't started yet"
 
     prompt = (
-        "You write motivational one-liners in Uzbek (Latin script) for a study "
-        "tracker app. Output a SINGLE short sentence, at most 8 words, no quotes, "
-        "no emoji, no English, no punctuation at the end. It should sound like a "
-        "friend, not a corporate slogan.\n\n"
+        "You write motivational one-liners in English for a study tracker app. "
+        "Output a SINGLE short sentence, at most 8 words, no quotes, no emoji, "
+        "no punctuation at the end. It should sound like a friend, not a "
+        "corporate slogan.\n\n"
         f"This week the user did {stats['completed_blocks']}/{stats['total_blocks']} "
         f"timetable blocks ({stats['completion_rate']:.0f}% complete), "
         f"spent {stats['completed_hours']:.1f} hours, "
@@ -363,21 +362,17 @@ def generate_uzbek_motivation_line(stats: dict) -> str:
         return fallback
 
     line = raw.strip().strip("\"' ")
-    # Reject empty / overlong / clearly-English replies.
     if not line:
         return fallback
     words = line.split()
     if len(words) > 10:
-        # AI ignored the word limit — keep first 8 words.
         line = " ".join(words[:8])
-    # Crude English smell-check: if >70% of letters are ASCII-only AND the
-    # phrase contains common English filler words, fall back.
-    lower = line.lower()
-    english_smell = any(w in lower for w in (" the ", " and ", " your ", "you ", " is "))
-    if english_smell:
-        return fallback
     # Strip trailing punctuation per the spec.
     return line.rstrip(".!?·,;: ")
+
+
+# Keep old name as an alias so callers in telegram.py don't break.
+generate_uzbek_motivation_line = generate_motivation_line
 
 
 # ── Drawing primitives ──────────────────────────────────────────────────────
@@ -513,7 +508,7 @@ def _draw_daily_bars(
             )
 
         # Weekday initial
-        label = WEEKDAY_LABELS_UZ[i]
+        label = WEEKDAY_LABELS[i]
         lf = _font("medium", 22)
         lw = _text_w(draw, label, lf)
         draw.text((cx - lw // 2, y_top + bar_max_h + 14), label, font=lf, fill=TEXT_DIM)
@@ -554,12 +549,12 @@ def render_weekly_card(stats: dict, ai_line: str) -> bytes:
     if total_blocks == 0:
         msg_font  = _font("bold", 64)
         sub_font  = _font("medium", 30)
-        _draw_centered(draw, 520, "Bu hafta", msg_font, TEXT)
-        _draw_centered(draw, 600, "hali boshlanmadi", msg_font, TEXT)
+        _draw_centered(draw, 520, "This week", msg_font, TEXT)
+        _draw_centered(draw, 600, "hasn’t started yet", msg_font, TEXT)
         _draw_centered(
             draw,
             720,
-            "Ertaga birinchi blokni qo‘sh — yo‘l shu yerdan boshlanadi.",
+            "Add your first block tomorrow — the journey starts here.",
             sub_font,
             TEXT_DIM,
         )
@@ -598,8 +593,8 @@ def render_weekly_card(stats: dict, ai_line: str) -> bytes:
     flame_cy     = HERO_Y + 138
     _draw_flame(draw, flame_cx, flame_cy, flame_size)
 
-    _draw_centered(draw, UNIT_Y,      "kun",           hero_unit, TEXT_DIM)
-    _draw_centered(draw, UNIT_Y + 56, "kunlik seriya", hero_sub,  TEXT_MUTED)
+    _draw_centered(draw, UNIT_Y,      "day",           hero_unit, TEXT_DIM)
+    _draw_centered(draw, UNIT_Y + 56, "daily streak",  hero_sub,  TEXT_MUTED)
 
     # ── Completion ring ─────────────────────────────────────────────────────
     ring_pct     = stats["completion_rate"]
@@ -650,7 +645,7 @@ def render_weekly_card(stats: dict, ai_line: str) -> bytes:
 
     # ── AI Uzbek line ───────────────────────────────────────────────────────
     ai_font      = _font("medium", 32)
-    safe_ai      = (ai_line or UZBEK_FALLBACK_LINES[0]).strip()
+    safe_ai      = (ai_line or FALLBACK_LINES[0]).strip()
     max_ai_w     = CANVAS_W - 2 * PAD_X
     if _text_w(draw, f"“{safe_ai}”", ai_font) <= max_ai_w:
         draw.text(
