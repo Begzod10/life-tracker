@@ -160,8 +160,17 @@ def _serialize_item_for_client(plan_item: dict, word: models.DictionaryWord) -> 
     return out
 
 
+def _is_proper_noun(word: str) -> bool:
+    """Skip collocation generation for proper nouns (names, places, brands)."""
+    parts = word.split()
+    return all(p[0].isupper() for p in parts if p) and len(word) > 1
+
+
 def _generate_collocations(words: list[models.DictionaryWord], db: Session) -> None:
-    needs = [w for w in words if not ((w.word_meta or {}).get("collocations"))]
+    needs = [
+        w for w in words
+        if not ((w.word_meta or {}).get("collocations")) and not _is_proper_noun(w.word)
+    ]
     if not needs or not settings.OPENAI_API_KEY:
         return
     import json as _json
@@ -174,9 +183,11 @@ def _generate_collocations(words: list[models.DictionaryWord], db: Session) -> N
             "role": "user",
             "content": (
                 "For each English word/phrase below, provide exactly 5 natural collocations "
-                "(short phrases that commonly follow the word). Return ONLY valid JSON.\n"
+                "as FULL phrases that include the word (e.g. for 'remarkable': "
+                "'remarkable achievement', 'remarkable progress'). "
+                "Return ONLY valid JSON.\n"
                 f"Words: {_json.dumps(word_list)}\n"
-                'Format: {"word1": ["collocate1", "collocate2", ...], "word2": [...]}'
+                'Format: {"word1": ["full phrase 1", "full phrase 2", ...], "word2": [...]}'
             ),
         }],
         "temperature": 0.2,

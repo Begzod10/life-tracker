@@ -569,7 +569,7 @@ def build_question(
         random.shuffle(options)
         return {**base,
                 "exercise_type": "collocation_mc",
-                "prompt": f'Complete the phrase: "{target} ___"',
+                "prompt": f'Which phrase uses "{target}" correctly?',
                 "options": options,
                 "correct_answer": correct_collocate}
 

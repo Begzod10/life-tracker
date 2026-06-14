@@ -168,7 +168,7 @@ function ResultCard({ result }: { result: ExerciseGradeResult }) {
                                         key={c}
                                         className="text-xs px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/20 text-indigo-200/80"
                                     >
-                                        {result.word} {c}
+                                        {c}
                                     </span>
                                 ))}
                             </div>
