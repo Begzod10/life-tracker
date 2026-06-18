@@ -295,6 +295,17 @@ _CATEGORY_STRATEGIES: dict[str, Any] = {
 }
 
 
+# Category-specific fallback sentences for grammar drill when a word has no stored examples.
+# These are CORRECT sentences — _inject_error will introduce the targeted mistake.
+_DRILL_FALLBACK_SENTENCES: dict[str, str] = {
+    "articles":     "The development of a strong education system is essential for every society.",
+    "prepositions": "Many students rely on their teachers for guidance in their academic studies.",
+    "word_forms":   "The success of the project depends on careful planning and good organisation.",
+    "connectors":   "While technology has many benefits, it also presents significant challenges.",
+    "comparatives": "Modern devices are faster and more efficient than the older models from before.",
+}
+
+
 def _inject_error(sentence: str, position: int, category: str | None = None) -> str | None:
     """Return errored sentence or None if no injection succeeded.
 
@@ -677,10 +688,12 @@ def build_question(
                 "correct_answer": None}
 
     if exercise_type == "error_correction":
-        # Requires a real example sentence to inject an error into.
-        # Falls back to sentence if no usable example or injection fails.
-        if examples:
-            source = examples[0]
+        # Use word's stored examples first; fall back to category templates in grammar drill.
+        source = examples[0] if examples else None
+        if source is None and grammar_focus:
+            category = grammar_focus[0]
+            source = _DRILL_FALLBACK_SENTENCES.get(category, _DRILL_FALLBACK_SENTENCES["articles"])
+        if source:
             category = grammar_focus[0] if grammar_focus else None
             errored = _inject_error(source, position, category)
             if errored and errored != source:
