@@ -24,15 +24,55 @@ export interface CriteriaScores {
   grammatical_range_accuracy: number | null
 }
 
+export interface GrammarErrorItem {
+  span: string
+  category: string
+  severity: 'major' | 'minor'
+  correction: string
+  rule: string
+}
+
 export interface Task2GradeResult {
   attempt_id: number
   criteria_scores: CriteriaScores
   overall_band: number | null
   is_correct: boolean
   essay_errors: string[] | null
+  grammar_errors: GrammarErrorItem[]
   feedback: string | null
   model_revision: string | null
   word_count: number
+}
+
+export interface GrammarDrillItem {
+  grammar_point_id: string
+  priority: number
+  mastery: number
+  lapses: number
+  next_review_at: string | null
+}
+
+export interface GrammarDrillQueue {
+  drill_queue: GrammarDrillItem[]
+}
+
+export interface GrammarPointEntry {
+  id: string
+  name: string
+  cefr: string
+  priority: number
+  rule: string
+  l1_notes: string
+  common_errors: Array<{ wrong: string; right: string }>
+  examples: string[]
+  mastery: number
+  lapses: number
+  priority_score: number
+  next_review_at: string | null
+}
+
+export interface GrammarPointsResponse {
+  points: GrammarPointEntry[]
 }
 
 export interface Task2HistoryItem {
@@ -124,5 +164,27 @@ export function useTask2Analytics(platformId: string) {
     queryFn: () =>
       request(API_ENDPOINTS.TASK2.ANALYTICS) as Promise<Task2Analytics>,
     staleTime: 60_000,
+  })
+}
+
+export function useGrammarDrillQueue(platformId: string, limit = 5) {
+  const { request } = useHttp()
+
+  return useQuery<GrammarDrillQueue>({
+    queryKey: ['grammar-drill-queue', platformId, limit],
+    queryFn: () =>
+      request(API_ENDPOINTS.TASK2.GRAMMAR_DRILL_QUEUE(limit)) as Promise<GrammarDrillQueue>,
+    staleTime: 60_000,
+  })
+}
+
+export function useGrammarPoints(platformId: string) {
+  const { request } = useHttp()
+
+  return useQuery<GrammarPointsResponse>({
+    queryKey: ['grammar-points', platformId],
+    queryFn: () =>
+      request(API_ENDPOINTS.TASK2.GRAMMAR_POINTS) as Promise<GrammarPointsResponse>,
+    staleTime: 120_000,
   })
 }

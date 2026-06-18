@@ -335,10 +335,12 @@ export const API_ENDPOINTS = {
     },
 
     TASK2: {
-        START:     `${API_URL}/essays/task2/start`,
-        GRADE:     `${API_URL}/essays/task2/grade`,
-        HISTORY:   (page = 1, limit = 20) => `${API_URL}/essays/task2/history?page=${page}&limit=${limit}`,
-        ANALYTICS: `${API_URL}/essays/task2/analytics`,
+        START:              `${API_URL}/essays/task2/start`,
+        GRADE:              `${API_URL}/essays/task2/grade`,
+        HISTORY:            (page = 1, limit = 20) => `${API_URL}/essays/task2/history?page=${page}&limit=${limit}`,
+        ANALYTICS:          `${API_URL}/essays/task2/analytics`,
+        GRAMMAR_DRILL_QUEUE: (limit = 10) => `${API_URL}/essays/task2/grammar/drill-queue?limit=${limit}`,
+        GRAMMAR_POINTS:      `${API_URL}/essays/task2/grammar/points`,
     },
 
     TIMETABLE: {

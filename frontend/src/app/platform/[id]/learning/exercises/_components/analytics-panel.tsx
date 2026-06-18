@@ -1,8 +1,10 @@
 'use client'
 
-import { TrendingUp, Target, AlertTriangle, BarChart2, ChevronDown, ChevronUp } from 'lucide-react'
+import { TrendingUp, Target, AlertTriangle, BarChart2, ChevronDown, ChevronUp, GraduationCap } from 'lucide-react'
 import { useState } from 'react'
+import { useParams } from 'next/navigation'
 import { useExerciseAnalytics } from '@/lib/hooks/use-exercises'
+import { useGrammarDrillQueue } from '@/lib/hooks/use-task2'
 
 const TYPE_LABEL: Record<string, string> = {
     sentence: 'Sentence',
@@ -35,9 +37,31 @@ function AccuracyBar({ accuracy, size = 'md' }: { accuracy: number; size?: 'sm' 
     )
 }
 
+const GRAMMAR_LABELS: Record<string, string> = {
+    articles:                  'Articles',
+    subject_verb_agreement:    'Subject-verb agreement',
+    present_perfect:           'Present perfect',
+    tense_consistency:         'Tense consistency',
+    prepositions:              'Prepositions',
+    countable_uncountable:     'Countable / uncountable',
+    complex_sentences:         'Complex sentences',
+    relative_clauses:          'Relative clauses',
+    conditionals:              'Conditionals',
+    passive_voice:             'Passive voice',
+    word_order:                'Word order',
+    gerund_infinitive:         'Gerund vs infinitive',
+    modal_verbs:               'Modal verbs',
+    comparatives_superlatives: 'Comparatives',
+    plural_singular:           'Plural / singular',
+    punctuation_run_on:        'Run-on sentences',
+    other:                     'Other grammar',
+}
+
 export function AnalyticsPanel() {
     const [expanded, setExpanded] = useState(false)
     const { data, isLoading } = useExerciseAnalytics(30)
+    const params = useParams<{ id: string }>()
+    const { data: grammarQueue } = useGrammarDrillQueue(params.id, 5)
 
     if (isLoading) return null
     if (!data || data.total_attempts === 0) return null
@@ -91,7 +115,7 @@ export function AnalyticsPanel() {
             {/* Expanded detail */}
             {expanded && (
                 <div className="px-4 pb-4 space-y-4 border-t border-white/10 pt-3">
-                    {/* Grammar weak areas */}
+                    {/* Grammar weak areas (from exercises) */}
                     {data.grammar_weak_areas.length > 0 && (
                         <div>
                             <div className="flex items-center gap-1.5 text-xs text-amber-400 font-medium mb-2">
@@ -114,6 +138,32 @@ export function AnalyticsPanel() {
                             </div>
                             <p className="text-[11px] text-white/30 mt-2">
                                 Your next session will include exercises targeting these areas.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Grammar drill queue (from essay SRS) */}
+                    {grammarQueue && grammarQueue.drill_queue.length > 0 && (
+                        <div>
+                            <div className="flex items-center gap-1.5 text-xs text-violet-400 font-medium mb-2">
+                                <GraduationCap className="w-3.5 h-3.5" />
+                                Essay grammar queue
+                            </div>
+                            <div className="space-y-1.5">
+                                {grammarQueue.drill_queue.map((item) => (
+                                    <div key={item.grammar_point_id} className="flex items-center gap-2">
+                                        <span className="text-xs text-white/60 w-36 shrink-0 truncate">
+                                            {GRAMMAR_LABELS[item.grammar_point_id] ?? item.grammar_point_id.replace(/_/g, ' ')}
+                                        </span>
+                                        <div className="flex-1">
+                                            <AccuracyBar accuracy={Math.round(item.mastery * 100)} size="sm" />
+                                        </div>
+                                        <span className="text-xs text-white/40 w-6 text-right">{item.lapses}×</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-white/30 mt-2">
+                                Grammar errors found in your essays — mastery grows as you drill them.
                             </p>
                         </div>
                     )}

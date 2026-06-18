@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, BookOpen, Target, TrendingUp, TrendingDown, Minus,
     Clock, CheckCircle2, XCircle, ChevronRight, RefreshCw, Lightbulb,
-    AlertTriangle, Award, Pencil, BarChart2,
+    AlertTriangle, Award, Pencil, BarChart2, Zap, GraduationCap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,10 +14,13 @@ import {
     useTask2Grade,
     useTask2Analytics,
     useTask2History,
+    useGrammarDrillQueue,
     type Task2Session,
     type Task2GradeResult,
     type Task2Analytics,
     type Task2HistoryItem,
+    type GrammarErrorItem,
+    type GrammarDrillItem,
 } from '@/lib/hooks/use-task2'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -74,6 +77,26 @@ const TREND_ICON = (t: string) =>
     t === 'falling' ? <TrendingDown className="w-3.5 h-3.5 text-rose-400" />   :
                       <Minus className="w-3.5 h-3.5 text-white/30" />
 
+const GRAMMAR_POINT_LABELS: Record<string, string> = {
+    articles:                 'Articles (a / an / the)',
+    subject_verb_agreement:   'Subject-verb agreement',
+    present_perfect:          'Present perfect vs past simple',
+    tense_consistency:        'Tense consistency',
+    prepositions:             'Dependent prepositions',
+    countable_uncountable:    'Countable vs uncountable',
+    complex_sentences:        'Complex sentences',
+    relative_clauses:         'Relative clauses',
+    conditionals:             'Conditionals',
+    passive_voice:            'Passive voice',
+    word_order:               'Word order',
+    gerund_infinitive:        'Gerund vs infinitive',
+    modal_verbs:              'Modal verbs',
+    comparatives_superlatives:'Comparatives & superlatives',
+    plural_singular:          'Plural / singular forms',
+    punctuation_run_on:       'Run-on sentences',
+    other:                    'Other grammar',
+}
+
 const CRITERIA_LABELS: Record<string, string> = {
     task_response:              'Task Response',
     coherence_cohesion:         'Coherence & Cohesion',
@@ -107,6 +130,7 @@ export default function IELTSPage() {
     const { mutate: gradeResponse, isPending: grading } = useTask2Grade(params.id)
     const { data: analytics, refetch: refetchAnalytics }  = useTask2Analytics(params.id)
     const { data: history, refetch: refetchHistory }       = useTask2History(params.id, 1, 10)
+    const { data: grammarQueue, refetch: refetchGrammarQueue } = useGrammarDrillQueue(params.id, 5)
 
     useEffect(() => {
         if (phase === 'writing' && session?.essay_type === 'essay_full') {
@@ -146,6 +170,7 @@ export default function IELTSPage() {
                     setPhase('result')
                     refetchAnalytics()
                     refetchHistory()
+                    refetchGrammarQueue()
                 },
                 onError: () => setPhase('writing'),
             },
@@ -184,6 +209,7 @@ export default function IELTSPage() {
                             key="idle"
                             analytics={analytics ?? undefined}
                             history={history?.items ?? undefined}
+                            grammarQueue={grammarQueue?.drill_queue ?? undefined}
                             targetBand={targetBand}
                             onTargetBandChange={setTargetBand}
                             onStart={handleStart}
@@ -222,10 +248,11 @@ export default function IELTSPage() {
 // ─── Idle ─────────────────────────────────────────────────────────────────────
 
 function IdlePhase({
-    analytics, history, targetBand, onTargetBandChange, onStart, starting,
+    analytics, history, grammarQueue, targetBand, onTargetBandChange, onStart, starting,
 }: {
     analytics: Task2Analytics | undefined
     history: Task2HistoryItem[] | undefined
+    grammarQueue: GrammarDrillItem[] | undefined
     targetBand: number
     onTargetBandChange: (v: number) => void
     onStart: () => void
@@ -252,6 +279,44 @@ function IdlePhase({
                             <span key={e} className="text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/20">
                                 {labelError(e)}
                             </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Grammar drill queue */}
+            {grammarQueue && grammarQueue.length > 0 && (
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <GraduationCap className="w-4 h-4 text-violet-400" />
+                        <span className="text-sm font-medium text-violet-300">Grammar to drill</span>
+                        <span className="ml-auto text-xs text-violet-400/50">from your essays</span>
+                    </div>
+                    <div className="space-y-2">
+                        {grammarQueue.map(item => (
+                            <div key={item.grammar_point_id} className="flex items-center gap-3">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-white/70 truncate">
+                                        {GRAMMAR_POINT_LABELS[item.grammar_point_id] ?? item.grammar_point_id.replace(/_/g, ' ')}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full bg-violet-500/70 transition-all"
+                                                style={{ width: `${Math.round(item.mastery * 100)}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-[10px] text-white/30 shrink-0 tabular-nums">
+                                            {Math.round(item.mastery * 100)}%
+                                        </span>
+                                    </div>
+                                </div>
+                                {item.lapses > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/20 shrink-0">
+                                        {item.lapses}×
+                                    </span>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </div>
@@ -459,6 +524,69 @@ function WritingPhase({
     )
 }
 
+// ─── Grammar Errors Block ────────────────────────────────────────────────────
+
+function GrammarErrorsBlock({ errors }: { errors: GrammarErrorItem[] }) {
+    const [open, setOpen] = useState(false)
+
+    const majorCount = errors.filter(e => e.severity === 'major').length
+    const minorCount = errors.length - majorCount
+
+    return (
+        <div className="rounded-xl border border-orange-500/15 bg-orange-500/5 p-4">
+            <button
+                onClick={() => setOpen(v => !v)}
+                className="flex items-center gap-2 w-full"
+            >
+                <Zap className="w-4 h-4 text-orange-400 shrink-0" />
+                <span className="text-sm font-medium text-orange-300 flex-1 text-left">
+                    Grammar errors ({errors.length})
+                </span>
+                <div className="flex items-center gap-1.5 mr-2">
+                    {majorCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 border border-rose-500/20">
+                            {majorCount} major
+                        </span>
+                    )}
+                    {minorCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                            {minorCount} minor
+                        </span>
+                    )}
+                </div>
+                <ChevronRight className={`w-4 h-4 text-white/30 transition-transform ${open ? 'rotate-90' : ''}`} />
+            </button>
+
+            {open && (
+                <div className="mt-3 pt-3 border-t border-white/8 space-y-3">
+                    {errors.map((e, i) => (
+                        <div key={i} className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                    e.severity === 'major'
+                                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/20'
+                                        : 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+                                }`}>
+                                    {e.severity}
+                                </span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/20">
+                                    {GRAMMAR_POINT_LABELS[e.category] ?? e.category.replace(/_/g, ' ')}
+                                </span>
+                            </div>
+                            <div className="text-xs text-white/70">
+                                <span className="line-through text-rose-400/80">{e.span}</span>
+                                <span className="text-white/30 mx-1.5">→</span>
+                                <span className="text-emerald-400/90">{e.correction}</span>
+                            </div>
+                            <p className="text-[11px] text-white/40 leading-relaxed">{e.rule}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 // ─── Grading ─────────────────────────────────────────────────────────────────
 
 function GradingPhase() {
@@ -550,6 +678,11 @@ function ResultPhase({
                         ))}
                     </div>
                 </div>
+            )}
+
+            {/* Grammar errors — sentence-level from the new SRS grader */}
+            {result.grammar_errors && result.grammar_errors.length > 0 && (
+                <GrammarErrorsBlock errors={result.grammar_errors} />
             )}
 
             {/* Focus audit: were prior issues fixed? */}
