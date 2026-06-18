@@ -762,6 +762,10 @@ class DictionaryWord(Base):
     )
     source_page = Column(Integer, nullable=True)
     source_sentence = Column(Text, nullable=True)
+    # Lexical class: word | collocation | phrase | linker.
+    # Used to gate which exercise types are generated (no spelling/anagram for multiword).
+    # Backfilled by migration v1v2w3x4y5z6a7; set at import time for new words.
+    lexical_type = Column(String(20), nullable=False, default="word", server_default="word")
     # Phase B: synonyms, antonyms, word forms — populated by offline generator script.
     word_meta = Column(JSON, nullable=True)
     deleted = Column(Boolean, default=False)

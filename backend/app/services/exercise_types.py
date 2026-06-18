@@ -11,6 +11,8 @@ import random
 import re
 from typing import Any, Optional
 
+from app.services.lexical_type import LexicalType, classify, eligible_types
+
 _log = logging.getLogger(__name__)
 
 # ─── Type catalog ─────────────────────────────────────────────────────────────
@@ -114,46 +116,63 @@ _PROMPTS = [
 
 # ─── Type selection ────────────────────────────────────────────────────────────
 
+def _word_lexical_type(word: Any) -> LexicalType:
+    """Resolve lexical type from DB column, falling back to classify() if unset."""
+    raw = getattr(word, "lexical_type", None)
+    if raw:
+        try:
+            return LexicalType(raw)
+        except ValueError:
+            pass
+    return classify(getattr(word, "word", "") or "")
+
+
 def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
-    """Return an exercise_type string for this word given the requested mode."""
+    """Return an exercise_type string for this word given the requested mode.
+
+    Every candidate pool is filtered through eligible_types() so multiword
+    entries (collocation / phrase / linker) never receive spelling, anagram,
+    or word_formation exercises.
+    """
+    lt = _word_lexical_type(word)
+
+    def _pick(pool: list[str]) -> str:
+        gated = eligible_types(lt, pool)
+        return gated[position % len(gated)]
+
     if mode in ALL_TYPES:
-        return mode
+        # Explicit type override — still gate it.
+        return _pick([mode])
 
     if mode == "recognition":
-        options = ["meaning_mc", "reverse_mc"]
-        return options[position % len(options)]
+        return _pick(["meaning_mc", "reverse_mc"])
 
     if mode == "cloze":
-        options = ["cloze", "spelling", "anagram"]
-        return options[position % len(options)]
+        return _pick(["cloze", "spelling", "anagram"])
 
     if mode == "production":
-        options = ["sentence", "constrained_sentence", "prompt_response"]
-        return options[position % len(options)]
+        return _pick(["sentence", "constrained_sentence", "prompt_response"])
 
     if mode == "mixed":
-        options = [
+        return _pick([
             "meaning_mc", "reverse_mc",
             "cloze", "spelling",
             "sentence", "constrained_sentence",
             "prompt_response", "paraphrase",
             "anagram",
-        ]
-        return options[position % len(options)]
+        ])
 
     # mode == "auto": SRS-driven
     reps = getattr(word, "reps", 0) or 0
     interval = getattr(word, "interval_days", 0) or 0
 
     if reps == 0:
-        return ["meaning_mc", "reverse_mc"][position % 2]
+        return _pick(["meaning_mc", "reverse_mc"])
 
     if reps < _REPS_FOR_PRODUCTION or interval < _INTERVAL_FOR_PRODUCTION:
-        cued = ["cloze", "spelling", "collocation_mc", "anagram"]
-        return cued[position % len(cued)]
+        return _pick(["cloze", "spelling", "collocation_mc", "anagram"])
 
-    production = ["sentence", "constrained_sentence", "prompt_response", "error_correction"]
-    return production[position % len(production)]
+    return _pick(["sentence", "constrained_sentence", "prompt_response", "error_correction"])
 
 
 # ─── Error injection (error_correction type) ──────────────────────────────────
@@ -476,11 +495,22 @@ def build_question(
                 "options": options,
                 "correct_answer": target}
 
+    # Linker stubs: linker_function_mc → meaning_mc, structure_production → sentence.
+    # Full implementations (choose-the-function MC + grammar-graded sentence frames)
+    # are tracked as a separate feature; these delegates keep the gate from crashing.
+    if exercise_type == "linker_function_mc":
+        return build_question("meaning_mc", w, distractor_pool, position)
+
+    if exercise_type == "structure_production":
+        return build_question("sentence", w, distractor_pool, position)
+
     if exercise_type == "cloze":
         gapped = _find_cloze_sentence(w)
         if gapped is None:
-            # fall back to spelling
-            return build_question("spelling", w, distractor_pool, position)
+            # fall back to meaning_mc for multiword entries, spelling for single words
+            lt = _word_lexical_type(w)
+            fallback = "meaning_mc" if lt is not LexicalType.word else "spelling"
+            return build_question(fallback, w, distractor_pool, position)
         return {**base,
                 "exercise_type": "cloze",
                 "prompt": gapped,
@@ -562,7 +592,7 @@ def build_question(
         meta = getattr(w, "word_meta", None) or {}
         collocations = [c for c in (meta.get("collocations") or []) if c]
         if not collocations:
-            return build_question("spelling", w, distractor_pool, position)
+            return build_question("cloze", w, distractor_pool, position)
         correct_collocate = collocations[position % len(collocations)]
         distractors = _get_collocation_distractors(correct_collocate, w, distractor_pool)
         options = [correct_collocate] + distractors
@@ -602,7 +632,7 @@ def build_question(
             if v and str(v).lower() != target.lower()
         }
         if not forms:
-            return build_question("spelling", w, distractor_pool, position)
+            return build_question("meaning_mc", w, distractor_pool, position)
         form_keys = list(forms.keys())
         form_type = form_keys[position % len(form_keys)]
         form_value = forms[form_type]
