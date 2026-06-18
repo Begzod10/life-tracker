@@ -19,7 +19,7 @@ _log = logging.getLogger(__name__)
 
 PRODUCTION_TYPES = frozenset({"sentence", "constrained_sentence", "paraphrase", "prompt_response", "error_correction"})
 RECOGNITION_TYPES = frozenset({"meaning_mc", "reverse_mc"})
-CLOZE_TYPES = frozenset({"cloze"})
+CLOZE_TYPES = frozenset({"cloze", "cloze_choice"})
 FORM_TYPES = frozenset({"spelling", "anagram", "collocation_mc"})
 GROUPED_TYPES = frozenset({"match", "cloze_bank"})
 PHASE_B_TYPES = frozenset({"word_formation", "synonym_antonym", "odd_one_out"})
@@ -27,7 +27,7 @@ PHASE_B_TYPES = frozenset({"word_formation", "synonym_antonym", "odd_one_out"})
 ALL_TYPES = PRODUCTION_TYPES | RECOGNITION_TYPES | CLOZE_TYPES | FORM_TYPES | GROUPED_TYPES | PHASE_B_TYPES
 DETERMINISTIC_TYPES = ALL_TYPES - PRODUCTION_TYPES
 
-VALID_MODES = {"auto", "recognition", "cloze", "production", "mixed"} | ALL_TYPES
+VALID_MODES = {"auto", "recognition", "cloze", "production", "mixed", "grammar_drill"} | ALL_TYPES
 
 # ─── SRS thresholds ───────────────────────────────────────────────────────────
 
@@ -140,6 +140,9 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
         gated = eligible_types(lt, pool)
         return gated[position % len(gated)]
 
+    if mode == "grammar_drill":
+        return "error_correction"
+
     if mode in ALL_TYPES:
         # Explicit type override — still gate it.
         return _pick([mode])
@@ -148,7 +151,7 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
         return _pick(["meaning_mc", "reverse_mc"])
 
     if mode == "cloze":
-        return _pick(["cloze", "spelling", "anagram"])
+        return _pick(["cloze", "cloze_choice", "spelling", "anagram"])
 
     if mode == "production":
         return _pick(["sentence", "constrained_sentence", "prompt_response"])
@@ -156,7 +159,7 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
     if mode == "mixed":
         return _pick([
             "meaning_mc", "reverse_mc",
-            "cloze", "spelling",
+            "cloze", "cloze_choice", "spelling",
             "sentence", "constrained_sentence",
             "prompt_response", "paraphrase",
             "anagram",
@@ -170,7 +173,7 @@ def pick_exercise_type(word: Any, mode: str, position: int = 0) -> str:
         return _pick(["meaning_mc", "reverse_mc"])
 
     if reps < _REPS_FOR_PRODUCTION or interval < _INTERVAL_FOR_PRODUCTION:
-        return _pick(["cloze", "spelling", "collocation_mc", "anagram"])
+        return _pick(["cloze", "cloze_choice", "spelling", "collocation_mc", "anagram"])
 
     return _pick(["sentence", "constrained_sentence", "prompt_response", "error_correction"])
 
@@ -217,9 +220,95 @@ def _error_tense(sentence: str) -> str | None:
     return None
 
 
-def _inject_error(sentence: str, position: int) -> str | None:
-    """Return errored sentence or None if no injection succeeded."""
-    strategies = [_error_article, _error_sv_agreement, _error_tense]
+_PREP_RE = re.compile(
+    r'\b(in|on|at|for|with|about|from|to|of|by|through|during|between|among|into)\b',
+    re.IGNORECASE,
+)
+_PREP_SWAP = {
+    'in': 'on', 'on': 'in', 'at': 'in', 'for': 'to', 'with': 'by',
+    'about': 'on', 'from': 'of', 'of': 'for', 'by': 'with',
+    'through': 'during', 'during': 'through', 'between': 'among',
+    'among': 'between', 'into': 'to', 'to': 'into',
+}
+
+
+def _error_preposition(sentence: str) -> str | None:
+    for m in _PREP_RE.finditer(sentence):
+        orig = m.group(0).lower()
+        replacement = _PREP_SWAP.get(orig)
+        if replacement:
+            return sentence[:m.start()] + replacement + sentence[m.end():]
+    return None
+
+
+_WORD_FORM_ERRORS = [
+    (r'\b(successful)\b', 'success'),
+    (r'\b(rapidly)\b', 'rapid'),
+    (r'\b(significant)\b', 'significance'),
+    (r'\b(traditional)\b', 'tradition'),
+    (r'\b(economic)\b', 'economy'),
+    (r'\b(carefully)\b', 'careful'),
+]
+
+
+def _error_word_form(sentence: str) -> str | None:
+    for pattern, wrong in _WORD_FORM_ERRORS:
+        m = re.search(pattern, sentence, re.IGNORECASE)
+        if m:
+            return sentence[:m.start()] + wrong + sentence[m.end():]
+    return None
+
+
+_DOUBLE_CONNECTOR_RE = re.compile(
+    r'^(while|although|even though|whereas|despite the fact that)\b(.+)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _error_double_connector(sentence: str) -> str | None:
+    m = _DOUBLE_CONNECTOR_RE.match(sentence.strip())
+    if not m:
+        return None
+    connector = m.group(1)
+    rest = m.group(2)
+    comma_pos = rest.find(',')
+    if comma_pos == -1:
+        return None
+    main = rest[comma_pos + 1:].strip()
+    return f"{connector}{rest[:comma_pos]}, but {main}"
+
+
+def _error_comparative(sentence: str) -> str | None:
+    # Double comparative: "faster" → "more faster"
+    m = re.search(r'\b(?<!more )(\w+er)\b(?! than)', sentence, re.IGNORECASE)
+    if m:
+        return sentence[:m.start()] + 'more ' + m.group(1) + sentence[m.end():]
+    return None
+
+
+_CATEGORY_STRATEGIES: dict[str, Any] = {
+    'articles':     _error_article,
+    'prepositions': _error_preposition,
+    'word_forms':   _error_word_form,
+    'connectors':   _error_double_connector,
+    'comparatives': _error_comparative,
+}
+
+
+def _inject_error(sentence: str, position: int, category: str | None = None) -> str | None:
+    """Return errored sentence or None if no injection succeeded.
+
+    When category is given (e.g. 'articles'), that strategy is tried first.
+    Falls through to round-robin over all strategies if targeted injection fails.
+    """
+    strategies = [
+        _error_article, _error_sv_agreement, _error_tense,
+        _error_preposition, _error_word_form, _error_double_connector, _error_comparative,
+    ]
+    if category and category in _CATEGORY_STRATEGIES:
+        result = _CATEGORY_STRATEGIES[category](sentence)
+        if result and result != sentence:
+            return result
     n = len(strategies)
     for i in range(n):
         result = strategies[(position + i) % n](sentence)
@@ -516,6 +605,19 @@ def build_question(
                 "prompt": gapped,
                 "correct_answer": target}
 
+    if exercise_type == "cloze_choice":
+        gapped = _find_cloze_sentence(w)
+        if gapped is None:
+            return build_question("meaning_mc", w, distractor_pool, position)
+        distractors = _get_word_distractors(w, distractor_pool, n=1)
+        options = [target] + distractors
+        random.shuffle(options)
+        return {**base,
+                "exercise_type": "cloze_choice",
+                "prompt": gapped,
+                "options": options,
+                "correct_answer": target}
+
     if exercise_type == "spelling":
         parts = [definition]
         if translation:
@@ -579,10 +681,12 @@ def build_question(
         # Falls back to sentence if no usable example or injection fails.
         if examples:
             source = examples[0]
-            errored = _inject_error(source, position)
+            category = grammar_focus[0] if grammar_focus else None
+            errored = _inject_error(source, position, category)
             if errored and errored != source:
+                category_label = f" ({category.replace('_', ' ')})" if category else ""
                 return {**base,
-                        "prompt": "Find and correct the grammar mistake in this sentence:",
+                        "prompt": f"Find and correct the grammar mistake in this sentence{category_label}:",
                         "source_sentence": errored,
                         "instruction": "Rewrite the full sentence with the error corrected.",
                         "correct_answer": source}

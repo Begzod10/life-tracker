@@ -150,6 +150,7 @@ class StartRequest(BaseModel):
     source: str = "smart"
     count: int = Field(default=5, ge=1, le=10)
     mode: str = "auto"
+    grammar_category: Optional[str] = None
     folder_id: Optional[int] = None
     module_id: Optional[int] = None
 
@@ -259,6 +260,8 @@ def start_exercise_session(
         for err in (attempt.grammar_errors or []):
             error_counts[err] = error_counts.get(err, 0) + 1
     grammar_focus = sorted(error_counts, key=lambda k: -error_counts[k])[:3] or None
+    if request.mode == "grammar_drill" and request.grammar_category:
+        grammar_focus = [request.grammar_category]
 
     _generate_collocations(words, db)
     items_plan: list[dict] = []

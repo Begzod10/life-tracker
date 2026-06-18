@@ -22,21 +22,21 @@ class LexicalType(str, Enum):
 ELIGIBLE: dict[LexicalType, set[str]] = {
     LexicalType.word: {
         "meaning_mc", "reverse_mc", "collocation_mc", "synonym_antonym", "odd_one_out",
-        "spelling", "cloze", "anagram", "cloze_bank", "match", "word_formation",
+        "spelling", "cloze", "cloze_choice", "anagram", "cloze_bank", "match", "word_formation",
         "sentence", "constrained_sentence", "prompt_response", "paraphrase", "error_correction",
     },
     LexicalType.collocation: {
         # No spelling / anagram / word_formation — don't spell or scramble a chunk.
-        "collocation_mc", "meaning_mc", "reverse_mc", "cloze", "cloze_bank", "match",
+        "collocation_mc", "meaning_mc", "reverse_mc", "cloze", "cloze_choice", "cloze_bank", "match",
         "sentence", "constrained_sentence", "paraphrase",
     },
     LexicalType.phrase: {
         # Same exclusions as collocation; tighter — fewer MC types make sense.
-        "cloze", "cloze_bank", "match", "sentence", "paraphrase",
+        "cloze", "cloze_choice", "cloze_bank", "match", "sentence", "paraphrase",
     },
     LexicalType.linker: {
         # Task-2 academic frames: drive into production graded by grammar_grading.
-        "linker_function_mc", "structure_production", "cloze", "prompt_response",
+        "linker_function_mc", "structure_production", "cloze", "cloze_choice", "prompt_response",
     },
 }
 
