@@ -8,6 +8,7 @@ import { AnagramInput } from './anagram-input'
 import { SentenceInput } from './sentence-input'
 import { WordFormationInput } from './word-formation-input'
 import { ErrorCorrectionInput } from './error-correction-input'
+import { ClozeChoiceWidget } from './cloze-choice-widget'
 
 interface Props {
     item: ExerciseItem
@@ -26,6 +27,8 @@ export function ExerciseWidget({ item, value, onChange, disabled }: Props) {
             return <MultipleChoice item={item} value={value} onChange={onChange} disabled={disabled} />
         case 'cloze':
             return <ClozeInput item={item} value={value} onChange={onChange} disabled={disabled} />
+        case 'cloze_choice':
+            return <ClozeChoiceWidget item={item} value={value} onChange={onChange} disabled={disabled} />
         case 'spelling':
             return <SpellingInput item={item} value={value} onChange={onChange} disabled={disabled} />
         case 'anagram':

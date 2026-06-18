@@ -14,6 +14,7 @@ export type ExerciseType =
     | 'meaning_mc'
     | 'reverse_mc'
     | 'cloze'
+    | 'cloze_choice'
     | 'spelling'
     | 'anagram'
     | 'match'
@@ -30,6 +31,7 @@ export type ExerciseMode =
     | 'cloze'
     | 'production'
     | 'mixed'
+    | 'grammar_drill'
     | ExerciseType
 
 export type ExerciseItem = {
@@ -157,6 +159,7 @@ export type StartExerciseRequest = {
     mode?: ExerciseMode
     folder_id?: number
     module_id?: number
+    grammar_category?: string
 }
 
 export type StartExerciseResponse = {

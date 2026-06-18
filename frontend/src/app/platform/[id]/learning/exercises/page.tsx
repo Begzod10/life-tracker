@@ -28,6 +28,7 @@ export default function ExercisesPage() {
     const [phase, setPhase] = useState<Phase>('setup')
     const [source, setSource] = useState<Source>('smart')
     const [mode, setMode] = useState<ExerciseMode>('auto')
+    const [grammarCategory, setGrammarCategory] = useState<string>('articles')
     const [count, setCount] = useState<number>(5)
     const [folderId, setFolderId] = useState<number | undefined>(undefined)
     const [moduleId, setModuleId] = useState<number | undefined>(undefined)
@@ -52,6 +53,7 @@ export default function ExercisesPage() {
                 mode,
                 folder_id: folderId,
                 module_id: moduleId,
+                grammar_category: mode === 'grammar_drill' ? grammarCategory : undefined,
             })
             setSessionId(res.session_id)
             setItems(res.items)
@@ -61,7 +63,7 @@ export default function ExercisesPage() {
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Failed to start exercises.')
         }
-    }, [startSession, source, count, mode, folderId, moduleId, streak])
+    }, [startSession, source, count, mode, grammarCategory, folderId, moduleId, streak])
 
     const submitAll = useCallback(async () => {
         setError(null)
@@ -157,6 +159,8 @@ export default function ExercisesPage() {
                             setSource={setSource}
                             mode={mode}
                             setMode={setMode}
+                            grammarCategory={grammarCategory}
+                            setGrammarCategory={setGrammarCategory}
                             count={count}
                             setCount={setCount}
                             folderId={folderId}

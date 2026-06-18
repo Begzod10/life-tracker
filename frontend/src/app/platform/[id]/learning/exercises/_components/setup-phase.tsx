@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Loader2, PenLine, Sparkles, X } from 'lucide-react'
+import { Loader2, PenLine, Sparkles, X, BookOpenCheck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useFolders, useModules } from '@/lib/hooks/use-dictionary'
@@ -9,11 +9,21 @@ import type { ExerciseMode, Source } from '@/lib/hooks/use-exercises'
 import { COUNT_OPTIONS } from './shared'
 import { AnalyticsPanel } from './analytics-panel'
 
+export const GRAMMAR_DRILL_CATEGORIES: { id: string; label: string; hint: string }[] = [
+    { id: 'articles',      label: 'Articles',       hint: 'a / an / the' },
+    { id: 'prepositions',  label: 'Prepositions',   hint: 'in, on, at, for…' },
+    { id: 'word_forms',    label: 'Word forms',     hint: 'noun / adj / adv' },
+    { id: 'connectors',    label: 'Connectors',     hint: 'While…but errors' },
+    { id: 'comparatives',  label: 'Comparatives',   hint: 'more better errors' },
+]
+
 interface SetupPhaseProps {
     source: Source
     setSource: (v: Source) => void
     mode: ExerciseMode
     setMode: (v: ExerciseMode) => void
+    grammarCategory: string
+    setGrammarCategory: (v: string) => void
     count: number
     setCount: (v: number) => void
     folderId: number | undefined
@@ -33,16 +43,18 @@ const SOURCE_OPTIONS: { id: Source; label: string; hint: string }[] = [
 ]
 
 const MODE_OPTIONS: { id: ExerciseMode; label: string; hint: string }[] = [
-    { id: 'auto', label: 'Smart', hint: 'SRS-driven' },
-    { id: 'recognition', label: 'Recognition', hint: 'MC only' },
-    { id: 'cloze', label: 'Fill-in', hint: 'Cloze/Spelling' },
-    { id: 'production', label: 'Writing', hint: 'Sentences' },
-    { id: 'mixed', label: 'Mixed', hint: 'Variety' },
+    { id: 'auto',          label: 'Smart',         hint: 'SRS-driven' },
+    { id: 'recognition',   label: 'Recognition',   hint: 'MC only' },
+    { id: 'cloze',         label: 'Fill-in',       hint: 'Cloze/Spelling' },
+    { id: 'production',    label: 'Writing',       hint: 'Sentences' },
+    { id: 'mixed',         label: 'Mixed',         hint: 'Variety' },
+    { id: 'grammar_drill', label: 'Grammar drill', hint: 'Error fix' },
 ]
 
 export function SetupPhase({
     source, setSource,
     mode, setMode,
+    grammarCategory, setGrammarCategory,
     count, setCount,
     folderId, setFolderId,
     moduleId, setModuleId,
@@ -75,23 +87,55 @@ export function SetupPhase({
                 {/* Mode */}
                 <section>
                     <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">Exercise mode</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {MODE_OPTIONS.map((opt) => (
                             <button
                                 key={opt.id}
                                 onClick={() => setMode(opt.id)}
                                 className={`px-3 py-3 rounded-lg border text-left transition-colors ${
                                     mode === opt.id
-                                        ? 'border-amber-500/50 bg-amber-500/10 text-white'
+                                        ? opt.id === 'grammar_drill'
+                                            ? 'border-violet-500/50 bg-violet-500/10 text-white'
+                                            : 'border-amber-500/50 bg-amber-500/10 text-white'
                                         : 'border-white/10 hover:border-white/20 bg-white/2.5 text-white/70'
                                 }`}
                             >
-                                <div className="text-sm font-medium">{opt.label}</div>
+                                <div className="flex items-center gap-1.5">
+                                    {opt.id === 'grammar_drill' && (
+                                        <BookOpenCheck className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                                    )}
+                                    <span className="text-sm font-medium">{opt.label}</span>
+                                </div>
                                 <div className="text-[11px] text-white/40 mt-0.5">{opt.hint}</div>
                             </button>
                         ))}
                     </div>
                 </section>
+
+                {/* Grammar drill category picker */}
+                {mode === 'grammar_drill' && (
+                    <section>
+                        <h2 className="text-xs uppercase tracking-wide text-violet-400/70 mb-3">
+                            Target grammar category
+                        </h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {GRAMMAR_DRILL_CATEGORIES.map((cat) => (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setGrammarCategory(cat.id)}
+                                    className={`px-3 py-3 rounded-lg border text-left transition-colors ${
+                                        grammarCategory === cat.id
+                                            ? 'border-violet-500/50 bg-violet-500/10 text-white'
+                                            : 'border-white/10 hover:border-white/20 bg-white/2.5 text-white/70'
+                                    }`}
+                                >
+                                    <div className="text-sm font-medium">{cat.label}</div>
+                                    <div className="text-[11px] text-white/40 mt-0.5">{cat.hint}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* Source */}
                 <section>
