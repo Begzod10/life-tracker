@@ -264,10 +264,45 @@ def start_exercise_session(
         grammar_focus = [request.grammar_category]
 
     _generate_collocations(words, db)
+
+    # Grammar drill: one AI call generates a unique sentence pair per word so
+    # no two exercises share the same sentence even when words have no examples.
+    ai_drill_pairs: dict[int, dict[str, str]] = {}
+    if request.mode == "grammar_drill" and request.grammar_category and settings.OPENAI_API_KEY:
+        from app.services.grammar_drill import generate_drill_pairs
+        ai_drill_pairs = generate_drill_pairs(
+            words,
+            request.grammar_category,
+            settings.OPENAI_API_KEY,
+            settings.OPENAI_MODEL,
+            (settings.OPENAI_BASE_URL or "https://api.groq.com/openai/v1"),
+        )
+
     items_plan: list[dict] = []
     for position, word in enumerate(words):
-        exercise_type = pick_exercise_type(word, request.mode, position)
-        question = build_question(exercise_type, word, pool, position, grammar_focus)
+        # AI-generated grammar drill pair takes priority over the regex path.
+        if request.mode == "grammar_drill" and word.id in ai_drill_pairs:
+            pair = ai_drill_pairs[word.id]
+            cat = request.grammar_category or "grammar"
+            question = {
+                "exercise_type": "error_correction",
+                "word_id": word.id,
+                "word": word.word,
+                "definition": word.definition or "",
+                "translation": word.translation,
+                "phonetic": word.phonetic,
+                "part_of_speech": word.part_of_speech,
+                "difficulty": word.difficulty or "B1",
+                "examples": [],
+                "group_id": None,
+                "correct_answer": pair["correct"],
+                "prompt": f"Find and correct the grammar mistake in this sentence ({cat.replace('_', ' ')}):",
+                "source_sentence": pair["errored"],
+                "instruction": "Rewrite the full sentence with the error corrected.",
+            }
+        else:
+            exercise_type = pick_exercise_type(word, request.mode, position)
+            question = build_question(exercise_type, word, pool, position, grammar_focus)
         items_plan.append(question)
 
     # Assign group_ids and enrich payloads for match/cloze_bank grouped types.
