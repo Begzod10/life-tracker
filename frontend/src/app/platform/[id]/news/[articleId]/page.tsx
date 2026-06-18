@@ -1,14 +1,20 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     ArrowLeft, ExternalLink, Calendar, Tag, Sparkles, Newspaper,
-    ZoomIn, ZoomOut, X, BookOpen, Loader2,
+    ZoomIn, ZoomOut, X, BookOpen, Loader2, BookmarkPlus, Check, Plus,
 } from 'lucide-react'
 import { useNewsItem } from '@/lib/hooks/use-news'
-import { useAiWordDetails, type AiWordDetails } from '@/lib/hooks/use-dictionary'
+import {
+    useAiWordDetails, useWordCreate, useFolders, useModules,
+    useFolderCreate, useModuleCreate, type AiWordDetails,
+} from '@/lib/hooks/use-dictionary'
+import {
+    readLastVocabTarget, rememberLastVocabTarget,
+} from '@/lib/last-vocab-target'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -79,22 +85,22 @@ interface PopupState {
 }
 
 function WordPopup({
-    popup, data, loading, onClose,
+    popup, data, loading, onClose, onSave,
 }: {
     popup: PopupState
     data: AiWordDetails | null
     loading: boolean
     onClose: () => void
+    onSave: () => void
 }) {
     const ref = useRef<HTMLDivElement>(null)
 
-    // Position: prefer above click, fall back below if too close to top
     const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 })
     useEffect(() => {
         if (!ref.current) return
         const { innerWidth, innerHeight } = window
         const popW = ref.current.offsetWidth || 300
-        const popH = ref.current.offsetHeight || 200
+        const popH = ref.current.offsetHeight || 240
         let left = popup.x - popW / 2
         left = Math.max(8, Math.min(left, innerWidth - popW - 8))
         const spaceAbove = popup.y - 12
@@ -140,17 +146,12 @@ function WordPopup({
 
             {!loading && data && (
                 <div className="px-4 pb-4 space-y-3">
-                    {/* Part of speech */}
                     {data.part_of_speech && (
                         <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border font-medium uppercase tracking-wide ${posChip}`}>
                             {data.part_of_speech}
                         </span>
                     )}
-
-                    {/* Definition */}
                     <p className="text-sm text-white/80 leading-relaxed">{data.definition}</p>
-
-                    {/* Examples */}
                     {data.examples?.length > 0 && (
                         <div className="space-y-1.5 border-t border-white/5 pt-2.5">
                             {data.examples.slice(0, 2).map((ex, i) => (
@@ -160,17 +161,228 @@ function WordPopup({
                             ))}
                         </div>
                     )}
-
-                    {/* Difficulty chip */}
                     {data.difficulty && (
-                        <p className="text-[10px] text-white/25 uppercase tracking-widest pt-0.5">{data.difficulty}</p>
+                        <p className="text-[10px] text-white/25 uppercase tracking-widest">{data.difficulty}</p>
                     )}
+
+                    {/* Save to dictionary */}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onSave() }}
+                        className="w-full flex items-center justify-center gap-2 mt-1 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition"
+                    >
+                        <BookmarkPlus className="w-3.5 h-3.5" />
+                        Save to dictionary
+                    </button>
                 </div>
             )}
 
             {!loading && !data && (
                 <p className="px-4 pb-4 text-sm text-white/35">No definition found.</p>
             )}
+        </motion.div>
+    )
+}
+
+// ─── Save dialog ─────────────────────────────────────────────────────────────
+
+function SaveDialog({
+    word, wordData, onClose,
+}: {
+    word: string
+    wordData: AiWordDetails
+    onClose: () => void
+}) {
+    const stored = useMemo(() => readLastVocabTarget(), [])
+    const [folderId, setFolderId] = useState<number | undefined>(stored.folderId)
+    const [moduleId, setModuleId] = useState<number | undefined>(stored.moduleId)
+    const [newFolderName, setNewFolderName] = useState<string | null>(null)
+    const [newModuleName, setNewModuleName] = useState<string | null>(null)
+    const [saved, setSaved] = useState(false)
+
+    const { data: folders = [] } = useFolders()
+    const { data: modules = [] } = useModules(folderId)
+    const { mutateAsync: createFolder, isPending: creatingFolder } = useFolderCreate()
+    const { mutateAsync: createModule, isPending: creatingModule } = useModuleCreate()
+    const wordCreate = useWordCreate()
+
+    // Drop stored IDs that no longer exist
+    useEffect(() => {
+        if (folderId && folders.length > 0 && !folders.some(f => f.id === folderId)) {
+            setFolderId(undefined); setModuleId(undefined)
+        }
+    }, [folders, folderId])
+    useEffect(() => {
+        if (moduleId && modules.length > 0 && !modules.some(m => m.id === moduleId)) {
+            setModuleId(undefined)
+        }
+    }, [modules, moduleId])
+
+    const handleCreateFolder = async () => {
+        const name = (newFolderName ?? '').trim()
+        if (!name) return
+        const created = await createFolder({ name })
+        setFolderId(created.id); setModuleId(undefined); setNewFolderName(null)
+    }
+    const handleCreateModule = async () => {
+        const name = (newModuleName ?? '').trim()
+        if (!name || !folderId) return
+        const created = await createModule({ folder_id: folderId, name })
+        setModuleId(created.id); setNewModuleName(null)
+    }
+
+    const handleSave = () => {
+        if (!moduleId) return
+        wordCreate.mutate(
+            {
+                module_id: moduleId,
+                word,
+                definition: wordData.definition,
+                translation: wordData.translation,
+                phonetic: wordData.phonetic,
+                part_of_speech: wordData.part_of_speech,
+                difficulty: wordData.difficulty,
+                examples: wordData.examples,
+            },
+            {
+                onSuccess: () => {
+                    rememberLastVocabTarget(folderId, moduleId)
+                    setSaved(true)
+                    setTimeout(onClose, 900)
+                },
+            },
+        )
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={onClose}
+        >
+            <motion.div
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-sm bg-[#0a0a14] border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4"
+            >
+                <div className="flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                        <BookmarkPlus className="w-4 h-4 text-indigo-300" />
+                        Save to dictionary
+                    </h2>
+                    <button onClick={onClose} className="p-1 text-white/30 hover:text-white hover:bg-white/5 rounded-lg transition">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                {/* Word preview */}
+                <div className="px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <p className="text-sm font-bold text-white">{word}</p>
+                    <p className="text-xs text-white/45 mt-0.5 leading-relaxed line-clamp-2">{wordData.definition}</p>
+                </div>
+
+                {/* Folder select */}
+                <div className="space-y-1.5">
+                    <label className="text-xs text-white/40 uppercase tracking-wider">Folder</label>
+                    {newFolderName === null ? (
+                        <div className="flex gap-2">
+                            <select
+                                value={folderId ?? ''}
+                                onChange={e => { setFolderId(e.target.value ? Number(e.target.value) : undefined); setModuleId(undefined) }}
+                                className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none focus:border-indigo-500/50"
+                            >
+                                <option value="">— choose folder —</option>
+                                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                            </select>
+                            <button
+                                onClick={() => setNewFolderName('')}
+                                className="px-3 py-2 rounded-xl border border-white/10 text-white/40 hover:text-white hover:bg-white/5 text-xs transition"
+                                title="New folder"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <input
+                                autoFocus
+                                value={newFolderName}
+                                onChange={e => setNewFolderName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setNewFolderName(null) }}
+                                placeholder="Folder name"
+                                className="flex-1 bg-white/[0.04] border border-indigo-500/40 rounded-xl px-3 py-2 text-sm text-white outline-none"
+                            />
+                            <button onClick={handleCreateFolder} disabled={creatingFolder || !newFolderName?.trim()}
+                                className="px-3 py-2 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs disabled:opacity-40 transition">
+                                {creatingFolder ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                            </button>
+                            <button onClick={() => setNewFolderName(null)} className="px-2 py-2 text-white/30 hover:text-white transition"><X className="w-4 h-4" /></button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Module select */}
+                {folderId && (
+                    <div className="space-y-1.5">
+                        <label className="text-xs text-white/40 uppercase tracking-wider">Module</label>
+                        {newModuleName === null ? (
+                            <div className="flex gap-2">
+                                <select
+                                    value={moduleId ?? ''}
+                                    onChange={e => setModuleId(e.target.value ? Number(e.target.value) : undefined)}
+                                    className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none focus:border-indigo-500/50"
+                                >
+                                    <option value="">— choose module —</option>
+                                    {modules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                                <button
+                                    onClick={() => setNewModuleName('')}
+                                    className="px-3 py-2 rounded-xl border border-white/10 text-white/40 hover:text-white hover:bg-white/5 text-xs transition"
+                                    title="New module"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <input
+                                    autoFocus
+                                    value={newModuleName}
+                                    onChange={e => setNewModuleName(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') handleCreateModule(); if (e.key === 'Escape') setNewModuleName(null) }}
+                                    placeholder="Module name"
+                                    className="flex-1 bg-white/[0.04] border border-indigo-500/40 rounded-xl px-3 py-2 text-sm text-white outline-none"
+                                />
+                                <button onClick={handleCreateModule} disabled={creatingModule || !newModuleName?.trim()}
+                                    className="px-3 py-2 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs disabled:opacity-40 transition">
+                                    {creatingModule ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                                </button>
+                                <button onClick={() => setNewModuleName(null)} className="px-2 py-2 text-white/30 hover:text-white transition"><X className="w-4 h-4" /></button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Save button */}
+                <button
+                    onClick={handleSave}
+                    disabled={!moduleId || wordCreate.isPending || saved}
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-sm transition flex items-center justify-center gap-2"
+                >
+                    {saved ? (
+                        <><Check className="w-4 h-4" /> Saved!</>
+                    ) : wordCreate.isPending ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                    ) : (
+                        <><BookmarkPlus className="w-4 h-4" /> Save word</>
+                    )}
+                </button>
+
+                {wordCreate.isError && (
+                    <p className="text-xs text-red-400 text-center">Failed to save — try again.</p>
+                )}
+            </motion.div>
         </motion.div>
     )
 }
@@ -271,11 +483,13 @@ export default function ArticleProfilePage() {
     const [translateActive, setTranslateActive] = useState(false)
     const [popup, setPopup] = useState<PopupState | null>(null)
     const [popupData, setPopupData] = useState<AiWordDetails | null>(null)
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     const contentRef = useRef<HTMLDivElement>(null)
 
     const closePopup = useCallback(() => {
         setPopup(null)
         setPopupData(null)
+        setSaveDialogOpen(false)
         lookupWord.reset()
     }, [lookupWord])
 
@@ -349,6 +563,18 @@ export default function ArticleProfilePage() {
                         data={popupData}
                         loading={lookupWord.isPending}
                         onClose={closePopup}
+                        onSave={() => setSaveDialogOpen(true)}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Save to dictionary dialog */}
+            <AnimatePresence>
+                {saveDialogOpen && popup && popupData && (
+                    <SaveDialog
+                        word={popup.word}
+                        wordData={popupData}
+                        onClose={() => setSaveDialogOpen(false)}
                     />
                 )}
             </AnimatePresence>
