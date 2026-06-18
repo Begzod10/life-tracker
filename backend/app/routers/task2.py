@@ -8,8 +8,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -28,6 +29,17 @@ from app.services.essay_service import (
     pick_essay_type,
     pick_question,
     round_to_half_band,
+)
+from app.services.grammar_grading import (
+    SYSTEM_PROMPT as GRAMMAR_SYSTEM_PROMPT,
+    build_user_prompt as build_grammar_prompt,
+    parse_grading_response,
+)
+from app.services.srs_update import (
+    GrammarPointState,
+    apply_error,
+    build_drill_queue,
+    priority_score,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,7 +181,7 @@ def _coerce_essay_grade(raw: dict, target_band: float) -> dict:
 
 # ─── _grade_essay_via_openai ─────────────────────────────────────────────────
 
-async def _grade_essay_via_openai(payload: dict) -> dict:
+async def _call_openai_json(system_prompt: str, user_prompt: str, max_tokens: int = 900) -> dict:
     from openai import (
         AsyncOpenAI,
         APIConnectionError,
@@ -188,44 +200,43 @@ async def _grade_essay_via_openai(payload: dict) -> dict:
         base_url=settings.OPENAI_BASE_URL or None,
         http_client=http_client,
     )
-    max_tokens = max(900, 250 + 250 * 1)   # single essay; scale same as exercises.py
     try:
         response = await client.chat.completions.create(
             model=settings.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": _ESSAY_GRADER_SYSTEM},
-                {"role": "user", "content": _essay_grader_prompt(payload)},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
             ],
             max_tokens=max_tokens,
             temperature=0.2,
             response_format={"type": "json_object"},
         )
     except AuthenticationError as exc:
-        logger.error("Essay grader auth failed: %s", exc)
+        logger.error("OpenAI auth failed: %s", exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"Essay grader auth failed: {exc}") from exc
+                            detail=f"OpenAI auth failed: {exc}") from exc
     except RateLimitError as exc:
-        logger.error("Essay grader rate-limited: %s", exc)
+        logger.error("OpenAI rate-limited: %s", exc)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            detail=f"Essay grader rate-limited: {exc}") from exc
+                            detail=f"OpenAI rate-limited: {exc}") from exc
     except APIConnectionError as exc:
-        logger.error("Essay grader unreachable: %s", exc)
+        logger.error("OpenAI unreachable: %s", exc)
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                            detail=f"Essay grader unreachable: {exc}") from exc
+                            detail=f"OpenAI unreachable: {exc}") from exc
     except APIError as exc:
-        logger.error("Essay grader API error: %s", exc)
+        logger.error("OpenAI API error: %s", exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"Essay grader API error: {exc}") from exc
+                            detail=f"OpenAI API error: {exc}") from exc
 
     if not response.choices:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail="Essay grader returned no choices.")
+                            detail="OpenAI returned no choices.")
     choice = response.choices[0]
     raw = choice.message.content
     if not raw:
         finish = getattr(choice, "finish_reason", "unknown")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"Essay grader returned empty content (finish_reason={finish}).")
+                            detail=f"OpenAI returned empty content (finish_reason={finish}).")
     raw = raw.strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
     raw = re.sub(r'\s*```$', '', raw)
@@ -234,12 +245,74 @@ async def _grade_essay_via_openai(payload: dict) -> dict:
     except json.JSONDecodeError:
         finish = getattr(choice, "finish_reason", "unknown")
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"Essay grader invalid JSON (finish_reason={finish}): {raw[:200]}")
+                            detail=f"OpenAI invalid JSON (finish_reason={finish}): {raw[:200]}")
 
     if not isinstance(data, dict):
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail="Essay grader response was not a JSON object.")
+                            detail="OpenAI response was not a JSON object.")
     return data
+
+
+async def _grade_essay_via_openai(payload: dict) -> dict:
+    return await _call_openai_json(
+        system_prompt=_ESSAY_GRADER_SYSTEM,
+        user_prompt=_essay_grader_prompt(payload),
+        max_tokens=max(900, 250 + 250 * 1),
+    )
+
+
+# ─── Grammar SRS helpers ─────────────────────────────────────────────────────
+
+def _db_to_state(row: models.UserGrammarPoint) -> GrammarPointState:
+    return GrammarPointState(
+        grammar_point_id=row.grammar_point_id,
+        reps=row.reps,
+        ease=row.ease,
+        interval_days=row.interval_days,
+        lapses=row.lapses,
+        correct_count=row.correct_count,
+        review_count=row.review_count,
+        last_seen_at=row.last_seen_at,
+        next_review_at=row.next_review_at,
+    )
+
+
+def _state_to_db(row: models.UserGrammarPoint, state: GrammarPointState) -> None:
+    row.reps = state.reps
+    row.ease = state.ease
+    row.interval_days = state.interval_days
+    row.lapses = state.lapses
+    row.correct_count = state.correct_count
+    row.review_count = state.review_count
+    row.last_seen_at = state.last_seen_at
+    row.next_review_at = state.next_review_at
+
+
+def _get_or_create_grammar_point(
+    db: Session, person_id: int, grammar_point_id: str
+) -> models.UserGrammarPoint:
+    row = (
+        db.query(models.UserGrammarPoint)
+        .filter_by(person_id=person_id, grammar_point_id=grammar_point_id)
+        .first()
+    )
+    if row is None:
+        row = models.UserGrammarPoint(
+            person_id=person_id,
+            grammar_point_id=grammar_point_id,
+        )
+        db.add(row)
+    return row
+
+
+async def _run_grammar_extraction(essay_text: str, essay_type: str) -> dict:
+    """Call OpenAI to extract grammar errors from an essay. Returns raw parsed dict."""
+    prompt = build_grammar_prompt(student_answer=essay_text, exercise_type=essay_type)
+    return await _call_openai_json(
+        system_prompt=GRAMMAR_SYSTEM_PROMPT,
+        user_prompt=prompt,
+        max_tokens=700,
+    )
 
 
 # ─── Request / Response schemas ──────────────────────────────────────────────
@@ -382,8 +455,20 @@ async def grade_task2_session(
             detail="Essay grader not configured (missing API key).",
         )
 
-    raw_grade = await _grade_essay_via_openai(payload)
+    import asyncio
+    raw_grade, raw_grammar = await asyncio.gather(
+        _grade_essay_via_openai(payload),
+        _run_grammar_extraction(response_text, session.essay_type),
+    )
     grade = _coerce_essay_grade(raw_grade, session.target_band)
+
+    # Parse grammar errors (silently ignore failures — grading is primary)
+    grammar_errors_found: List[dict] = []
+    try:
+        grammar_result = parse_grading_response(json.dumps(raw_grammar))
+        grammar_errors_found = [e.model_dump() for e in grammar_result.errors]
+    except Exception as exc:
+        logger.warning("Grammar extraction failed (non-fatal): %s", exc)
 
     now = datetime.now(timezone.utc)
     attempt = models.Task2Attempt(
@@ -417,6 +502,28 @@ async def grade_task2_session(
 
     db.refresh(attempt)
 
+    # Update grammar point SRS states (best-effort; don't fail the response)
+    if grammar_errors_found:
+        try:
+            counts: Counter = Counter(e["category"] for e in grammar_errors_found)
+            severity_by_cat: dict = {}
+            for e in grammar_errors_found:
+                if e["severity"] == "major":
+                    severity_by_cat[e["category"]] = "major"
+                else:
+                    severity_by_cat.setdefault(e["category"], "minor")
+
+            for category, count in counts.items():
+                row = _get_or_create_grammar_point(db, current_user.id, category)
+                state = _db_to_state(row)
+                apply_error(state, severity=severity_by_cat.get(category, "major"), count=count, now=now)
+                _state_to_db(row, state)
+
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Grammar SRS update failed (non-fatal): %s", exc)
+
     return {
         "attempt_id": attempt.id,
         "criteria_scores": grade["criteria_scores"],
@@ -426,7 +533,86 @@ async def grade_task2_session(
         "feedback": grade["feedback"],
         "model_revision": grade["model_revision"],
         "word_count": word_count,
+        "grammar_errors": grammar_errors_found,
     }
+
+
+# ─── GET /grammar/drill-queue ────────────────────────────────────────────────
+
+@router.get("/grammar/drill-queue")
+def get_grammar_drill_queue(
+    limit: int = Query(10, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return the top grammar points to drill next, ordered by SRS priority."""
+    _require_enabled()
+
+    rows = (
+        db.query(models.UserGrammarPoint)
+        .filter(models.UserGrammarPoint.person_id == current_user.id)
+        .all()
+    )
+    if not rows:
+        return {"drill_queue": []}
+
+    states = [_db_to_state(r) for r in rows]
+    now = datetime.now(timezone.utc)
+    queue = build_drill_queue(states, limit=limit, now=now)
+
+    return {
+        "drill_queue": [
+            {
+                "grammar_point_id": s.grammar_point_id,
+                "priority": priority_score(s, now),
+                "mastery": s.mastery,
+                "lapses": s.lapses,
+                "next_review_at": s.next_review_at.isoformat() if s.next_review_at else None,
+            }
+            for s in queue
+        ]
+    }
+
+
+# ─── GET /grammar/points ─────────────────────────────────────────────────────
+
+@router.get("/grammar/points")
+def get_grammar_points(
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return all grammar points enriched with the user's current SRS state."""
+    import json as _json
+    import os
+
+    _require_enabled()
+
+    catalog_path = os.path.join(os.path.dirname(__file__), "..", "assets", "grammar_points.json")
+    with open(catalog_path, encoding="utf-8") as f:
+        catalog = _json.load(f)
+
+    rows = (
+        db.query(models.UserGrammarPoint)
+        .filter(models.UserGrammarPoint.person_id == current_user.id)
+        .all()
+    )
+    state_map = {r.grammar_point_id: _db_to_state(r) for r in rows}
+    now = datetime.now(timezone.utc)
+
+    result = []
+    for point in catalog:
+        state = state_map.get(point["id"])
+        result.append({
+            **point,
+            "mastery": state.mastery if state else 0.0,
+            "lapses": state.lapses if state else 0,
+            "priority": priority_score(state, now) if state else 0.0,
+            "next_review_at": (
+                state.next_review_at.isoformat() if state and state.next_review_at else None
+            ),
+        })
+
+    return {"points": result}
 
 
 # ─── GET /history ─────────────────────────────────────────────────────────────

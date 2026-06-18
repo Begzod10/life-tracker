@@ -1,0 +1,256 @@
+[
+  {
+    "id": "articles",
+    "name": "Articles (a / an / the / zero)",
+    "cefr": "A2",
+    "priority": 1,
+    "rule": "Use a/an for non-specific singular countables, the for specific/known nouns, and no article for general plurals and uncountables.",
+    "l1_notes": "Uzbek and Russian have no articles, so this is the single highest-frequency error for you. Expect to over-delete (drop 'the') and occasionally over-insert.",
+    "common_errors": [
+      { "wrong": "I am developer.", "right": "I am a developer." },
+      { "wrong": "Technology has changed the society.", "right": "Technology has changed society." },
+      { "wrong": "Government should invest in education.", "right": "The government should invest in education." }
+    ],
+    "examples": [
+      "A new platform was launched last month.",
+      "The platform I built handles 510 endpoints.",
+      "Education is a public good."
+    ]
+  },
+  {
+    "id": "subject_verb_agreement",
+    "name": "Subject-verb agreement",
+    "cefr": "A2",
+    "priority": 2,
+    "rule": "The verb agrees in number with its true subject, even when words come between them.",
+    "l1_notes": "Errors spike when the subject is separated from the verb by a long phrase, or with collective/uncountable subjects.",
+    "common_errors": [
+      { "wrong": "The number of students are growing.", "right": "The number of students is growing." },
+      { "wrong": "Each of the modules have tests.", "right": "Each of the modules has tests." }
+    ],
+    "examples": [
+      "The list of features is long.",
+      "Neither option works for this case."
+    ]
+  },
+  {
+    "id": "present_perfect",
+    "name": "Present perfect vs past simple",
+    "cefr": "B1",
+    "priority": 3,
+    "rule": "Present perfect links past to now (unfinished time, result still relevant); past simple is for finished time. Use since for a start point, for for a duration.",
+    "l1_notes": "Uzbek/Russian map both onto a single past form, so you tend to use present simple or past simple where English needs present perfect (especially with since/for).",
+    "common_errors": [
+      { "wrong": "I work here since 2020.", "right": "I have worked here since 2020." },
+      { "wrong": "I have finished it yesterday.", "right": "I finished it yesterday." }
+    ],
+    "examples": [
+      "I have built several products this year.",
+      "We launched the beta in March."
+    ]
+  },
+  {
+    "id": "tense_consistency",
+    "name": "Tense consistency",
+    "cefr": "B1",
+    "priority": 4,
+    "rule": "Keep tense stable within a passage; shift only when the time frame genuinely changes.",
+    "l1_notes": "Watch for unintended drift between past and present inside the same paragraph.",
+    "common_errors": [
+      { "wrong": "He opened the app and sees an error.", "right": "He opened the app and saw an error." }
+    ],
+    "examples": [
+      "She tested the feature, found a bug, and reported it."
+    ]
+  },
+  {
+    "id": "prepositions",
+    "name": "Dependent prepositions",
+    "cefr": "B1",
+    "priority": 5,
+    "rule": "Many verbs/adjectives/nouns take a fixed preposition (depend on, interested in, responsible for, an increase in).",
+    "l1_notes": "Preposition mappings differ from Uzbek/Russian, so direct translation usually fails. These must be memorized per collocation.",
+    "common_errors": [
+      { "wrong": "It depends of the user.", "right": "It depends on the user." },
+      { "wrong": "There was an increase of users.", "right": "There was an increase in users." }
+    ],
+    "examples": [
+      "Success depends on consistent practice.",
+      "She is responsible for the backend."
+    ]
+  },
+  {
+    "id": "countable_uncountable",
+    "name": "Countable vs uncountable nouns",
+    "cefr": "B1",
+    "priority": 6,
+    "rule": "Uncountable nouns take no plural and no a/an; use much/little, and many/few only with countables. Information, advice, research, equipment, knowledge are uncountable.",
+    "l1_notes": "Several English uncountables are countable in Russian/Uzbek, producing 'informations', 'advices', 'researches'.",
+    "common_errors": [
+      { "wrong": "I need more informations.", "right": "I need more information." },
+      { "wrong": "He gave me many advices.", "right": "He gave me a lot of advice." }
+    ],
+    "examples": [
+      "There is little research on this topic.",
+      "We collected a great deal of data."
+    ]
+  },
+  {
+    "id": "complex_sentences",
+    "name": "Complex sentences / subordination",
+    "cefr": "B2",
+    "priority": 7,
+    "rule": "Combine a main clause with subordinate clauses (because, although, while, which, so that) to add range. IELTS GRA rewards a mix of simple, compound, and complex sentences.",
+    "l1_notes": "Raising your band from 5.5 to 6.5 depends heavily on producing accurate complex sentences, not just more of them.",
+    "common_errors": [
+      { "wrong": "The plan failed. It was rushed.", "right": "The plan failed because it was rushed." }
+    ],
+    "examples": [
+      "Although the market is competitive, demand keeps rising.",
+      "The system caches results so that queries stay fast."
+    ]
+  },
+  {
+    "id": "relative_clauses",
+    "name": "Relative clauses",
+    "cefr": "B2",
+    "priority": 8,
+    "rule": "Use who/which/that to add information about a noun. Defining clauses take no commas; non-defining clauses are set off by commas and cannot use 'that'.",
+    "l1_notes": "Comma use and which/that choice are the usual slips.",
+    "common_errors": [
+      { "wrong": "The tool who I built is live.", "right": "The tool that I built is live." },
+      { "wrong": "My laptop, that is new, is fast.", "right": "My laptop, which is new, is fast." }
+    ],
+    "examples": [
+      "The students who practice daily improve fastest.",
+      "Tashkent, which is the capital, is growing rapidly."
+    ]
+  },
+  {
+    "id": "conditionals",
+    "name": "Conditionals",
+    "cefr": "B2",
+    "priority": 9,
+    "rule": "Type 1 (real future): if + present, will + base. Type 2 (unreal present): if + past, would + base. Type 3 (unreal past): if + past perfect, would have + past participle.",
+    "l1_notes": "Mixing the verb forms across the two clauses is the typical error.",
+    "common_errors": [
+      { "wrong": "If I will have time, I will help.", "right": "If I have time, I will help." },
+      { "wrong": "If I would know, I would tell you.", "right": "If I knew, I would tell you." }
+    ],
+    "examples": [
+      "If demand grows, we will hire more staff.",
+      "If the government invested more, outcomes would improve."
+    ]
+  },
+  {
+    "id": "passive_voice",
+    "name": "Passive voice",
+    "cefr": "B2",
+    "priority": 10,
+    "rule": "be + past participle, used when the actor is unknown, obvious, or unimportant. Common in academic register.",
+    "l1_notes": "Watch the correct participle form and keeping the auxiliary.",
+    "common_errors": [
+      { "wrong": "The report was wrote yesterday.", "right": "The report was written yesterday." },
+      { "wrong": "The data collected over a year.", "right": "The data was collected over a year." }
+    ],
+    "examples": [
+      "The survey was conducted in 2025.",
+      "Resources should be allocated efficiently."
+    ]
+  },
+  {
+    "id": "word_order",
+    "name": "Word order & adverb placement",
+    "cefr": "B1",
+    "priority": 11,
+    "rule": "English is fairly fixed (subject-verb-object). Adverbs of frequency go before main verbs but after 'be'; questions invert, but embedded questions do not.",
+    "l1_notes": "Russian/Uzbek allow freer order, so direct translation can scramble English word order.",
+    "common_errors": [
+      { "wrong": "I know what is the answer.", "right": "I know what the answer is." },
+      { "wrong": "She speaks fluently English.", "right": "She speaks English fluently." }
+    ],
+    "examples": [
+      "He always reviews the code before merging.",
+      "I am not sure where the bug is."
+    ]
+  },
+  {
+    "id": "gerund_infinitive",
+    "name": "Gerund vs infinitive",
+    "cefr": "B1",
+    "priority": 12,
+    "rule": "Some verbs take -ing (enjoy, avoid, suggest, consider), others take to + base (want, decide, plan, hope); a few change meaning.",
+    "l1_notes": "No reliable one-to-one rule with your L1; learn the patterns per verb.",
+    "common_errors": [
+      { "wrong": "I enjoy to code.", "right": "I enjoy coding." },
+      { "wrong": "We decided launching early.", "right": "We decided to launch early." }
+    ],
+    "examples": [
+      "She avoids using jargon.",
+      "They plan to expand to Africa."
+    ]
+  },
+  {
+    "id": "modal_verbs",
+    "name": "Modal verbs & hedging",
+    "cefr": "B2",
+    "priority": 13,
+    "rule": "should/must/might/could + base verb (no 'to', no -s). Modals carry register and certainty, useful for cautious academic claims (may, tend to, is likely to).",
+    "l1_notes": "Avoid adding 'to' after modals and overusing 'must' where 'should' fits.",
+    "common_errors": [
+      { "wrong": "Governments must to act.", "right": "Governments must act." },
+      { "wrong": "It can helps students.", "right": "It can help students." }
+    ],
+    "examples": [
+      "This approach may reduce costs.",
+      "Students should practice consistently."
+    ]
+  },
+  {
+    "id": "comparatives_superlatives",
+    "name": "Comparatives & superlatives",
+    "cefr": "A2",
+    "priority": 14,
+    "rule": "Short adjectives add -er/-est; longer ones use more/most. Use 'than' with comparatives and 'the' with superlatives. Don't double-mark.",
+    "l1_notes": "Watch for double comparatives like 'more easier'.",
+    "common_errors": [
+      { "wrong": "This is more easier.", "right": "This is easier." },
+      { "wrong": "It is the most fast option.", "right": "It is the fastest option." }
+    ],
+    "examples": [
+      "This method is more efficient than the old one.",
+      "It is the largest market in the region."
+    ]
+  },
+  {
+    "id": "plural_singular",
+    "name": "Plural / singular forms",
+    "cefr": "A2",
+    "priority": 15,
+    "rule": "Use plural after numbers and many; keep irregular plurals (children, criteria, phenomena) correct; no plural on uncountables.",
+    "l1_notes": "Overlaps with countable/uncountable; watch irregular plurals.",
+    "common_errors": [
+      { "wrong": "There are many criterias.", "right": "There are many criteria." },
+      { "wrong": "two childs", "right": "two children" }
+    ],
+    "examples": [
+      "Three criteria were applied.",
+      "Several phenomena remain unexplained."
+    ]
+  },
+  {
+    "id": "punctuation_run_on",
+    "name": "Run-on sentences & comma splices",
+    "cefr": "B1",
+    "priority": 16,
+    "rule": "Don't join two independent clauses with only a comma. Use a full stop, a semicolon, or a coordinator (and/but/so) with the comma.",
+    "l1_notes": "Long translated sentences often become comma splices in English.",
+    "common_errors": [
+      { "wrong": "The app is fast, users love it.", "right": "The app is fast, and users love it." }
+    ],
+    "examples": [
+      "The app is fast; users love it.",
+      "Demand is high, so we are scaling up."
+    ]
+  }
+]

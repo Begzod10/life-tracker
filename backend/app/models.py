@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -129,6 +129,11 @@ class Person(Base):
     )
     news_category_picks = relationship(
         "UserNewsCategory",
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )
+    grammar_points = relationship(
+        "UserGrammarPoint",
         back_populates="person",
         cascade="all, delete-orphan",
     )
@@ -1169,6 +1174,31 @@ class NewsItem(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow)
 
     category = relationship("NewsCategory", back_populates="items")
+
+
+class UserGrammarPoint(Base):
+    """Per-user SRS state for a grammar point (error-driven, one row per pair)."""
+    __tablename__ = "user_grammar_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id", ondelete="CASCADE"), nullable=False)
+    grammar_point_id = Column(String(64), nullable=False)
+
+    # SM-2 fields
+    reps = Column(Integer, default=0, nullable=False)
+    ease = Column(Float, default=2.5, nullable=False)
+    interval_days = Column(Float, default=0.0, nullable=False)
+    lapses = Column(Integer, default=0, nullable=False)
+    correct_count = Column(Integer, default=0, nullable=False)
+    review_count = Column(Integer, default=0, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)
+    next_review_at = Column(DateTime, nullable=True)
+
+    person = relationship("Person", back_populates="grammar_points")
+
+    __table_args__ = (
+        UniqueConstraint("person_id", "grammar_point_id", name="uq_user_grammar_point"),
+    )
 
 
 class UserNewsCategory(Base):
