@@ -1805,9 +1805,9 @@ function PracticePageInner() {
         return Number.isFinite(n) && n > 0 ? n : undefined
     }, [searchParams])
 
-    // Fixed: a round is always 10 words. The drill always covers the full
+    // Fixed: a round is always 20 words. The drill always covers the full
     // chosen scope; "rounds" are just review checkpoints inside that drill.
-    const chunkSize = 10
+    const chunkSize = 20
 
     const [phase, setPhase] = useState<Phase>('pick')
     const [mode, setMode] = useState<Mode>('flashcard')
