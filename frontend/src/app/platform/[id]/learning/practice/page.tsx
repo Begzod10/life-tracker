@@ -628,6 +628,7 @@ function Spelling({ word, onAnswer }: {
                                     : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
+                    style={{ animation: submitted && !verdict.ok && !revealed ? 'energy-shake 0.42s ease' : undefined }}
                 />
                 {submitted && revealed && (
                     <p className="text-center text-sm text-amber-300/90">
@@ -774,6 +775,7 @@ function Cloze({ word, onAnswer }: {
                                 : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
+                    style={{ animation: submitted && !verdict.ok ? 'energy-shake 0.42s ease' : undefined }}
                 />
                 {submitted && verdict.ok && verdict.exact && (
                     <p className="text-center text-sm text-green-400 font-medium">✓ Correct!</p>
@@ -880,6 +882,7 @@ function Listening({ word, onAnswer }: {
                                 : 'border-red-500/50 bg-red-500/5'
                             : 'border-white/10 focus:border-white/25'
                     }`}
+                    style={{ animation: submitted && !verdict.ok ? 'energy-shake 0.42s ease' : undefined }}
                 />
                 {submitted && verdict.ok && verdict.exact && (
                     <p className="text-center text-sm text-green-400 font-medium">✓ Correct!</p>
@@ -918,241 +921,175 @@ function Listening({ word, onAnswer }: {
     )
 }
 
-// ── Fire background (fixed DOM overlay — never scrolls, always viewport-locked)
+// ── Energy charge system ──────────────────────────────────────────────────────
 
-const FIRE_CSS_ID = 'fire-keyframes'
-const FIRE_OVERLAY_ID = 'fire-bg-overlay'
-const FIRE_SVG_ID = 'fire-svg-filter'
+const ENERGY_CSS_ID = 'energy-keyframes'
 
-function ensureFireAssets() {
-    // SVG turbulence filter — distorts gradient edges organically
-    if (!document.getElementById(FIRE_SVG_ID)) {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-        svg.id = FIRE_SVG_ID
-        svg.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden')
-        svg.innerHTML = `
-            <defs>
-                <filter id="fire-turbulence" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-                    <feTurbulence type="turbulence" baseFrequency="0.012 0.08" numOctaves="4" seed="2" result="turb">
-                        <animate attributeName="baseFrequency" values="0.012 0.08;0.016 0.10;0.012 0.08" dur="3.5s" repeatCount="indefinite"/>
-                        <animate attributeName="seed" values="2;5;8;5;2" dur="7s" repeatCount="indefinite"/>
-                    </feTurbulence>
-                    <feDisplacementMap in="SourceGraphic" in2="turb" scale="28" xChannelSelector="R" yChannelSelector="G"/>
-                </filter>
-                <filter id="fire-turbulence-soft" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-                    <feTurbulence type="turbulence" baseFrequency="0.018 0.06" numOctaves="3" seed="7" result="turb2">
-                        <animate attributeName="baseFrequency" values="0.018 0.06;0.022 0.09;0.018 0.06" dur="4.2s" repeatCount="indefinite"/>
-                    </feTurbulence>
-                    <feDisplacementMap in="SourceGraphic" in2="turb2" scale="18" xChannelSelector="G" yChannelSelector="R"/>
-                </filter>
-            </defs>`
-        document.body.appendChild(svg)
+function ensureEnergyAssets() {
+    if (document.getElementById(ENERGY_CSS_ID)) return
+    if (!document.getElementById('jbmono-font')) {
+        const link = document.createElement('link')
+        link.id = 'jbmono-font'
+        link.rel = 'stylesheet'
+        link.href = 'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap'
+        document.head.appendChild(link)
     }
-
-    if (document.getElementById(FIRE_CSS_ID)) return
     const s = document.createElement('style')
-    s.id = FIRE_CSS_ID
+    s.id = ENERGY_CSS_ID
     s.textContent = `
-        @keyframes fire-pulse {
-            0%,100% { opacity:.88; transform:scaleY(1)    scaleX(1); }
-            18%     { opacity:1;   transform:scaleY(1.06) scaleX(1.02); }
-            47%     { opacity:.70; transform:scaleY(.96)  scaleX(.98); }
-            73%     { opacity:.95; transform:scaleY(1.03) scaleX(1.01); }
+        @keyframes energy-shake {
+            0%,100% { transform:translateX(0); }
+            15%     { transform:translateX(-6px); }
+            30%     { transform:translateX(5px); }
+            45%     { transform:translateX(-4px); }
+            60%     { transform:translateX(3px); }
+            75%     { transform:translateX(-2px); }
         }
-        @keyframes fire-wave {
-            0%,100% { transform:translateX(0)    scaleX(1);    opacity:.9; }
-            30%     { transform:translateX(1.8%) scaleX(1.03); opacity:1; }
-            65%     { transform:translateX(-1.2%) scaleX(.97); opacity:.78; }
+        @keyframes energy-float-up {
+            0%   { opacity:1; transform:translateY(0) scale(1.1); }
+            70%  { opacity:0.9; transform:translateY(-36px) scale(1); }
+            100% { opacity:0; transform:translateY(-52px) scale(0.85); }
         }
-        @keyframes fire-ember {
-            0%,100% { opacity:.42; transform:scaleY(1); }
-            35%     { opacity:.82; transform:scaleY(1.08); }
-            68%     { opacity:.52; transform:scaleY(.95); }
+        @keyframes energy-spark {
+            0%   { opacity:1; transform:translate(0,0) scale(1); }
+            100% { opacity:0; transform:translate(var(--ex),var(--ey)) scale(0); }
         }
-        @keyframes fire-glow {
-            0%,100% { box-shadow:0 0 20px 8px rgba(255,50,0,.7),0 0 48px 18px rgba(255,90,0,.38); }
-            50%     { box-shadow:0 0 34px 14px rgba(255,75,0,.88),0 0 70px 26px rgba(255,130,0,.5); }
-        }
-        @keyframes fire-side-l {
-            0%,100% { opacity:.55; transform:scaleX(1)    skewY(-2deg); }
-            40%     { opacity:.8;  transform:scaleX(1.05) skewY(-4deg); }
-            70%     { opacity:.62; transform:scaleX(.95)  skewY(-1deg); }
-        }
-        @keyframes fire-side-r {
-            0%,100% { opacity:.55; transform:scaleX(1)    skewY(2deg); }
-            35%     { opacity:.82; transform:scaleX(1.04) skewY(4deg); }
-            68%     { opacity:.6;  transform:scaleX(.96)  skewY(1deg); }
-        }
-        @keyframes fire-core {
-            0%,100% { opacity:.65; transform:scaleY(1)    scaleX(1); }
-            25%     { opacity:.9;  transform:scaleY(1.10) scaleX(.96); }
-            60%     { opacity:.72; transform:scaleY(.94)  scaleX(1.03); }
-        }
-        @keyframes fire-particle {
-            0%   { transform:translateY(0)    translateX(0)    scale(1);    opacity:.9; }
-            40%  { transform:translateY(-22vh) translateX(var(--dx)) scale(.7); opacity:.75; }
-            75%  { transform:translateY(-42vh) translateX(calc(var(--dx)*1.6)) scale(.4); opacity:.35; }
-            100% { transform:translateY(-62vh) translateX(calc(var(--dx)*2))   scale(.1); opacity:0; }
-        }
-        @keyframes fire-spark {
-            0%   { transform:translateY(0) translateX(0) scale(1); opacity:1; }
-            50%  { transform:translateY(-18vh) translateX(var(--sx)) scale(.55); opacity:.8; }
-            100% { transform:translateY(-35vh) translateX(calc(var(--sx)*1.4)) scale(.1); opacity:0; }
+        @media (prefers-reduced-motion:reduce) {
+            .energy-anim { animation:none !important; transition:none !important; }
         }
     `
     document.head.appendChild(s)
 }
 
-// Deterministic pseudo-random to avoid Math.random() in render
-function seededRand(seed: number) {
-    let s = seed
-    return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646 }
+// ── ChargeRail ────────────────────────────────────────────────────────────────
+
+function ChargeRail({ filled, overdrive }: { filled: number; overdrive: boolean }) {
+    useEffect(() => { ensureEnergyAssets() }, [])
+    const accent = overdrive ? '#ffd166' : '#22d3ee'
+    const shadow = overdrive ? '0 0 7px 2px rgba(255,209,102,.65)' : '0 0 7px 2px rgba(34,211,238,.55)'
+    return (
+        <div className="flex gap-1.5 w-full mt-2.5" role="presentation" aria-hidden>
+            {Array.from({ length: 5 }, (_, i) => (
+                <div
+                    key={i}
+                    className="energy-anim flex-1 h-1 rounded-full"
+                    style={{
+                        transition: 'background-color .25s,box-shadow .25s',
+                        backgroundColor: i < filled ? accent : 'rgba(255,255,255,.08)',
+                        boxShadow:       i < filled ? shadow : 'none',
+                    }}
+                />
+            ))}
+        </div>
+    )
 }
 
-function buildParticles(count: number, seed: number): string {
-    const rand = seededRand(seed)
-    return Array.from({ length: count }, (_, i) => {
-        const left = 5 + rand() * 90
-        const size = 4 + rand() * 10
-        const dur = 1.8 + rand() * 2.2
-        const delay = -(rand() * dur)
-        const dx = (rand() - 0.5) * 18
-        const isHot = rand() > 0.45
-        const color = isHot
-            ? `rgba(255,${Math.floor(120 + rand()*100)},0,0.9)`
-            : `rgba(255,${Math.floor(55 + rand()*70)},0,0.8)`
-        return `<div style="
-            position:absolute;bottom:0;
-            left:${left.toFixed(1)}%;
-            width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;
-            border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;
-            background:${color};
-            filter:blur(${(size * 0.45).toFixed(1)}px);
-            mix-blend-mode:screen;
-            --dx:${dx.toFixed(1)}px;
-            animation:fire-particle ${dur.toFixed(2)}s ${delay.toFixed(2)}s ease-out infinite;">
-        </div>`
-    }).join('')
+// ── FloatPlus ─────────────────────────────────────────────────────────────────
+
+function FloatPlus({ triggerKey, boost }: { triggerKey: number; boost: boolean }) {
+    if (triggerKey === 0) return null
+    return (
+        <AnimatePresence>
+            <motion.span
+                key={triggerKey}
+                initial={{ opacity: 1, y: 0, scale: 1.1 }}
+                animate={{ opacity: 0, y: -48, scale: 0.85 }}
+                transition={{ duration: 0.75, ease: 'easeOut' }}
+                className="energy-anim pointer-events-none select-none absolute left-1/2 -translate-x-1/2 font-bold text-sm"
+                style={{
+                    fontFamily: "'JetBrains Mono','Fira Code',monospace",
+                    color: boost ? '#ffd166' : '#22d3ee',
+                    textShadow: boost ? '0 0 8px rgba(255,209,102,.8)' : '0 0 8px rgba(34,211,238,.8)',
+                    zIndex: 10,
+                }}
+            >
+                {boost ? '+2' : '+1'}
+            </motion.span>
+        </AnimatePresence>
+    )
 }
 
-function buildSparks(count: number, seed: number): string {
-    const rand = seededRand(seed + 999)
-    return Array.from({ length: count }, () => {
-        const left = 10 + rand() * 80
-        const size = 2 + rand() * 4
-        const dur = 1.0 + rand() * 1.4
-        const delay = -(rand() * dur)
-        const sx = (rand() - 0.5) * 24
-        return `<div style="
-            position:absolute;bottom:2px;
-            left:${left.toFixed(1)}%;
-            width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;
-            border-radius:50%;
-            background:rgba(255,${Math.floor(200 + rand()*55)},${Math.floor(rand()*60)},0.95);
-            filter:blur(${(size * 0.3).toFixed(1)}px);
-            mix-blend-mode:screen;
-            --sx:${sx.toFixed(1)}px;
-            animation:fire-spark ${dur.toFixed(2)}s ${delay.toFixed(2)}s ease-out infinite;">
-        </div>`
-    }).join('')
-}
+// ── EnergyHUD ─────────────────────────────────────────────────────────────────
 
-function useFireBackground(level: number) {
-    useEffect(() => {
-        ensureFireAssets()
-        const existing = document.getElementById(FIRE_OVERLAY_ID)
-        if (level === 0) { existing?.remove(); return }
+function EnergyHUD({ streak, overdrive }: { streak: number; overdrive: boolean }) {
+    useEffect(() => { ensureEnergyAssets() }, [])
+    if (streak === 0) return null
 
-        const el = (existing ?? (() => {
-            const d = document.createElement('div')
-            d.id = FIRE_OVERLAY_ID
-            document.body.appendChild(d)
-            return d
-        })()) as HTMLDivElement
+    const SIZE  = 52
+    const SW    = 4
+    const R     = (SIZE - SW) / 2
+    const CIRC  = 2 * Math.PI * R
+    const fill  = Math.min(streak / 5, 1)
+    const dash  = CIRC * (1 - fill)
 
-        const a1 = Math.min(0.55 + level * 0.06, 0.80)
-        const a2 = Math.min(0.28 + level * 0.05, 0.55)
-        const particleCount = Math.min(10 + level * 4, 26)
-        const sparkCount = Math.min(6 + level * 2, 16)
+    const accent     = overdrive ? '#ffd166' : '#22d3ee'
+    const glowRgba   = overdrive ? 'rgba(255,209,102,.45)' : 'rgba(34,211,238,.4)'
+    const glowStrong = overdrive ? 'rgba(255,209,102,.8)'  : 'rgba(34,211,238,.7)'
 
-        el.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9998;'
-        el.innerHTML = `
-            <!-- turbulence-distorted core glow -->
-            <div style="position:absolute;inset:0;filter:url(#fire-turbulence);mix-blend-mode:screen;">
-                <div style="position:absolute;inset:0;
-                    background:
-                        radial-gradient(ellipse at 50% 118%,rgba(255,50,0,${a1}) 0%,rgba(255,115,0,${a2}) 22%,rgba(170,20,0,.08) 50%,transparent 72%),
-                        radial-gradient(ellipse at 50% 122%,rgba(255,20,0,${(a1*.6).toFixed(2)}) 0%,transparent 38%);
-                    animation:fire-core 2.1s ease-in-out infinite;">
-                </div>
-            </div>
-
-            <!-- left wing — soft turbulence -->
-            <div style="position:absolute;inset:0;filter:url(#fire-turbulence-soft);mix-blend-mode:screen;">
-                <div style="position:absolute;inset:0;
-                    background:radial-gradient(ellipse at 15% 112%,rgba(255,65,0,${(a2*.9).toFixed(2)}) 0%,rgba(255,90,0,${(a2*.45).toFixed(2)}) 18%,transparent 38%);
-                    animation:fire-side-l 2.7s ease-in-out infinite;">
-                </div>
-            </div>
-
-            <!-- right wing — soft turbulence, offset phase -->
-            <div style="position:absolute;inset:0;filter:url(#fire-turbulence-soft);mix-blend-mode:screen;">
-                <div style="position:absolute;inset:0;
-                    background:radial-gradient(ellipse at 85% 112%,rgba(255,65,0,${(a2*.9).toFixed(2)}) 0%,rgba(255,90,0,${(a2*.45).toFixed(2)}) 18%,transparent 38%);
-                    animation:fire-side-r 3.1s .4s ease-in-out infinite;">
-                </div>
-            </div>
-
-            <!-- secondary wave — no filter, additive -->
-            <div style="position:absolute;inset:0;mix-blend-mode:screen;">
-                <div style="position:absolute;inset:0;
-                    background:radial-gradient(ellipse at 50% 116%,rgba(255,30,0,.22) 0%,transparent 46%);
-                    animation:fire-wave 2.4s ease-in-out infinite;">
-                </div>
-            </div>
-
-            <!-- tall ember column — normal blend so it darkens the base -->
-            <div style="position:absolute;bottom:0;left:0;right:0;height:45vh;
-                background:linear-gradient(to top,rgba(190,12,0,.58) 0%,rgba(255,65,0,.18) 38%,transparent 82%);
-                animation:fire-ember 3.1s ease-in-out infinite;">
-            </div>
-
-            <!-- hot base line with glow -->
-            <div style="position:absolute;bottom:0;left:0;right:0;height:5px;
-                background:rgba(255,40,0,.97);
-                animation:fire-glow 1.7s ease-in-out infinite;">
-            </div>
-
-            <!-- rising particles layer -->
-            <div style="position:absolute;bottom:0;left:0;right:0;height:100%;overflow:hidden;">
-                ${buildParticles(particleCount, level)}
-                ${buildSparks(sparkCount, level)}
-            </div>
-        `
-        return () => { document.getElementById(FIRE_OVERLAY_ID)?.remove() }
-    }, [level])
-}
-
-function FireBadge({ streak }: { streak: number }) {
     return (
         <motion.div
-            key={streak}
-            initial={{ scale: 0.7, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-            className="fixed pointer-events-none flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-            style={{
-                top: '5.5rem', right: '1rem', zIndex: 9999,
-                background: 'rgba(210,50,0,.28)',
-                border: '1px solid rgba(255,130,0,.65)',
-                color: 'rgb(255,210,70)',
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                boxShadow: '0 0 22px rgba(255,70,0,.5)',
-            }}
+            key={`hud-${overdrive}`}
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+            className="fixed pointer-events-none energy-anim"
+            style={{ top: '5.5rem', right: '1rem', zIndex: 9999 }}
         >
-            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>🔥</span>
-            <span style={{ fontSize: '0.875rem', fontWeight: 700 }}>{streak}</span>
+            <div
+                className="flex flex-col items-center gap-1 px-2 py-2 rounded-2xl"
+                style={{
+                    background:           'rgba(6,9,18,.82)',
+                    border:               `1px solid ${glowRgba}`,
+                    backdropFilter:       'blur(14px)',
+                    WebkitBackdropFilter: 'blur(14px)',
+                    boxShadow:            `0 0 18px ${glowRgba}`,
+                }}
+            >
+                <div className="relative" style={{ width: SIZE, height: SIZE }}>
+                    <svg width={SIZE} height={SIZE} style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                            stroke="rgba(255,255,255,.07)" strokeWidth={SW} />
+                        <motion.circle
+                            cx={SIZE/2} cy={SIZE/2} r={R} fill="none"
+                            stroke={accent} strokeWidth={SW} strokeLinecap="round"
+                            strokeDasharray={CIRC}
+                            animate={{ strokeDashoffset: dash }}
+                            transition={{ duration: 0.4, ease: 'easeOut' }}
+                            style={{ filter: `drop-shadow(0 0 4px ${glowStrong})` }}
+                        />
+                    </svg>
+                    <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{
+                            fontFamily: "'JetBrains Mono','Fira Code',monospace",
+                            fontSize: '0.88rem', fontWeight: 700, color: accent,
+                        }}
+                    >
+                        {streak}
+                    </div>
+                </div>
+
+                {overdrive && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md energy-anim"
+                        style={{
+                            background:  'rgba(255,209,102,.15)',
+                            border:      '1px solid rgba(255,209,102,.4)',
+                            fontFamily:  "'JetBrains Mono','Fira Code',monospace",
+                            fontSize:    '0.6rem',
+                            fontWeight:  700,
+                            color:       '#ffd166',
+                            letterSpacing: '.05em',
+                        }}
+                    >
+                        <Zap className="w-2.5 h-2.5" />
+                        ×2
+                    </motion.div>
+                )}
+            </div>
         </motion.div>
     )
 }
@@ -1217,7 +1154,7 @@ function LegacySession({
     // state copy that drives the badge so React re-renders on every answer.
     const streakRef = useRef(0)
     const [streakDisplay, setStreakDisplay] = useState(0)
-    const [fireLevel, setFireLevel] = useState(0)
+    const [floatId, setFloatId] = useState(0)
 
     const { mutate: submitResult } = useSubmitResult()
 
@@ -1289,19 +1226,16 @@ function LegacySession({
         // in sync with the sound/colour feedback, before the next card slides in.
         setWordStatuses(prev => ({ ...prev, [word.id]: wasCorrect ? 'correct' : 'wrong' }))
 
-        // Fire streak tracking — consecutive correct answers unlock the
-        // fire background. A wrong answer extinguishes it and resets the
-        // streak so the user has to earn it back.
+        // Energy streak — consecutive correct answers fill the charge rail.
+        // At 5+ consecutive correct (overdrive), the rail turns amber and
+        // a ×2 tag appears. A wrong answer resets everything.
         if (wasCorrect) {
             streakRef.current += 1
             setStreakDisplay(streakRef.current)
-            if (streakRef.current % 5 === 0) {
-                setFireLevel(lv => lv + 1)
-            }
+            setFloatId(id => id + 1)
         } else {
             streakRef.current = 0
             setStreakDisplay(0)
-            setFireLevel(0)
         }
 
         const nextQuiz = new Set(quizCorrect)
@@ -1356,11 +1290,12 @@ function LegacySession({
         submitResult, finish, onPositionChange,
     ])
 
-    useFireBackground(fireLevel)
+    const overdrive      = streakDisplay >= 5
+    const segmentsFilled = Math.min(streakDisplay, 5)
 
     return (
         <>
-        {fireLevel > 0 && <FireBadge streak={streakDisplay} />}
+        <EnergyHUD streak={streakDisplay} overdrive={overdrive} />
 
         <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-md">
@@ -1408,26 +1343,30 @@ function LegacySession({
                         )
                     })}
                 </div>
+                <ChargeRail filled={segmentsFilled} overdrive={overdrive} />
             </div>
 
-            <AnimatePresence mode="wait">
-                <motion.div
-                    // Re-key on subMode so the same word transitions cleanly
-                    // when jumping from the quiz pass to the spelling pass.
-                    key={`${subMode}-${word.id}`}
-                    initial={{ opacity: 0, x: 30 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -30 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-full flex flex-col items-center"
-                >
-                    {isQuizPlus && subMode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
-                    {isQuizPlus && subMode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
-                    {!isQuizPlus && mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
-                    {!isQuizPlus && mode === 'listening' && <Listening word={word} onAnswer={advance} />}
-                    {!isQuizPlus && mode === 'cloze' && <Cloze word={word} onAnswer={advance} />}
-                </motion.div>
-            </AnimatePresence>
+            <div className="w-full flex flex-col items-center relative">
+                <FloatPlus triggerKey={floatId} boost={overdrive} />
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        // Re-key on subMode so the same word transitions cleanly
+                        // when jumping from the quiz pass to the spelling pass.
+                        key={`${subMode}-${word.id}`}
+                        initial={{ opacity: 0, x: 30 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -30 }}
+                        transition={{ duration: 0.2 }}
+                        className="w-full flex flex-col items-center"
+                    >
+                        {isQuizPlus && subMode === 'quiz' && <Quiz word={word} onAnswer={advance} />}
+                        {isQuizPlus && subMode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
+                        {!isQuizPlus && mode === 'spelling' && <Spelling word={word} onAnswer={advance} />}
+                        {!isQuizPlus && mode === 'listening' && <Listening word={word} onAnswer={advance} />}
+                        {!isQuizPlus && mode === 'cloze' && <Cloze word={word} onAnswer={advance} />}
+                    </motion.div>
+                </AnimatePresence>
+            </div>
         </div>
         </>
     )
