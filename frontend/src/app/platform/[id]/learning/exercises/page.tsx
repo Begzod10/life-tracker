@@ -110,11 +110,11 @@ export default function ExercisesPage() {
     const accuracy = results.length > 0 ? Math.round((correctCount / results.length) * 100) : 0
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen flex flex-col p-4 sm:p-6 lg:p-8">
             {/* Streak celebration overlay — non-blocking, auto-dismisses */}
             <StreakCelebration tier={streak.justUnlocked} onDismiss={streak.dismissCelebration} />
 
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto w-full flex flex-col flex-1">
                 <div className="flex items-center justify-between mb-6">
                     <button
                         onClick={() =>
@@ -151,6 +151,7 @@ export default function ExercisesPage() {
                     </div>
                 </div>
 
+                <div className="flex-1 flex items-center w-full">
                 <AnimatePresence mode="wait">
                     {phase === 'setup' && (
                         <SetupPhase
@@ -208,6 +209,7 @@ export default function ExercisesPage() {
                         />
                     )}
                 </AnimatePresence>
+                </div>
             </div>
         </div>
     )
