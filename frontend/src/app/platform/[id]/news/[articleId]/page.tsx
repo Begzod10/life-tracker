@@ -125,6 +125,88 @@ function SelectionPopover({
     )
 }
 
+// ─── Word lookup popup (single-word click) ───────────────────────────────────
+
+interface WordLookupState {
+    word: string
+    rect: DOMRect
+}
+
+function WordLookupPopup({
+    lookup, onSave, onDismiss,
+}: {
+    lookup: WordLookupState
+    onSave: (word: string) => void
+    onDismiss: () => void
+}) {
+    const { mutate, isPending, data } = useAiWordDetails()
+
+    useEffect(() => { mutate(lookup.word) }, [lookup.word, mutate])
+
+    const top = lookup.rect.top + window.scrollY - 8
+    const HALF = 160
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1024
+    const rawLeft = lookup.rect.left + window.scrollX + lookup.rect.width / 2
+    const left = Math.min(Math.max(rawLeft, window.scrollX + HALF + 8), window.scrollX + vw - HALF - 8)
+
+    return (
+        <div
+            data-word-lookup-popup
+            style={{
+                position: 'absolute',
+                top: `${Math.max(8, top)}px`,
+                left: `${left}px`,
+                transform: 'translateX(-50%) translateY(-100%)',
+                zIndex: 40,
+                width: 280,
+            }}
+            className="bg-[#0d0d1a] border border-white/15 rounded-xl shadow-2xl overflow-hidden"
+        >
+            {/* Word header */}
+            <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="text-sm font-bold text-white truncate">{lookup.word}</span>
+                    {data?.phonetic && <span className="text-xs text-white/40 shrink-0">{data.phonetic}</span>}
+                    {data?.part_of_speech && (
+                        <span className="text-[10px] text-indigo-300/70 bg-indigo-500/10 px-1.5 py-0.5 rounded shrink-0">{data.part_of_speech}</span>
+                    )}
+                </div>
+                <button onClick={onDismiss} className="ml-2 p-1 text-white/30 hover:text-white shrink-0 rounded transition">
+                    <X className="w-3.5 h-3.5" />
+                </button>
+            </div>
+
+            {/* Definition / translation */}
+            <div className="px-3 pb-1 min-h-[40px]">
+                {isPending ? (
+                    <p className="text-xs text-white/30 flex items-center gap-1.5 py-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Looking up…
+                    </p>
+                ) : data?.definition ? (
+                    <p className="text-xs text-white/65 leading-relaxed">{data.definition}</p>
+                ) : (
+                    <p className="text-xs text-white/25 italic">No definition found</p>
+                )}
+                {data?.translation && (
+                    <p className="text-xs text-amber-300/70 mt-0.5">{data.translation}</p>
+                )}
+            </div>
+
+            {/* Save button */}
+            <div className="px-3 pb-3 pt-1">
+                <button
+                    onClick={() => onSave(lookup.word)}
+                    disabled={isPending}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-indigo-600/30 border border-indigo-500/30 text-indigo-200 text-xs font-medium hover:bg-indigo-600/50 disabled:opacity-40 transition"
+                >
+                    <BookmarkPlus className="w-3.5 h-3.5" />
+                    Save to dictionary
+                </button>
+            </div>
+        </div>
+    )
+}
+
 // ─── Save dialog ─────────────────────────────────────────────────────────────
 
 function SaveDialog({
@@ -374,8 +456,25 @@ function FolderLinkPicker({
 }) {
     const [folderId, setFolderId] = useState<number | undefined>(current.folderId)
     const [moduleId, setModuleId] = useState<number | undefined>(current.moduleId)
+    const [newFolderName, setNewFolderName] = useState<string | null>(null)
+    const [newModuleName, setNewModuleName] = useState<string | null>(null)
     const { data: folders = [] } = useFolders()
     const { data: modules = [] } = useModules(folderId)
+    const { mutateAsync: createFolder, isPending: creatingFolder } = useFolderCreate()
+    const { mutateAsync: createModule, isPending: creatingModule } = useModuleCreate()
+
+    const handleCreateFolder = async () => {
+        const name = (newFolderName ?? '').trim()
+        if (!name) return
+        const created = await createFolder({ name })
+        setFolderId(created.id); setModuleId(undefined); setNewFolderName(null)
+    }
+    const handleCreateModule = async () => {
+        const name = (newModuleName ?? '').trim()
+        if (!name || !folderId) return
+        const created = await createModule({ folder_id: folderId, name })
+        setModuleId(created.id); setNewModuleName(null)
+    }
 
     return (
         <motion.div
@@ -402,24 +501,67 @@ function FolderLinkPicker({
                 <p className="text-xs text-white/40 leading-relaxed">
                     Select a folder and module. After that, selecting any word in the article saves it instantly — no dialog needed.
                 </p>
+
+                {/* Folder */}
                 <div className="space-y-1.5">
                     <label className="text-xs text-white/40 uppercase tracking-wider">Folder</label>
-                    <select value={folderId ?? ''} onChange={e => { setFolderId(e.target.value ? Number(e.target.value) : undefined); setModuleId(undefined) }}
-                        className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none">
-                        <option value="">— choose folder —</option>
-                        {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                    </select>
+                    {newFolderName === null ? (
+                        <div className="flex gap-2">
+                            <select value={folderId ?? ''} onChange={e => { setFolderId(e.target.value ? Number(e.target.value) : undefined); setModuleId(undefined) }}
+                                className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none focus:border-emerald-500/50">
+                                <option value="">— choose folder —</option>
+                                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                            </select>
+                            <button onClick={() => setNewFolderName('')} className="px-3 py-2 rounded-xl border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition" title="New folder">
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            <input autoFocus value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setNewFolderName(null) }}
+                                placeholder="Folder name"
+                                className="flex-1 bg-white/[0.04] border border-emerald-500/40 rounded-xl px-3 py-2 text-sm text-white outline-none" />
+                            <button onClick={handleCreateFolder} disabled={creatingFolder || !newFolderName?.trim()}
+                                className="px-3 py-2 rounded-xl bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs disabled:opacity-40 transition">
+                                {creatingFolder ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                            </button>
+                            <button onClick={() => setNewFolderName(null)} className="px-2 text-white/30 hover:text-white transition"><X className="w-4 h-4" /></button>
+                        </div>
+                    )}
                 </div>
+
+                {/* Module */}
                 {folderId && (
                     <div className="space-y-1.5">
                         <label className="text-xs text-white/40 uppercase tracking-wider">Module</label>
-                        <select value={moduleId ?? ''} onChange={e => setModuleId(e.target.value ? Number(e.target.value) : undefined)}
-                            className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none">
-                            <option value="">— choose module —</option>
-                            {modules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+                        {newModuleName === null ? (
+                            <div className="flex gap-2">
+                                <select value={moduleId ?? ''} onChange={e => setModuleId(e.target.value ? Number(e.target.value) : undefined)}
+                                    className="flex-1 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm text-white appearance-none outline-none focus:border-emerald-500/50">
+                                    <option value="">— choose module —</option>
+                                    {modules.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                </select>
+                                <button onClick={() => setNewModuleName('')} className="px-3 py-2 rounded-xl border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition" title="New module">
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <input autoFocus value={newModuleName} onChange={e => setNewModuleName(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') handleCreateModule(); if (e.key === 'Escape') setNewModuleName(null) }}
+                                    placeholder="Module name"
+                                    className="flex-1 bg-white/[0.04] border border-emerald-500/40 rounded-xl px-3 py-2 text-sm text-white outline-none" />
+                                <button onClick={handleCreateModule} disabled={creatingModule || !newModuleName?.trim()}
+                                    className="px-3 py-2 rounded-xl bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs disabled:opacity-40 transition">
+                                    {creatingModule ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                                </button>
+                                <button onClick={() => setNewModuleName(null)} className="px-2 text-white/30 hover:text-white transition"><X className="w-4 h-4" /></button>
+                            </div>
+                        )}
                     </div>
                 )}
+
                 <button
                     onClick={() => { onSave({ folderId, moduleId }); onClose() }}
                     disabled={!folderId || !moduleId}
@@ -460,6 +602,7 @@ export default function ArticleProfilePage() {
     const [selection, setSelection] = useState<TextSelection | null>(null)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     const [quickSaveToast, setQuickSaveToast] = useState<string | null>(null)
+    const [wordLookup, setWordLookup] = useState<WordLookupState | null>(null)
     const articleRef = useRef<HTMLDivElement>(null)
 
     const captureSelection = useCallback(() => {
@@ -478,6 +621,32 @@ export default function ArticleProfilePage() {
         setTimeout(captureSelection, 30)
     }, [captureSelection])
 
+    // Single-word click → show definition popup
+    const handleArticleClick = useCallback((e: React.MouseEvent) => {
+        // Ignore if there's a real text selection (dragged)
+        const sel = window.getSelection()
+        if (sel && sel.toString().trim()) return
+
+        const range = (document.caretRangeFromPoint as ((x: number, y: number) => Range | null) | undefined)?.(e.clientX, e.clientY)
+        if (!range) return
+        // Expand to word boundaries manually
+        const textNode = range.startContainer
+        if (textNode.nodeType !== Node.TEXT_NODE) return
+        const text = textNode.textContent ?? ''
+        let start = range.startOffset
+        let end = range.startOffset
+        while (start > 0 && /\w/.test(text[start - 1])) start--
+        while (end < text.length && /\w/.test(text[end])) end++
+        range.setStart(textNode, start)
+        range.setEnd(textNode, end)
+        const word = range.toString().trim().replace(/[^a-zA-Z''-]/g, '')
+        if (!word || word.length < 2) return
+
+        const rect = range.getBoundingClientRect()
+        setWordLookup({ word, rect })
+        setSelection(null)
+    }, [])
+
     // selectionchange covers mobile handle dragging
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout> | null = null
@@ -492,13 +661,12 @@ export default function ArticleProfilePage() {
         }
     }, [captureSelection])
 
-    // Dismiss selection popover when clicking outside it
+    // Dismiss popovers when clicking outside them
     useEffect(() => {
         const onDown = (e: MouseEvent) => {
             const target = e.target as Element
-            if (!target.closest('[data-selection-popover]')) {
-                setSelection(null)
-            }
+            if (!target.closest('[data-selection-popover]')) setSelection(null)
+            if (!target.closest('[data-word-lookup-popup]')) setWordLookup(null)
         }
         document.addEventListener('mousedown', onDown)
         return () => document.removeEventListener('mousedown', onDown)
@@ -605,6 +773,41 @@ export default function ArticleProfilePage() {
                     onDismiss={() => setSelection(null)}
                 />
 
+                {/* Word lookup popup */}
+                {wordLookup && (
+                    <WordLookupPopup
+                        lookup={wordLookup}
+                        onDismiss={() => setWordLookup(null)}
+                        onSave={(word) => {
+                            setWordLookup(null)
+                            if (quickTarget.folderId && quickTarget.moduleId) {
+                                lookupWord.mutate(word, {
+                                    onSuccess: (data) => {
+                                        wordCreate.mutate({
+                                            module_id: quickTarget.moduleId!,
+                                            word,
+                                            definition: data.definition,
+                                            translation: data.translation,
+                                            phonetic: data.phonetic,
+                                            part_of_speech: data.part_of_speech,
+                                            difficulty: data.difficulty,
+                                            examples: data.examples,
+                                        }, {
+                                            onSuccess: () => {
+                                                setQuickSaveToast(word.slice(0, 40))
+                                                setTimeout(() => setQuickSaveToast(null), 2200)
+                                            },
+                                        })
+                                    },
+                                })
+                            } else {
+                                setSelection({ text: word, rect: wordLookup.rect })
+                                setSaveDialogOpen(true)
+                            }
+                        }}
+                    />
+                )}
+
                 {/* Quick-save toast */}
                 <AnimatePresence>
                     {quickSaveToast && (
@@ -689,8 +892,8 @@ export default function ArticleProfilePage() {
                             </div>
                         )}
 
-                        {/* Article body — selection events attached here */}
-                        <div ref={articleRef} onMouseUp={handleMouseUp} onTouchEnd={() => setTimeout(captureSelection, 50)}>
+                        {/* Article body — selection + click-to-lookup events */}
+                        <div ref={articleRef} onMouseUp={handleMouseUp} onClick={handleArticleClick} onTouchEnd={() => setTimeout(captureSelection, 50)}>
                             {item.content ? (
                                 <div className="space-y-3">
                                     <p className="text-xs text-white/35 uppercase tracking-wide">Full article</p>

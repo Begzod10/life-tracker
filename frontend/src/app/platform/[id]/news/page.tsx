@@ -103,7 +103,7 @@ export default function NewsPage() {
     const datesWithContent = new Set(datesQuery.data?.dates ?? [])
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black text-white">
+        <div className="min-h-screen text-white">
             {/* ─── Header ───────────────────────────────────────────────── */}
             <header className="sticky top-0 z-20 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
                 <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
