@@ -105,7 +105,7 @@ export default function NewsPage() {
     return (
         <div className="min-h-screen text-white">
             {/* ─── Header ───────────────────────────────────────────────── */}
-            <header className="sticky top-0 z-20 border-b border-white/5 bg-black/20 backdrop-blur-md">
+            <header className="sticky top-0 z-20 border-b border-white/5 bg-white/[0.03] backdrop-blur-xl">
                 <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
