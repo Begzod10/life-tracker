@@ -679,12 +679,22 @@ function Spelling({ word, onAnswer }: {
                     </div>
                 )}
                 {awaitingContinue && (
-                    <Button
-                        onClick={continueToNext}
-                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
-                    >
-                        Continue →
-                    </Button>
+                    <div className="flex gap-2">
+                        {!revealed && (
+                            <Button
+                                onClick={() => onAnswer(true, { ok: true, exact: false })}
+                                className="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/30"
+                            >
+                                I was right
+                            </Button>
+                        )}
+                        <Button
+                            onClick={continueToNext}
+                            className={`${revealed ? 'w-full' : 'flex-1'} bg-white/10 hover:bg-white/15 text-white border border-white/20`}
+                        >
+                            Continue →
+                        </Button>
+                    </div>
                 )}
             </div>
         </div>
@@ -784,12 +794,20 @@ function Cloze({ word, onAnswer }: {
                     </Button>
                 )}
                 {awaitingContinue && (
-                    <Button
-                        onClick={() => onAnswer(false, verdict)}
-                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
-                    >
-                        Continue →
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={() => onAnswer(true, { ok: true, exact: false })}
+                            className="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/30"
+                        >
+                            I was right
+                        </Button>
+                        <Button
+                            onClick={() => onAnswer(false, verdict)}
+                            className="flex-1 bg-white/10 hover:bg-white/15 text-white border border-white/20"
+                        >
+                            Continue →
+                        </Button>
+                    </div>
                 )}
             </div>
         </div>
@@ -880,12 +898,20 @@ function Listening({ word, onAnswer }: {
                     </Button>
                 )}
                 {awaitingContinue && (
-                    <Button
-                        onClick={() => onAnswer(false, verdict)}
-                        className="w-full bg-white/10 hover:bg-white/15 text-white border border-white/20"
-                    >
-                        Continue →
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={() => onAnswer(true, { ok: true, exact: false })}
+                            className="flex-1 bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/30"
+                        >
+                            I was right
+                        </Button>
+                        <Button
+                            onClick={() => onAnswer(false, verdict)}
+                            className="flex-1 bg-white/10 hover:bg-white/15 text-white border border-white/20"
+                        >
+                            Continue →
+                        </Button>
+                    </div>
                 )}
             </div>
         </div>
