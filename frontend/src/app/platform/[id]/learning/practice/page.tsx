@@ -2571,7 +2571,7 @@ function PracticePageInner() {
                     )}
                 </motion.div>
 
-                <div className="flex-1 flex items-center w-full">
+                <div className="flex-1 flex flex-col justify-center">
                 <AnimatePresence mode="wait">
                     {/* Mode picker */}
                     {phase === 'pick' && (
