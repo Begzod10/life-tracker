@@ -134,7 +134,7 @@ export default function AuthPage() {
             >
                 <Card className="bg-[#1a1b26] border-[#2a2b36] overflow-hidden">
                     {/* Header */}
-                    <div className="relative bg-gradient-to-r from-blue-500 to-cyan-500 p-6">
+                    <div className="relative bg-gradient-to-r from-cyan-400 to-indigo-500 p-6">
                         <div className="absolute inset-0 bg-black/20" />
                         <div className="relative">
                             <motion.div
@@ -163,7 +163,7 @@ export default function AuthPage() {
                             <button
                                 onClick={() => setMode('login')}
                                 className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'login'
-                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
+                                    ? 'bg-gradient-to-r from-cyan-400 to-indigo-500 text-white'
                                     : 'text-gray-400 hover:text-white'
                                     }`}
                             >
@@ -172,7 +172,7 @@ export default function AuthPage() {
                             <button
                                 onClick={() => setMode('register')}
                                 className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${mode === 'register'
-                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                                    ? 'bg-gradient-to-r from-indigo-400 to-violet-500 text-white'
                                     : 'text-gray-400 hover:text-white'
                                     }`}
                             >
@@ -384,7 +384,7 @@ export default function AuthPage() {
                                 <div className="flex justify-end">
                                     <button
                                         type="button"
-                                        className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                                        className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
                                     >
                                         Forgot password?
                                     </button>
@@ -395,8 +395,8 @@ export default function AuthPage() {
                                 type="submit"
                                 disabled={register.isPending || login.isPending}
                                 className={`w-full ${mode === 'login'
-                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500'
-                                    : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                                    ? 'bg-gradient-to-r from-cyan-400 to-indigo-500'
+                                    : 'bg-gradient-to-r from-indigo-400 to-violet-500'
                                     } hover:opacity-90 transition-opacity`}
                             >
                                 {(register.isPending || login.isPending) ? (
@@ -419,7 +419,7 @@ export default function AuthPage() {
                                 {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                                 <button
                                     onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-                                    className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+                                    className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                                 >
                                     {mode === 'login' ? 'Sign up' : 'Sign in'}
                                 </button>

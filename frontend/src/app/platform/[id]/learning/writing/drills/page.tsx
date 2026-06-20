@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, Target as TargetIcon, CheckCircle2, XCircle, Sparkles, Archive,
     BookOpen, Eye, Layers, RotateCcw,
@@ -16,11 +17,11 @@ import {
 
 const KIND_COLOR: Record<string, string> = {
     grammar: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-    vocab: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    vocab: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
     style: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
     cohesion: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
     clarity: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-    upgrade: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    upgrade: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
     task_response: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
 }
 
@@ -92,8 +93,9 @@ export default function ErrorDrillsPage() {
     const remaining = Math.max(0, drills.length - index)
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+        <CommandGrid className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-3xl mx-auto">
+                <StatusBar section="Drills" />
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
                     className="flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors mb-6"
@@ -191,7 +193,7 @@ export default function ErrorDrillsPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </CommandGrid>
     )
 }
 
@@ -312,7 +314,7 @@ function DrillCard({ card, index, total, revealed, onReveal, onReview, onArchive
                         {!revealed ? (
                             <Button
                                 onClick={onReveal}
-                                className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                                className="bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25"
                             >
                                 <Eye className="w-4 h-4 mr-2" />
                                 Show answer

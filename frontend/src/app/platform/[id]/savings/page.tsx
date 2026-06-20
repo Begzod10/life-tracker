@@ -36,6 +36,7 @@ import {
     SubmitButton,
     CancelButton,
 } from '@/components/modals/form-components'
+import { StatusBar, CommandGrid } from '@/components/hud'
 
 // ============================================================================
 // TYPES
@@ -161,7 +162,7 @@ const getAccountTypeConfig = (type: string) => {
     const config: Record<string, { icon: any; color: string; label: string }> = {
         savings: { icon: PiggyBank, color: 'from-blue-500 to-cyan-500', label: 'Savings' },
         investment: { icon: TrendingUp, color: 'from-violet-500 to-purple-500', label: 'Investment' },
-        crypto: { icon: Bitcoin, color: 'from-orange-500 to-amber-500', label: 'Crypto' },
+        crypto: { icon: Bitcoin, color: 'from-violet-400 to-violet-600', label: 'Crypto' },
         'real-estate': { icon: Building, color: 'from-green-500 to-emerald-500', label: 'Real Estate' },
         other: { icon: Wallet, color: 'from-gray-500 to-slate-500', label: 'Other' },
     }
@@ -171,7 +172,7 @@ const getAccountTypeConfig = (type: string) => {
 const getRiskConfig = (risk: string) => {
     const config: Record<string, string> = {
         low: 'bg-green-500/10 text-green-400 border-green-500/20',
-        medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+        medium: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
         high: 'bg-red-500/10 text-red-400 border-red-500/20',
     }
     return config[risk] || config.low
@@ -519,7 +520,7 @@ function BalanceOverviewCard({ account }: { account: SavingsAccount }) {
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.min(progressPercent, 100)}%` }}
                             transition={{ duration: 0.8, delay: 0.3 }}
-                            className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
+                            className="h-full bg-gradient-to-r from-cyan-400 to-indigo-500"
                         />
                     </div>
                 </div>
@@ -849,6 +850,8 @@ export default function SavingsProfilePage() {
 
     return (
         <div className="min-h-screen p-6">
+            <CommandGrid>
+            <StatusBar section="Savings" chips={[{ label: 'ACCOUNT', active: true }]} className="mb-2" />
             <div className="max-w-7xl mx-auto">
 
                 {/* Header */}
@@ -892,6 +895,7 @@ export default function SavingsProfilePage() {
                     </div>
                 </div>
             </div>
+            </CommandGrid>
         </div>
     )
 }

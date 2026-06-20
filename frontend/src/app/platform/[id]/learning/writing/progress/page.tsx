@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, TrendingUp, Trophy, AlertTriangle, Filter, ChevronRight,
 } from 'lucide-react'
@@ -20,7 +21,7 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const ISSUE_COLOR: Record<string, string> = {
     grammar: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
-    vocab: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    vocab: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
     style: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
     cohesion: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
     clarity: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
@@ -56,8 +57,9 @@ export default function WritingProgressPage() {
     }, [stats?.error_counts])
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+        <CommandGrid className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-6xl mx-auto">
+                <StatusBar section="Writing Progress" />
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
                     className="flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors mb-6"
@@ -69,7 +71,7 @@ export default function WritingProgressPage() {
                 <div className="flex items-end justify-between mb-6 sm:mb-8 flex-wrap gap-4">
                     <div className="min-w-0">
                         <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400 shrink-0" />
+                            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400 shrink-0" />
                             Writing progress
                         </h1>
                         <p className="text-xs sm:text-sm text-white/50 mt-1">
@@ -83,7 +85,7 @@ export default function WritingProgressPage() {
                                 onClick={() => setDays(d)}
                                 className={
                                     days === d
-                                        ? 'px-3 py-1.5 text-xs rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                        ? 'px-3 py-1.5 text-xs rounded-md bg-blue-500/15 text-blue-300 border border-blue-500/30'
                                         : 'px-3 py-1.5 text-xs rounded-md bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
                                 }
                             >
@@ -95,9 +97,9 @@ export default function WritingProgressPage() {
 
                 {/* Headline scores */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-8">
-                    <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/20">
+                    <Card className="p-4 sm:p-5 bg-white/2.5 border border-blue-500/20">
                         <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Avg deep score</p>
-                        <p className="text-3xl sm:text-4xl font-bold text-amber-400">
+                        <p className="text-3xl sm:text-4xl font-bold text-blue-400">
                             {stats?.avg_deep ?? '—'}
                             {stats?.avg_deep !== null && stats?.avg_deep !== undefined && <span className="text-white/30 text-base sm:text-lg">/100</span>}
                         </p>
@@ -218,7 +220,7 @@ export default function WritingProgressPage() {
                                 <Card
                                     key={e.id}
                                     onClick={() => router.push(`/platform/${params.id}/learning/writing/${e.id}`)}
-                                    className="p-4 bg-white/2.5 border border-white/5 hover:border-amber-500/20 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between"
+                                    className="p-4 bg-white/2.5 border border-white/5 hover:border-blue-500/20 hover:bg-white/5 cursor-pointer transition-all flex items-center justify-between"
                                 >
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -229,7 +231,7 @@ export default function WritingProgressPage() {
                                     </div>
                                     <div className="flex items-center gap-3 shrink-0">
                                         {e.score !== null && (
-                                            <span className="text-xl font-bold text-amber-400">{e.score}</span>
+                                            <span className="text-xl font-bold text-blue-400">{e.score}</span>
                                         )}
                                         <ChevronRight className="w-4 h-4 text-white/30" />
                                     </div>
@@ -243,7 +245,7 @@ export default function WritingProgressPage() {
                     <p className="text-sm text-white/40 text-center py-8">Loading progress…</p>
                 )}
             </div>
-        </div>
+        </CommandGrid>
     )
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, Save, Sparkles, ZapIcon, CheckCircle2, AlertTriangle, Target as TargetIcon,
     Clock, Trophy, Lightbulb, ChevronDown, ChevronRight, Plus, Trash2, Layers,
@@ -24,20 +25,20 @@ const LEVEL_COLOR: Record<string, string> = {
 
 const ISSUE_COLOR: Record<string, string> = {
     grammar: 'border-rose-500/30 bg-rose-500/5',
-    vocab: 'border-amber-500/30 bg-amber-500/5',
+    vocab: 'border-blue-500/30 bg-blue-500/5',
     style: 'border-sky-500/30 bg-sky-500/5',
     cohesion: 'border-violet-500/30 bg-violet-500/5',
     clarity: 'border-emerald-500/30 bg-emerald-500/5',
-    upgrade: 'border-amber-500/30 bg-amber-500/5',
+    upgrade: 'border-indigo-500/30 bg-indigo-500/5',
 }
 
 const HIGHLIGHT_COLOR: Record<string, string> = {
     grammar: 'bg-rose-500/20 text-rose-100 border-b-2 border-rose-400/60',
-    vocab: 'bg-amber-500/20 text-amber-100 border-b-2 border-amber-400/60',
+    vocab: 'bg-blue-500/20 text-blue-100 border-b-2 border-blue-400/60',
     style: 'bg-sky-500/20 text-sky-100 border-b-2 border-sky-400/60',
     cohesion: 'bg-violet-500/20 text-violet-100 border-b-2 border-violet-400/60',
     clarity: 'bg-emerald-500/20 text-emerald-100 border-b-2 border-emerald-400/60',
-    upgrade: 'bg-amber-500/15 text-amber-100 border-b-2 border-dashed border-amber-400/60',
+    upgrade: 'bg-indigo-500/15 text-indigo-100 border-b-2 border-dashed border-indigo-400/60',
     task_response: 'bg-rose-500/20 text-rose-100 border-b-2 border-rose-400/60',
 }
 
@@ -259,8 +260,9 @@ export default function EssayEditorPage() {
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+        <CommandGrid className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-6xl mx-auto">
+                <StatusBar section="Essay" />
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
                     className="flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors mb-6"
@@ -270,7 +272,7 @@ export default function EssayEditorPage() {
                 </button>
 
                 {/* Prompt header */}
-                <Card className="p-4 sm:p-5 mb-6 bg-amber-500/5 border border-amber-500/20">
+                <Card className="p-4 sm:p-5 mb-6 bg-blue-500/5 border border-blue-500/20">
                     <div className="flex items-start justify-between gap-3 sm:gap-4">
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
@@ -290,7 +292,7 @@ export default function EssayEditorPage() {
 
                     {/* Target words */}
                     {essay.target_words && essay.target_words.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-amber-500/10">
+                        <div className="mt-4 pt-4 border-t border-blue-500/10">
                             <p className="text-xs uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1">
                                 <TargetIcon className="w-3 h-3" /> Try to use
                             </p>
@@ -323,7 +325,7 @@ export default function EssayEditorPage() {
                             <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${progress}%` }}
-                                className="h-full bg-amber-400"
+                                className="h-full bg-blue-400"
                             />
                         </div>
                     )}
@@ -339,7 +341,7 @@ export default function EssayEditorPage() {
                             placeholder="Title (optional)"
                             value={title}
                             onChange={(e) => { setTitle(e.target.value); setDirty(true) }}
-                            className="w-full bg-transparent text-xl sm:text-2xl font-semibold text-white placeholder:text-white/30 outline-none border-b border-transparent focus:border-amber-500/30 pb-2"
+                            className="w-full bg-transparent text-xl sm:text-2xl font-semibold text-white placeholder:text-white/30 outline-none border-b border-transparent focus:border-blue-500/30 pb-2"
                         />
 
                         {showHighlights ? (
@@ -369,7 +371,7 @@ export default function EssayEditorPage() {
                                     onChange={(e) => { setBody(e.target.value); setDirty(true) }}
                                     placeholder="Start writing…"
                                     rows={20}
-                                    className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-amber-500/40 rounded-lg p-4 text-white placeholder:text-white/30 resize-y leading-relaxed outline-none transition-colors"
+                                    className="w-full bg-[#0f0f1a] border border-[#2a2b36] focus:border-blue-500/40 rounded-lg p-4 text-white placeholder:text-white/30 resize-y leading-relaxed outline-none transition-colors"
                                     style={{ minHeight: '420px' }}
                                 />
                             </>
@@ -396,7 +398,7 @@ export default function EssayEditorPage() {
                                 <Button
                                     onClick={handleQuickCheck}
                                     disabled={checking || !body.trim()}
-                                    className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                                    className="bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25"
                                 >
                                     <ZapIcon className="w-4 h-4 mr-2" />
                                     {checking ? 'Checking…' : 'Quick check'}
@@ -404,7 +406,7 @@ export default function EssayEditorPage() {
                                 <Button
                                     onClick={handleDeepReview}
                                     disabled={reviewing || !body.trim()}
-                                    className="bg-amber-500 hover:bg-amber-500/90 text-black"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
                                 >
                                     <Sparkles className="w-4 h-4 mr-2" />
                                     {reviewing ? 'Reviewing…' : 'Deep review'}
@@ -435,7 +437,7 @@ export default function EssayEditorPage() {
                             <QuickFeedbackPanel essay={essay} />
                         ) : (
                             <Card className="p-6 bg-white/2.5 border border-white/5 text-center">
-                                <Lightbulb className="w-8 h-8 text-amber-400/50 mx-auto mb-2" />
+                                <Lightbulb className="w-8 h-8 text-blue-400/50 mx-auto mb-2" />
                                 <p className="text-sm text-white/60">
                                     Quick check gives a fast score and 3 suggestions.<br />
                                     Deep review gives sentence-by-sentence feedback.
@@ -445,21 +447,21 @@ export default function EssayEditorPage() {
                     </div>
                 </div>
             </div>
-        </div>
+        </CommandGrid>
     )
 }
 
 function QuickFeedbackPanel({ essay }: { essay: Essay }) {
     const fb = essay.quick_feedback!
     return (
-        <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/20">
+        <Card className="p-4 sm:p-5 bg-white/2.5 border border-blue-500/20">
             <div className="flex items-center justify-between mb-4 gap-3">
                 <h3 className="font-semibold text-white flex items-center gap-2 min-w-0">
-                    <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+                    <Trophy className="w-4 h-4 text-blue-400 shrink-0" />
                     Quick check
                 </h3>
                 <div className="text-right shrink-0">
-                    <p className="text-2xl sm:text-3xl font-bold text-amber-400">{essay.quick_score}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-blue-400">{essay.quick_score}</p>
                     {fb.level_estimate && (
                         <p className="text-[10px] text-white/40">est. {fb.level_estimate}</p>
                     )}
@@ -513,14 +515,14 @@ function DeepReviewPanel({ essay, items, orderByKey, missing, activeKey, onSelec
 
     return (
         <div className="space-y-4">
-            <Card className="p-4 sm:p-5 bg-white/2.5 border border-amber-500/30">
+            <Card className="p-4 sm:p-5 bg-white/2.5 border border-blue-500/30">
                 <div className="flex items-center justify-between mb-4 gap-3">
                     <h3 className="font-semibold text-white flex items-center gap-2 min-w-0">
-                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                        <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
                         Deep review
                     </h3>
                     <div className="text-right shrink-0">
-                        <p className="text-2xl sm:text-3xl font-bold text-amber-400">{essay.deep_score}</p>
+                        <p className="text-2xl sm:text-3xl font-bold text-blue-400">{essay.deep_score}</p>
                         {review.level_estimate && (
                             <p className="text-[10px] text-white/40">est. {review.level_estimate}</p>
                         )}
@@ -578,12 +580,12 @@ function DeepReviewPanel({ essay, items, orderByKey, missing, activeKey, onSelec
                                     className={
                                         'w-full text-left text-sm flex items-start gap-2 rounded px-2 py-1.5 transition-colors ' +
                                         (isActive
-                                            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
+                                            ? 'bg-blue-500/15 ring-1 ring-blue-500/40'
                                             : 'hover:bg-white/2.5')
                                     }
                                 >
                                     {order ? (
-                                        <span className="shrink-0 mt-0.5 inline-flex w-5 h-5 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold">
+                                        <span className="shrink-0 mt-0.5 inline-flex w-5 h-5 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-[10px] font-bold">
                                             {order}
                                         </span>
                                     ) : (
@@ -627,13 +629,13 @@ function FeedbackCard({ item, order, active, missing, onSelect }: {
             onClick={onSelect}
             className={
                 `w-full text-left p-3 rounded-md border transition-all ${cls} ` +
-                (active ? 'ring-2 ring-amber-400/60 shadow-[0_0_0_2px_rgba(251,191,36,0.15)]' : '')
+                (active ? 'ring-2 ring-blue-400/60 shadow-[0_0_0_2px_rgba(96,165,250,0.15)]' : '')
             }
         >
             <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="flex items-center gap-2">
                     {order ? (
-                        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold">
+                        <span className="inline-flex w-5 h-5 items-center justify-center rounded-full bg-blue-500/15 text-blue-300 text-[10px] font-bold">
                             {order}
                         </span>
                     ) : (
@@ -665,7 +667,7 @@ function CriterionBar({ label, value }: { label: string; value: number }) {
                 <span className="text-white/80 font-medium">{value}/25</span>
             </div>
             <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-amber-400" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-blue-400" style={{ width: `${pct}%` }} />
             </div>
         </div>
     )
@@ -698,7 +700,7 @@ function AttemptHistory({ attempts }: { attempts: EssayAttempt[] }) {
                                 title={`${a.kind} — ${new Date(a.created_at).toLocaleString()}`}
                                 className={
                                     a.kind === 'deep'
-                                        ? 'min-w-[2.5rem] px-2 py-1.5 rounded text-center text-sm font-semibold bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                                        ? 'min-w-[2.5rem] px-2 py-1.5 rounded text-center text-sm font-semibold bg-blue-500/15 border border-blue-500/30 text-blue-300'
                                         : 'min-w-[2.5rem] px-2 py-1.5 rounded text-center text-sm font-semibold bg-white/5 border border-white/10 text-white/80'
                                 }
                             >
@@ -712,7 +714,7 @@ function AttemptHistory({ attempts }: { attempts: EssayAttempt[] }) {
             <p className="text-[10px] text-white/40 mt-2">
                 {sorted.length} attempt{sorted.length === 1 ? '' : 's'}
                 <span className="ml-2">
-                    <span className="inline-block w-2 h-2 rounded bg-amber-500/40 mr-1" />deep
+                    <span className="inline-block w-2 h-2 rounded bg-blue-500/40 mr-1" />deep
                     <span className="inline-block w-2 h-2 rounded bg-white/20 ml-2 mr-1" />quick
                 </span>
             </p>
@@ -1127,7 +1129,7 @@ function HighlightedEssayView({ segments, missing, activeKey, onSelect, onEdit }
         <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-white/40 flex items-center gap-2">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <Sparkles className="w-3 h-3 text-blue-400" />
                     Reviewed view — click any highlight to focus its feedback card.
                 </p>
                 <Button
@@ -1156,7 +1158,7 @@ function HighlightedEssayView({ segments, missing, activeKey, onSelect, onEdit }
                             onClick={() => onSelect(seg.item.key)}
                             className={
                                 `cursor-pointer rounded-sm px-0.5 transition-colors ${cls} ` +
-                                (active ? 'ring-2 ring-amber-400/70' : 'hover:brightness-125')
+                                (active ? 'ring-2 ring-blue-400/70' : 'hover:brightness-125')
                             }
                             title={seg.item.suggestion ? `${seg.item.explanation} → ${seg.item.suggestion}` : seg.item.explanation}
                         >

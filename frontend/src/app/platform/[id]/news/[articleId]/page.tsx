@@ -35,19 +35,19 @@ function relativeTime(iso: string) {
 const DIFF_CHIP: Record<string, string> = {
     Technology:    'bg-blue-500/15 text-blue-300 border-blue-500/30',
     World:         'bg-violet-500/15 text-violet-300 border-violet-500/30',
-    Business:      'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    Business:      'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
     Sports:        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     Health:        'bg-rose-500/15 text-rose-300 border-rose-500/30',
     Science:       'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
     Entertainment: 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30',
-    Automotive:    'bg-orange-500/15 text-orange-300 border-orange-500/30',
+    Automotive:    'bg-blue-500/15 text-blue-300 border-blue-500/30',
     Nation:        'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
 }
 
 function sourceAvatarColor(name: string) {
     const colors = [
         'bg-indigo-500', 'bg-violet-500', 'bg-blue-500',
-        'bg-emerald-500', 'bg-amber-500', 'bg-rose-500',
+        'bg-emerald-500', 'bg-violet-500', 'bg-rose-500',
         'bg-cyan-500', 'bg-fuchsia-500', 'bg-teal-500',
     ]
     let h = 0
@@ -188,7 +188,7 @@ function WordLookupPopup({
                     <p className="text-xs text-white/25 italic">No definition found</p>
                 )}
                 {data?.translation && (
-                    <p className="text-xs text-amber-300/70 mt-0.5">{data.translation}</p>
+                    <p className="text-xs text-indigo-300/70 mt-0.5">{data.translation}</p>
                 )}
             </div>
 

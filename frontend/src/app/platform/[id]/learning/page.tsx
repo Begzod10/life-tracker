@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     BookOpen,
     Brain,
@@ -119,7 +120,8 @@ export default function LearningPage() {
 
     return (
         <div className="min-h-screen p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
+            <CommandGrid className="max-w-7xl mx-auto">
+                <StatusBar section="Learning" chips={[{ label: 'ONLINE', active: true }]} />
                 <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -181,7 +183,7 @@ export default function LearningPage() {
                         onOpenBook={(id) => goto(`/library/${id}`)}
                     />
                 </div>
-            </div>
+            </CommandGrid>
         </div>
     )
 }
@@ -202,7 +204,7 @@ function StatsRow({
     const items = [
         { label: 'Words saved', value: total, icon: BookOpen, color: 'text-blue-300', tint: 'bg-blue-500/10' },
         { label: 'Words reviewed', value: reviewed, icon: Target, color: 'text-emerald-300', tint: 'bg-emerald-500/10' },
-        { label: 'Accuracy', value: `${Math.round(accuracy)}%`, icon: Trophy, color: 'text-amber-300', tint: 'bg-amber-500/10' },
+        { label: 'Accuracy', value: `${Math.round(accuracy)}%`, icon: Trophy, color: 'text-cyan-300', tint: 'bg-cyan-500/10' },
         { label: 'Due today', value: due, icon: Clock, color: 'text-rose-300', tint: 'bg-rose-500/10' },
     ]
     return (
@@ -627,7 +629,7 @@ function WritingPanel({
                 </p>
             }
             icon={PenLine}
-            accent="bg-amber-500/15"
+            accent="bg-blue-500/15"
             onClick={onNew}
             ariaLabel="Submit new essay"
         >
@@ -641,7 +643,7 @@ function WritingPanel({
                         stopPropagation(e)
                         onQuick()
                     }}
-                    className="px-3 py-1.5 rounded-md border border-white/10 hover:border-amber-500/40 hover:bg-amber-500/5 text-xs text-white/85 transition-colors"
+                    className="px-3 py-1.5 rounded-md border border-white/10 hover:border-blue-500/40 hover:bg-blue-500/5 text-xs text-white/85 transition-colors"
                 >
                     Quick check
                 </button>
@@ -650,7 +652,7 @@ function WritingPanel({
                         stopPropagation(e)
                         onDeep()
                     }}
-                    className="px-3 py-1.5 rounded-md border border-white/10 hover:border-amber-500/40 hover:bg-amber-500/5 text-xs text-white/85 transition-colors"
+                    className="px-3 py-1.5 rounded-md border border-white/10 hover:border-blue-500/40 hover:bg-blue-500/5 text-xs text-white/85 transition-colors"
                 >
                     Deep review
                 </button>
@@ -676,7 +678,7 @@ function WritingPanel({
                                             {e.level} · {timeAgo(e.updated_at ?? e.created_at)}
                                         </p>
                                     </div>
-                                    <span className="text-amber-300 font-semibold tabular-nums shrink-0">
+                                    <span className="text-cyan-300 font-semibold tabular-nums shrink-0">
                                         {scoreLabel}
                                     </span>
                                 </li>

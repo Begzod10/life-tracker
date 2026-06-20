@@ -14,6 +14,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProfile, useProfileUpdate, useTelegramLinkCode, useTelegramDisconnect, useTelegramTest } from '@/lib/hooks/use-profile'
 import { useLogout } from '@/lib/hooks/use-auth'
+import { StatusBar, CommandGrid } from '@/components/hud'
 
 const TIMEZONES = [
     { value: 'UTC', label: 'UTC' },
@@ -60,7 +61,10 @@ export default function ProfilePage() {
     return (
         <div className="min-h-screen">
             <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
-                <OwnProfile profile={profile} isEditMode={isEditMode} setIsEditMode={setIsEditMode} />
+                <CommandGrid>
+                    <StatusBar section="Profile" chips={[{ label: 'SETTINGS', active: true }]} className="mb-4" />
+                    <OwnProfile profile={profile} isEditMode={isEditMode} setIsEditMode={setIsEditMode} />
+                </CommandGrid>
             </div>
         </div>
     )
@@ -141,7 +145,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
             className="max-w-6xl mx-auto space-y-4 sm:space-y-6 p-3 sm:p-0"
         >
             {/* Profile Hero */}
-            <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 border-none relative overflow-hidden">
+            <Card className="bg-gradient-to-r from-cyan-400 to-indigo-500 border-none relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
                 <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
 
@@ -160,7 +164,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
                                         {initials}
                                     </div>
                                 )}
-                                <button className="absolute bottom-0 right-0 bg-white text-blue-600 rounded-full p-1.5 sm:p-2 shadow-lg hover:bg-gray-100 transition">
+                                <button className="absolute bottom-0 right-0 bg-white text-cyan-700 rounded-full p-1.5 sm:p-2 shadow-lg hover:bg-gray-100 transition">
                                     <Camera size={14} />
                                 </button>
                             </div>
@@ -206,7 +210,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
                         <Card className="bg-white/[0.025] border-white/5">
                             <div className="p-6 space-y-4">
                                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <User size={22} className="text-blue-500" />
+                                    <User size={22} className="text-cyan-400" />
                                     Edit Profile
                                 </h2>
                                 <div>
@@ -251,7 +255,7 @@ function OwnProfile({ profile, isEditMode, setIsEditMode }: {
                                     <Button
                                         onClick={handleSave}
                                         disabled={isPending}
-                                        className="bg-gradient-to-r from-blue-500 to-cyan-500"
+                                        className="bg-gradient-to-r from-cyan-400 to-indigo-500"
                                     >
                                         <Save size={18} className="mr-2" />
                                         {isPending ? 'Saving...' : 'Save Changes'}
@@ -327,15 +331,15 @@ function PrivacySettingsSection({ privacySettings, togglePrivacy }: {
         <Card className="bg-white/[0.025] border-white/5">
             <div className="p-6">
                 <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                    <Shield size={22} className="text-blue-500" />
+                    <Shield size={22} className="text-cyan-400" />
                     Privacy Settings
                 </h2>
 
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex gap-3 mb-6">
-                    <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-200">
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-4 flex gap-3 mb-6">
+                    <AlertTriangle size={20} className="text-rose-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-rose-200">
                         <p className="font-semibold mb-1">Important!</p>
-                        <p className="text-amber-300/80">
+                        <p className="text-rose-300/80">
                             Be careful sharing personal information. Enabled fields will be visible to other users.
                         </p>
                     </div>
@@ -352,21 +356,21 @@ function PrivacySettingsSection({ privacySettings, togglePrivacy }: {
                             <div className="flex items-center gap-3 flex-1">
                                 <button
                                     onClick={() => togglePrivacy(key)}
-                                    className={`w-12 h-6 rounded-full transition relative ${setting.visible ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-[#2a2b36]'}`}
+                                    className={`w-12 h-6 rounded-full transition relative ${setting.visible ? 'bg-gradient-to-r from-cyan-400 to-indigo-500' : 'bg-[#2a2b36]'}`}
                                 >
                                     <div className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-all ${setting.visible ? 'left-7' : 'left-1'}`} />
                                 </button>
 
                                 <div className="flex items-center gap-2">
                                     {setting.visible ? (
-                                        <Eye size={18} className="text-blue-500" />
+                                        <Eye size={18} className="text-cyan-400" />
                                     ) : (
                                         <EyeOff size={18} className="text-gray-500" />
                                     )}
                                     <span className="font-medium text-white">{fieldLabels[key]}</span>
                                 </div>
 
-                                <span className={`text-xs px-3 py-1 rounded-full ${setting.visible ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                <span className={`text-xs px-3 py-1 rounded-full ${setting.visible ? 'bg-cyan-500/20 text-cyan-400' : 'bg-gray-500/20 text-gray-400'}`}>
                                     {setting.visible ? (
                                         <span className="flex items-center gap-1"><Globe size={12} />Public</span>
                                     ) : (
@@ -377,12 +381,12 @@ function PrivacySettingsSection({ privacySettings, togglePrivacy }: {
 
                             {setting.warning && (
                                 <div className="group relative">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center cursor-help ${setting.visible ? 'bg-amber-500/20' : 'bg-gray-500/20'}`}>
-                                        <Info size={16} className={setting.visible ? 'text-amber-500' : 'text-gray-500'} />
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center cursor-help ${setting.visible ? 'bg-rose-500/20' : 'bg-gray-500/20'}`}>
+                                        <Info size={16} className={setting.visible ? 'text-rose-400' : 'text-gray-500'} />
                                     </div>
                                     <div className="absolute right-0 top-10 w-72 bg-gray-900 text-white text-sm rounded-lg p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 shadow-xl">
                                         <div className="flex gap-2">
-                                            <AlertTriangle size={18} className="flex-shrink-0 text-amber-400" />
+                                            <AlertTriangle size={18} className="flex-shrink-0 text-rose-400" />
                                             <div>
                                                 <p className="font-semibold mb-1">Security Warning</p>
                                                 <p className="text-gray-300">{setting.warningText}</p>
@@ -491,7 +495,7 @@ function TelegramCard({ profile }: { profile: NonNullable<ReturnType<typeof useP
                         <Button
                             onClick={handleConnect}
                             disabled={isLinking}
-                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                            className="w-full bg-gradient-to-r from-cyan-400 to-indigo-500 text-white"
                         >
                             <Link size={16} className="mr-2" />
                             {isLinking ? 'Opening Telegram…' : 'Connect via Telegram'}

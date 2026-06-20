@@ -43,6 +43,7 @@ import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { useQueryClient } from '@tanstack/react-query'
 import { ProgressLog, Milestone } from '@/types'
 import { Pencil, Trash, BarChart2 } from 'lucide-react'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, Cell
@@ -460,7 +461,7 @@ function RecurringWeeklyProgress({ goalId }: { goalId: string }) {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         {streak > 0 && (
-                                            <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs font-bold text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full">
                                                 🔥 {streak}d
                                             </span>
                                         )}
@@ -778,6 +779,8 @@ export default function GoalPage() {
 
     return (
         <div className="min-h-screen p-3 sm:p-6">
+            <CommandGrid>
+            <StatusBar section="Goal" chips={[{ label: 'DETAIL', active: true }]} className="mb-2" />
             <motion.div
                 className="max-w-7xl mx-auto space-y-6 sm:space-y-8 px-1 sm:px-6"
                 variants={containerVariants}
@@ -793,10 +796,10 @@ export default function GoalPage() {
                 >
                     <div className="flex-1 min-w-0 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg bg-orange-500/10 text-orange-500`}>
+                            <div className={`p-2 rounded-lg bg-cyan-500/10 text-cyan-400`}>
                                 {getCategoryIcon(goalData.category)}
                             </div>
-                            <span className="text-xs sm:text-sm font-medium text-orange-500/80 uppercase tracking-wider truncate">{goalData.category}</span>
+                            <span className="text-xs sm:text-sm font-medium text-cyan-400/80 uppercase tracking-wider truncate">{goalData.category}</span>
                         </div>
 
                         <div>
@@ -863,7 +866,7 @@ export default function GoalPage() {
                                 onClick={handleMarkComplete}
                                 className={`gap-2 ${goalData.status === 'completed'
                                     ? 'bg-white/10 hover:bg-white/20 text-white'
-                                    : 'bg-orange-500 hover:bg-orange-600 text-white'
+                                    : 'bg-cyan-500 hover:bg-cyan-600 text-white'
                                     }`}
                             >
                                 <CheckCircle2 className="w-4 h-4" />
@@ -894,10 +897,10 @@ export default function GoalPage() {
                                     borderColor: 'oklch(0.25 0.02 240)',
                                 }}
                             >
-                                <div className="absolute top-0 right-0 p-32 bg-orange-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                                <div className="absolute top-0 right-0 p-32 bg-cyan-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
                                 <h2 className="text-xl font-bold mb-8 flex items-center gap-2 text-white">
-                                    <Activity className="w-5 h-5 text-orange-500" />
+                                    <Activity className="w-5 h-5 text-cyan-400" />
                                     Progress Overview
                                 </h2>
 
@@ -1097,7 +1100,7 @@ export default function GoalPage() {
                                                             <Trash2 className="w-4 h-4" />
                                                         </Button>
                                                     </div>
-                                                    <span className="text-orange-500 font-bold">+{log.value_logged} units</span>
+                                                    <span className="text-cyan-400 font-bold">+{log.value_logged} units</span>
                                                 </div>
                                             </div>
                                         ))}
@@ -1589,6 +1592,7 @@ export default function GoalPage() {
                     </div>
                 </BaseModal>
             </motion.div>
+            </CommandGrid>
         </div>
     )
 }

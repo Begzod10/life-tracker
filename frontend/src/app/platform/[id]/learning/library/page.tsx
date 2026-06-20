@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, BookOpen, Plus, Upload, Search, Trash2, X, Loader2,
     BookMarked, CheckCircle2, Clock,
@@ -23,7 +24,7 @@ const STATUS_LABEL: Record<BookStatus | 'all', string> = {
 }
 
 const STATUS_ACCENT: Record<BookStatus, string> = {
-    reading: 'from-amber-500/15 to-amber-500/0 border-amber-500/30 text-amber-200',
+    reading: 'from-cyan-500/15 to-cyan-500/0 border-cyan-500/30 text-cyan-200',
     want: 'from-sky-500/15 to-sky-500/0 border-sky-500/30 text-sky-200',
     done: 'from-emerald-500/15 to-emerald-500/0 border-emerald-500/30 text-emerald-200',
 }
@@ -68,7 +69,7 @@ export default function LibraryPage() {
     }
 
     return (
-        <div
+        <CommandGrid
             className="min-h-screen p-4 sm:p-6 lg:p-8 relative"
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
@@ -94,6 +95,7 @@ export default function LibraryPage() {
             </AnimatePresence>
 
             <div className="max-w-6xl mx-auto">
+                <StatusBar section="Library" />
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -122,7 +124,7 @@ export default function LibraryPage() {
                 {/* Stats strip */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                     <StatTile label="Books" value={stats?.total_books ?? 0} accent="text-indigo-300" />
-                    <StatTile label="Reading" value={stats?.by_status?.reading ?? 0} accent="text-amber-300" />
+                    <StatTile label="Reading" value={stats?.by_status?.reading ?? 0} accent="text-cyan-300" />
                     <StatTile label="Finished" value={stats?.by_status?.done ?? 0} accent="text-emerald-300" />
                     <StatTile label="Pages · 30d" value={stats?.pages_last_30d ?? 0} accent="text-sky-300" />
                 </div>
@@ -184,7 +186,7 @@ export default function LibraryPage() {
             </div>
 
             <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
-        </div>
+        </CommandGrid>
     )
 }
 

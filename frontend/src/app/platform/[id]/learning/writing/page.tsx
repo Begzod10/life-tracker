@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import { ArrowLeft, PenLine, Sparkles, Plus, Trash2, Clock, Target as TargetIcon, TrendingUp, AlertCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -78,8 +79,9 @@ export default function WritingListPage() {
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+        <CommandGrid className="min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-5xl mx-auto">
+                <StatusBar section="Writing" />
                 <button
                     onClick={() => router.push(`/platform/${params.id}/learning`)}
                     className="flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors mb-6"
@@ -91,7 +93,7 @@ export default function WritingListPage() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
                     <div className="min-w-0">
                         <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                            <PenLine className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />
+                            <PenLine className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
                             Writing
                         </h1>
                         <p className="text-white/50 mt-1 text-sm">Write essays, get AI feedback at your CEFR level.</p>
@@ -128,7 +130,7 @@ export default function WritingListPage() {
                         </Button>
                         <Button
                             onClick={() => { setShowNew(true); setGeneratedPrompt(null); setExistingMatch(null); setError(null); }}
-                            className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                            className="bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25"
                         >
                             <Plus className="w-4 h-4 mr-2" />
                             New essay
@@ -139,7 +141,7 @@ export default function WritingListPage() {
                 {/* New essay panel */}
                 {showNew && (
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-                        <Card className="p-4 sm:p-6 mb-8 bg-white/2.5 border border-amber-500/20">
+                        <Card className="p-4 sm:p-6 mb-8 bg-white/2.5 border border-blue-500/20">
                             <h2 className="text-lg font-semibold text-white mb-4">Start a new essay</h2>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -163,7 +165,7 @@ export default function WritingListPage() {
                                             type="checkbox"
                                             checked={useWeak}
                                             onChange={(e) => setUseWeak(e.target.checked)}
-                                            className="w-4 h-4 accent-amber-400"
+                                            className="w-4 h-4 accent-blue-400"
                                         />
                                         <span className="text-sm text-white/70">Suggest dictionary words</span>
                                     </label>
@@ -174,7 +176,7 @@ export default function WritingListPage() {
                                 <Button
                                     onClick={handleGenerate}
                                     disabled={generating}
-                                    className="bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                                    className="bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25"
                                 >
                                     <Sparkles className="w-4 h-4 mr-2" />
                                     {generating ? 'Generating…' : 'Generate prompt'}
@@ -309,12 +311,12 @@ export default function WritingListPage() {
 
                 {!isLoading && essays.length === 0 && !showNew && (
                     <Card className="p-10 bg-white/2.5 border border-white/5 text-center">
-                        <PenLine className="w-10 h-10 text-amber-400/50 mx-auto mb-3" />
+                        <PenLine className="w-10 h-10 text-blue-400/50 mx-auto mb-3" />
                         <p className="text-white/60">No essays yet. Start your first one.</p>
                     </Card>
                 )}
             </div>
-        </div>
+        </CommandGrid>
     )
 }
 
@@ -350,7 +352,7 @@ function EssayRow({ essay, platformId, onDelete }: {
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     {score !== null && (
                         <div className="text-right">
-                            <p className="text-xl sm:text-2xl font-bold text-amber-400">{score}</p>
+                            <p className="text-xl sm:text-2xl font-bold text-blue-400">{score}</p>
                             <p className="text-[10px] uppercase tracking-wider text-white/40">{essay.deep_score !== null ? 'deep' : 'quick'}</p>
                         </div>
                     )}

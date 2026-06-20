@@ -136,9 +136,9 @@ export function SegmentedProgress({ segments, filled, className }: SegmentedProg
 
 // ── CommandGrid ───────────────────────────────────────────────────────────────
 // Faint 64px grid background, radially masked — wrap pages with this
-export function CommandGrid({ children, className }: { children: React.ReactNode; className?: string }) {
+export function CommandGrid({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
     return (
-        <div className={cn('relative', className)}>
+        <div className={cn('relative', className)} {...rest}>
             <div className="cmd-grid pointer-events-none absolute inset-0 z-0" aria-hidden />
             <div className="relative z-10">{children}</div>
         </div>

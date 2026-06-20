@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import { ArrowLeft, CheckCircle2, XCircle, TrendingUp, BarChart2, BookOpen, AlertTriangle, ChevronDown, CalendarRange, X } from 'lucide-react'
 import {
     useExerciseStats,
@@ -55,13 +56,13 @@ function relTime(iso: string | null): string {
 
 function accuracyColor(pct: number): string {
     if (pct >= 80) return 'text-emerald-400'
-    if (pct >= 60) return 'text-amber-400'
+    if (pct >= 60) return 'text-cyan-400'
     return 'text-red-400'
 }
 
 function accuracyBg(pct: number): string {
     if (pct >= 80) return 'bg-emerald-500'
-    if (pct >= 60) return 'bg-amber-500'
+    if (pct >= 60) return 'bg-cyan-500'
     return 'bg-red-500'
 }
 
@@ -191,8 +192,9 @@ export default function ExerciseHistoryPage() {
     )
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-950 to-black text-white">
-            <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6">
+        <div className="min-h-screen text-white">
+            <CommandGrid className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6">
+                <StatusBar section="Exercise History" />
 
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-6">
@@ -350,19 +352,19 @@ export default function ExerciseHistoryPage() {
 
                         {/* Grammar weak areas */}
                         {analytics.grammar_weak_areas.length > 0 && (
-                            <div className="rounded-xl border border-amber-500/15 bg-amber-500/[0.04] p-4">
+                            <div className="rounded-xl border border-rose-500/15 bg-rose-500/[0.04] p-4">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <AlertTriangle className="w-4 h-4 text-amber-400/60" />
-                                    <span className="text-xs text-amber-300/60 font-medium">Grammar weak areas</span>
+                                    <AlertTriangle className="w-4 h-4 text-rose-400/60" />
+                                    <span className="text-xs text-rose-300/60 font-medium">Grammar weak areas</span>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {analytics.grammar_weak_areas.map(g => (
                                         <span
                                             key={g.type}
-                                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-xs text-amber-300/80"
+                                            className="inline-flex items-center gap-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-xs text-rose-300/80"
                                         >
                                             {g.label}
-                                            <span className="text-amber-400/60 font-semibold">{g.count}×</span>
+                                            <span className="text-rose-400/60 font-semibold">{g.count}×</span>
                                         </span>
                                     ))}
                                 </div>
@@ -422,7 +424,7 @@ export default function ExerciseHistoryPage() {
                         </button>
                     )}
                 </div>
-            </div>
+            </CommandGrid>
         </div>
     )
 }

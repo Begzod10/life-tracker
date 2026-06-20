@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, BookOpen, Target, TrendingUp, TrendingDown, Minus,
     Clock, CheckCircle2, XCircle, ChevronRight, RefreshCw, Lightbulb,
@@ -62,14 +63,14 @@ function labelError(key: string) {
 
 const BAND_COLOR = (b: number) =>
     b >= 7   ? 'text-emerald-400' :
-    b >= 6   ? 'text-amber-400'   :
-    b >= 5   ? 'text-orange-400'  :
+    b >= 6   ? 'text-cyan-400'    :
+    b >= 5   ? 'text-sky-400'     :
                'text-rose-400'
 
 const BAND_BG = (b: number) =>
     b >= 7   ? 'bg-emerald-500/10 border-emerald-500/25' :
-    b >= 6   ? 'bg-amber-500/10 border-amber-500/25'     :
-    b >= 5   ? 'bg-orange-500/10 border-orange-500/25'   :
+    b >= 6   ? 'bg-cyan-500/10 border-cyan-500/25'       :
+    b >= 5   ? 'bg-sky-500/10 border-sky-500/25'         :
                'bg-rose-500/10 border-rose-500/25'
 
 const TREND_ICON = (t: string) =>
@@ -188,8 +189,9 @@ export default function IELTSPage() {
     const wordCount = draft.trim() ? draft.trim().split(/\s+/).length : 0
 
     return (
-        <div className="min-h-screen p-4 sm:p-8">
+        <CommandGrid className="min-h-screen p-4 sm:p-8">
             <div className="max-w-3xl mx-auto">
+                <StatusBar section="IELTS Task 2" />
                 <div className="flex items-center gap-3 mb-8">
                     <button
                         onClick={() => router.push(`/platform/${params.id}/learning/writing`)}
@@ -241,7 +243,7 @@ export default function IELTSPage() {
                     )}
                 </AnimatePresence>
             </div>
-        </div>
+        </CommandGrid>
     )
 }
 
@@ -269,10 +271,10 @@ function IdlePhase({
         >
             {/* Recurring issues */}
             {analytics && analytics.essay_focus.length > 0 && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
                     <div className="flex items-center gap-2 mb-3">
-                        <AlertTriangle className="w-4 h-4 text-amber-400" />
-                        <span className="text-sm font-medium text-amber-300">Your recurring issues</span>
+                        <AlertTriangle className="w-4 h-4 text-rose-400" />
+                        <span className="text-sm font-medium text-rose-300">Your recurring issues</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {analytics.essay_focus.map((e) => (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft, Plus, Search, Trash2, Edit2, X, ChevronDown,
     Folder as FolderIcon, BookOpen, Layers, AlertCircle, Target, BookMarked,
@@ -74,7 +75,7 @@ const DIFF_BAR_COLOR: Record<string, string> = {
 // the UI legend is the same source of truth as the scheduler.
 const BUCKETS: { key: 'fragile' | 'learning' | 'solid' | 'mastered'; label: string; bar: string; dot: string; help: string }[] = [
     { key: 'fragile', label: 'Fragile', bar: 'bg-rose-400', dot: 'bg-rose-400', help: 'Struggle: 2+ lapses or low ease' },
-    { key: 'learning', label: 'Learning', bar: 'bg-amber-400', dot: 'bg-amber-400', help: 'Interval ≤ 7 days (incl. new)' },
+    { key: 'learning', label: 'Learning', bar: 'bg-cyan-400', dot: 'bg-cyan-400', help: 'Interval ≤ 7 days (incl. new)' },
     { key: 'solid', label: 'Solid', bar: 'bg-blue-400', dot: 'bg-blue-400', help: 'Interval 8–21 days' },
     { key: 'mastered', label: 'Mastered', bar: 'bg-emerald-400', dot: 'bg-emerald-400', help: 'Interval > 21 days' },
 ]
@@ -107,7 +108,7 @@ function StatsPanel({
             <div className="flex items-baseline justify-between">
                 <h3 className="text-xs uppercase tracking-wider text-white/40 font-medium">{scopeLabel}</h3>
                 {stats.needs_review_total > 0 && (
-                    <span className="text-xs text-amber-300/80 flex items-center gap-1">
+                    <span className="text-xs text-rose-300/80 flex items-center gap-1">
                         <AlertCircle className="w-3 h-3" />
                         {stats.needs_review_total} need{stats.needs_review_total === 1 ? 's' : ''} review
                     </span>
@@ -129,7 +130,7 @@ function StatsPanel({
                     value={stats.reviewed > 0 ? `${stats.accuracy}%` : '—'}
                     accent={
                         stats.accuracy >= 80 ? 'text-green-400'
-                            : stats.accuracy >= 60 ? 'text-amber-300'
+                            : stats.accuracy >= 60 ? 'text-cyan-300'
                                 : stats.reviewed > 0 ? 'text-rose-400'
                                     : 'text-white/40'
                     }
@@ -325,7 +326,7 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
     const missingDifficulty = !form.difficulty
     const difficultyTriggerClass = form.difficulty
         ? `${DIFF_COLOR[form.difficulty] ?? 'bg-[#0f0f1a] border-[#2a2b36] text-white'} font-semibold`
-        : 'bg-[#0f0f1a] border-amber-500/40 text-amber-300/70'
+        : 'bg-[#0f0f1a] border-rose-500/40 text-rose-300/70'
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -359,7 +360,7 @@ function WordForm({ initial, onSubmit, isPending, onCancel }: {
             </div>
 
             {aiError && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 text-xs text-amber-300">
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-2.5 text-xs text-rose-300">
                     AI fill failed: {aiError.message}
                 </div>
             )}
@@ -1205,7 +1206,8 @@ export default function DictionaryPage() {
 
     return (
         <div className="min-h-screen p-4 sm:p-6 lg:p-8">
-            <div className="max-w-3xl mx-auto">
+            <CommandGrid className="max-w-3xl mx-auto">
+                <StatusBar section="Dictionary" chips={[{ label: 'ONLINE', active: true }]} />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8">
                     <button onClick={goBack}
                         className="p-2 text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition-all shrink-0">
@@ -1244,7 +1246,7 @@ export default function DictionaryPage() {
                 {folderId && moduleId && !currentModule && (
                     <div className="text-center py-16 text-white/40 text-sm">Module not found.</div>
                 )}
-            </div>
+            </CommandGrid>
         </div>
     )
 }

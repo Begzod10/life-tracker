@@ -8,12 +8,13 @@ import { useTimetableStats, useDailyConclusions, useCategoryBudgets, useCategory
 import { useQueryClient } from '@tanstack/react-query'
 import { useHttp } from '@/lib/hooks/use-http'
 import { API_ENDPOINTS } from '@/lib/api/endpoints'
+import { StatusBar, CommandGrid } from '@/components/hud'
 
 const CATEGORY_COLORS: Record<string, { bg: string; bar: string; text: string }> = {
     work:     { bg: 'bg-indigo-500/15',  bar: 'bg-indigo-500',  text: 'text-indigo-300' },
     personal: { bg: 'bg-purple-500/15',  bar: 'bg-purple-500',  text: 'text-purple-300' },
     health:   { bg: 'bg-emerald-500/15', bar: 'bg-emerald-500', text: 'text-emerald-300' },
-    learning: { bg: 'bg-amber-500/15',   bar: 'bg-amber-500',   text: 'text-amber-300' },
+    learning: { bg: 'bg-teal-500/15',    bar: 'bg-teal-500',    text: 'text-teal-300' },
     social:   { bg: 'bg-pink-500/15',    bar: 'bg-pink-500',    text: 'text-pink-300' },
     other:    { bg: 'bg-slate-500/15',   bar: 'bg-slate-500',   text: 'text-slate-300' },
 }
@@ -256,6 +257,8 @@ export default function TimetableStatsPage() {
             <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/25 to-transparent pointer-events-none z-0" />
 
             <div className="relative z-10 max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+                <CommandGrid>
+                <StatusBar section="Timetable Stats" chips={[{ label: 'ANALYTICS', active: true }]} className="mb-2" />
 
                 {/* Header */}
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6 sm:mb-8">
@@ -375,13 +378,13 @@ export default function TimetableStatsPage() {
                             <StatCard icon={<CheckCircle2 className="w-3.5 h-3.5" />} label="Completion Rate"
                                 value={`${stats.completion_rate}%`}
                                 sub={`${stats.completed_blocks} of ${stats.total_blocks} blocks`}
-                                color={stats.completion_rate >= 70 ? 'text-emerald-400' : stats.completion_rate >= 40 ? 'text-amber-400' : 'text-red-400'} />
+                                color={stats.completion_rate >= 70 ? 'text-emerald-400' : stats.completion_rate >= 40 ? 'text-teal-400' : 'text-red-400'} />
                             <StatCard icon={<XCircle className="w-3.5 h-3.5" />} label="Not Finished"
                                 value={stats.missed_blocks}
                                 sub={`${stats.missed_hours}h · ${stats.missed_rate}% of total`}
-                                color={stats.missed_blocks === 0 ? 'text-emerald-400' : stats.missed_rate <= 20 ? 'text-amber-400' : 'text-red-400'} />
+                                color={stats.missed_blocks === 0 ? 'text-emerald-400' : stats.missed_rate <= 20 ? 'text-teal-400' : 'text-red-400'} />
                             <StatCard icon={<Flame className="w-3.5 h-3.5" />} label="Active Streak"
-                                value={`${stats.streak_days}d`} sub="consecutive days with blocks" color="text-amber-400" />
+                                value={`${stats.streak_days}d`} sub="consecutive days with blocks" color="text-teal-400" />
                         </div>
 
                         {/* ── Daily Progress Line Chart ── */}
@@ -432,7 +435,7 @@ export default function TimetableStatsPage() {
                                                     : isFuture
                                                         ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
                                                         : allMissed ? 'bg-red-500/40 text-red-200'
-                                                        : hasMissed ? 'bg-amber-500/35 text-amber-200'
+                                                        : hasMissed ? 'bg-rose-500/35 text-rose-200'
                                                         : pct === 1 ? 'bg-emerald-500 text-white'
                                                         : pct >= 0.5 ? 'bg-emerald-500/50 text-emerald-200'
                                                         : 'bg-indigo-500/30 text-indigo-300'}`}>
@@ -446,7 +449,7 @@ export default function TimetableStatsPage() {
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-indigo-500/30" />Partial</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-emerald-500/50" />≥50% done</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-emerald-500" />All done</div>
-                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-amber-500/35" />Some missed</div>
+                                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-rose-500/35" />Some missed</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/40" />All missed</div>
                                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-indigo-500/20 border border-indigo-500/30" />Upcoming</div>
                             </div>
@@ -594,8 +597,8 @@ export default function TimetableStatsPage() {
                                 const tiers = [
                                     { label: 'Perfect (100%)', min: 100, max: 100, color: 'bg-emerald-500', text: 'text-emerald-400' },
                                     { label: 'Good (75–99%)', min: 75, max: 99, color: 'bg-emerald-500/50', text: 'text-emerald-300' },
-                                    { label: 'Partial (50–74%)', min: 50, max: 74, color: 'bg-amber-500/60', text: 'text-amber-300' },
-                                    { label: 'Low (25–49%)', min: 25, max: 49, color: 'bg-orange-500/50', text: 'text-orange-300' },
+                                    { label: 'Partial (50–74%)', min: 50, max: 74, color: 'bg-teal-500/60', text: 'text-teal-300' },
+                                    { label: 'Low (25–49%)', min: 25, max: 49, color: 'bg-violet-500/50', text: 'text-violet-300' },
                                     { label: 'Poor (<25%)', min: 0, max: 24, color: 'bg-red-500/50', text: 'text-red-300' },
                                 ]
                                 return (
@@ -674,7 +677,7 @@ export default function TimetableStatsPage() {
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span className={`text-xs ${over ? 'text-amber-400' : 'text-white/50'}`}>
+                                                                <span className={`text-xs ${over ? 'text-rose-400' : 'text-white/50'}`}>
                                                                     {b.actual_hours.toFixed(1)} / {b.weekly_hours_target}h
                                                                 </span>
                                                                 <button onClick={() => { setEditingBudget(b.category); setBudgetInput(String(b.weekly_hours_target)) }}
@@ -694,7 +697,7 @@ export default function TimetableStatsPage() {
                                                         initial={{ width: 0 }}
                                                         animate={{ width: `${pct}%` }}
                                                         transition={{ duration: 0.5, ease: 'easeOut' }}
-                                                        className={`h-full rounded-full ${over ? 'bg-amber-500' : style.bar}`}
+                                                        className={`h-full rounded-full ${over ? 'bg-rose-500' : style.bar}`}
                                                     />
                                                 </div>
                                             </div>
@@ -804,6 +807,7 @@ export default function TimetableStatsPage() {
 
                     </div>
                 )}
+                </CommandGrid>
             </div>
         </div>
     )

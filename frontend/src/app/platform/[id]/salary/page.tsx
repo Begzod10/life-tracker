@@ -15,6 +15,7 @@ import { useSalaryMonth, useSalaryMonthDelete, useSalaryMonthUpdate, useGennisPa
 import { useExpensesBySalaryMonth, useExpenseCreate, useExpenseUpdate, useExpenseDelete } from '@/lib/hooks/use-expenses'
 import { useJob } from '@/lib/hooks/use-jobs'
 import { FormField, TextInput, TextareaInput, SelectInput, NumberInput, DatePicker, SubmitButton, CancelButton } from '@/components/modals/form-components'
+import { StatusBar, CommandGrid } from '@/components/hud'
 
 // Types
 type SalaryMonthData = {
@@ -113,7 +114,7 @@ function SalaryHeader({ data, job, onEdit }: { data: SalaryMonthData | null; job
                             {job.currency}
                         </Badge>
                     )}
-                    <Badge variant={isReceived ? 'default' : 'secondary'} className={`text-xs ${isReceived ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}>
+                    <Badge variant={isReceived ? 'default' : 'secondary'} className={`text-xs ${isReceived ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-violet-500/20 text-violet-400 border-violet-500/30'}`}>
                         {isReceived ? 'Received' : 'Pending'}
                     </Badge>
                 </div>
@@ -220,7 +221,7 @@ function SpendingBreakdownCard({ data }: { data: SalaryMonthData | null }) {
     if (spentPercentage > 90) {
         barColor = 'bg-red-500'
     } else if (spentPercentage > 70) {
-        barColor = 'bg-yellow-500'
+        barColor = 'bg-violet-500'
     }
 
     return (
@@ -450,7 +451,7 @@ function ExpenseCard({ expense, salaryMonthId }: { expense: Expense; salaryMonth
                     <Badge variant="outline" className="text-xs bg-white/5 border-white/10 text-white/70">{expense.category}</Badge>
                     <Badge variant="outline" className="text-xs bg-white/5 border-white/10 text-white/70">{expense.payment_type}</Badge>
                     {expense.is_recurring && <Repeat className="w-3 h-3 text-white/50" />}
-                    {expense.is_essential && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />}
+                    {expense.is_essential && <Star className="w-3 h-3 text-emerald-400 fill-emerald-400" />}
                 </div>
             </div>
 
@@ -667,7 +668,7 @@ function ExpensesListCard({ expenses, onAddExpense, salaryMonthId }: { expenses:
                                             <td className="py-3 px-3 text-white font-medium">{expense.amount.toLocaleString()}</td>
                                             <td className="py-3 px-3 text-white/70 text-xs">{expense.payment_type}</td>
                                             <td className="py-3 px-3 text-white/70">{expense.date}</td>
-                                            <td className="py-3 px-3">{expense.is_essential ? <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> : '-'}</td>
+                                            <td className="py-3 px-3">{expense.is_essential ? <Star className="w-4 h-4 text-emerald-400 fill-emerald-400" /> : '-'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1049,6 +1050,8 @@ function SalaryPage() {
 
     return (
         <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+            <CommandGrid>
+            <StatusBar section="Salary" chips={[{ label: 'EMERALD', active: true }]} className="mb-2" />
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <SalaryHeader data={data} job={job ?? null} onEdit={() => setEditModalOpen(true)} />
@@ -1119,6 +1122,7 @@ function SalaryPage() {
                     </div>
                 </AlertDialogContent>
             </AlertDialog>
+            </CommandGrid>
         </div>
     )
 }

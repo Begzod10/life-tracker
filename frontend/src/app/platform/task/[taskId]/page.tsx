@@ -19,6 +19,7 @@ import { useProgressLogsByTask, useTaskProgressLogCreate, useTaskProgressLogUpda
 import { ProgressLogForm } from '@/components/modals/forms/progress-log-form'
 import { ProgressLog } from '@/types'
 import { TrendingUp, Plus, BarChart2 } from 'lucide-react'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     LineChart,
     Line,
@@ -73,8 +74,8 @@ type TaskData = {
 
 const getPriorityGradient = (priority: string) => {
     const gradients = {
-        high: 'from-red-500 to-orange-500',
-        medium: 'from-yellow-500 to-amber-500',
+        high: 'from-rose-500 to-rose-600',
+        medium: 'from-violet-400 to-violet-600',
         low: 'from-green-500 to-emerald-500',
     }
     return gradients[priority as keyof typeof gradients] || gradients.low
@@ -83,7 +84,7 @@ const getPriorityGradient = (priority: string) => {
 const getPriorityColor = (priority: string) => {
     const colors = {
         high: 'bg-red-500/10 text-red-400 border-red-500/20',
-        medium: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+        medium: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
         low: 'bg-green-500/10 text-green-400 border-green-500/20',
     }
     return colors[priority as keyof typeof colors] || colors.low
@@ -958,6 +959,8 @@ export default function TaskProfilePage() {
             transition={{ duration: 0.5 }}
             className="min-h-screen bg-background p-3 sm:p-6"
         >
+            <CommandGrid>
+            <StatusBar section="Task" chips={[{ label: 'DETAIL', active: true }]} className="mb-2" />
             <div className="max-w-7xl mx-auto">
                 {/* Header Section */}
                 <TaskHeader task={taskData} />
@@ -1142,6 +1145,7 @@ export default function TaskProfilePage() {
                     </Button>
                 </div>
             </BaseModal>
+            </CommandGrid>
         </motion.main>
     )
 }
