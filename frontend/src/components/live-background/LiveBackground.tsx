@@ -19,7 +19,7 @@ const VALID_MODES = new Set<string>(ALL_MODES)
 
 // Sun=scan Mon=beam Tue=network Wed=drift Thu=motes Fri=rain Sat=aurora
 const DAY_FX: Exclude<FxMode, 'auto' | 'off'>[] = [
-    'scan', 'beam', 'network', 'drift', 'motes', 'rain', 'aurora',
+    'scan', 'beam', 'network', 'contour', 'pulse', 'rain', 'starfield',
 ]
 
 const LS_KEY = 'lt_fx'
