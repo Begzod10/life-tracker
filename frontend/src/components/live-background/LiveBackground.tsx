@@ -6,12 +6,11 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 
 export type FxMode =
     | 'aurora' | 'drift' | 'motes' | 'scan' | 'network'
-    | 'rain' | 'beam' | 'pulse' | 'starfield' | 'contour'
+    | 'rain' | 'beam'
     | 'auto' | 'off'
 
 const ALL_MODES: FxMode[] = [
-    'aurora', 'drift', 'motes', 'scan', 'network',
-    'rain', 'beam', 'pulse', 'starfield', 'contour',
+    'aurora', 'drift', 'motes', 'scan', 'network', 'rain', 'beam',
     'auto', 'off',
 ]
 
@@ -19,7 +18,7 @@ const VALID_MODES = new Set<string>(ALL_MODES)
 
 // Sun=scan Mon=beam Tue=network Wed=drift Thu=motes Fri=rain Sat=aurora
 const DAY_FX: Exclude<FxMode, 'auto' | 'off'>[] = [
-    'scan', 'beam', 'network', 'contour', 'pulse', 'rain', 'starfield',
+    'scan', 'beam', 'network', 'drift', 'motes', 'rain', 'aurora',
 ]
 
 const LS_KEY = 'lt_fx'
@@ -379,131 +378,17 @@ function Beam() {
     )
 }
 
-// ── 3 new effects ─────────────────────────────────────────────────────────────
-// pulse  — expanding radar rings from center; focused, meditative (good for Sun or Thu)
-// starfield — slow parallax star dots; calm, vast (good for Sat)
-// contour — slow drifting topographic lines; flowing, analytical (good for Wed or Fri)
-
-function Pulse() {
-    const rings = [0, 1, 2, 3]
-    return (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {/* Crosshair */}
-            <div style={{
-                position: 'absolute',
-                width: '100%', height: '1px',
-                background: 'linear-gradient(90deg, transparent 0%, rgba(34,211,238,0.06) 40%, rgba(34,211,238,0.12) 50%, rgba(34,211,238,0.06) 60%, transparent)',
-            }} />
-            <div style={{
-                position: 'absolute',
-                width: '1px', height: '100%',
-                background: 'linear-gradient(180deg, transparent 0%, rgba(34,211,238,0.06) 40%, rgba(34,211,238,0.12) 50%, rgba(34,211,238,0.06) 60%, transparent)',
-            }} />
-            {/* Center dot */}
-            <div style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: '#22d3ee', zIndex: 1,
-                boxShadow: '0 0 12px 4px rgba(34,211,238,0.5)',
-            }} />
-            {/* Expanding rings */}
-            {rings.map((i) => (
-                <div key={i} style={{
-                    position: 'absolute',
-                    width: '60vmin', height: '60vmin',
-                    borderRadius: '50%',
-                    border: '1px solid rgba(34,211,238,0.25)',
-                    animation: `lt-pulse-ring 4s ease-out ${i * 1}s infinite`,
-                }} />
-            ))}
-        </div>
-    )
-}
-
-function Starfield() {
-    const stars = Array.from({ length: 120 }, (_, i) => ({
-        id: i,
-        left: `${(i * 67 + 13) % 100}%`,
-        top: `${(i * 43 + 7) % 100}%`,
-        size: 1 + (i % 3) * 0.5,
-        baseOpacity: 0.2 + (i % 5) * 0.08,
-        delay: `${(i * 0.37) % 6}s`,
-        duration: `${4 + (i % 5)}s`,
-        violet: i % 11 === 0,
-    }))
-    return (
-        <div className="absolute inset-0 overflow-hidden">
-            {stars.map((s) => (
-                <div key={s.id} style={{
-                    position: 'absolute',
-                    left: s.left, top: s.top,
-                    width: s.size, height: s.size,
-                    borderRadius: '50%',
-                    background: s.violet ? '#c4b5fd' : '#e0f7ff',
-                    '--star-base-opacity': s.baseOpacity,
-                    opacity: s.baseOpacity,
-                    boxShadow: s.size > 1.5 ? `0 0 ${s.size * 2}px rgba(255,255,255,0.4)` : 'none',
-                    animation: `lt-star-twinkle ${s.duration} ease-in-out ${s.delay} infinite`,
-                } as React.CSSProperties} />
-            ))}
-        </div>
-    )
-}
-
-function Contour() {
-    return (
-        <div style={{
-            position: 'absolute', inset: 0, overflow: 'hidden',
-        }}>
-            {/* Two offset SVG-like gradient layers creating contour illusion */}
-            <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: `
-                    repeating-radial-gradient(
-                        ellipse 80% 60% at 50% 45%,
-                        transparent 0px, transparent 38px,
-                        rgba(34,211,238,0.045) 39px, rgba(34,211,238,0.045) 40px,
-                        transparent 41px, transparent 79px,
-                        rgba(129,86,245,0.035) 80px, rgba(129,86,245,0.035) 81px
-                    )
-                `,
-                animation: 'lt-contour-drift 28s linear infinite',
-            }} />
-            <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: `
-                    repeating-radial-gradient(
-                        ellipse 65% 80% at 55% 55%,
-                        transparent 0px, transparent 58px,
-                        rgba(34,211,238,0.03) 59px, rgba(34,211,238,0.03) 60px,
-                        transparent 61px, transparent 119px,
-                        rgba(34,211,238,0.025) 120px, rgba(34,211,238,0.025) 121px
-                    )
-                `,
-                animation: 'lt-contour-drift 36s linear reverse infinite',
-            }} />
-            <div style={{
-                position: 'absolute', inset: 0,
-                WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 20%, transparent 85%)',
-                maskImage: 'radial-gradient(ellipse 90% 80% at 50% 50%, black 20%, transparent 85%)',
-            }} />
-        </div>
-    )
-}
-
 // ── Effect renderer ───────────────────────────────────────────────────────────
 
 function EffectLayer({ effect }: { effect: Exclude<FxMode, 'auto' | 'off'> }) {
     switch (effect) {
-        case 'aurora':    return <Aurora />
-        case 'drift':     return <Drift />
-        case 'motes':     return <Motes />
-        case 'scan':      return <Scan />
-        case 'network':   return <Network />
-        case 'rain':      return <Rain />
-        case 'beam':      return <Beam />
-        case 'pulse':     return <Pulse />
-        case 'starfield': return <Starfield />
-        case 'contour':   return <Contour />
+        case 'aurora':  return <Aurora />
+        case 'drift':   return <Drift />
+        case 'motes':   return <Motes />
+        case 'scan':    return <Scan />
+        case 'network': return <Network />
+        case 'rain':    return <Rain />
+        case 'beam':    return <Beam />
     }
 }
 
@@ -512,13 +397,11 @@ function EffectLayer({ effect }: { effect: Exclude<FxMode, 'auto' | 'off'> }) {
 const LABELS: Record<FxMode, string> = {
     aurora: 'Aurora', drift: 'Drift', motes: 'Motes', scan: 'Scan',
     network: 'Network', rain: 'Rain', beam: 'Beam',
-    pulse: 'Pulse', starfield: 'Stars', contour: 'Contour',
     auto: 'Auto', off: 'Off',
 }
 
 const SWITCHER_ORDER: FxMode[] = [
-    'auto', 'off', 'aurora', 'drift', 'motes', 'scan',
-    'network', 'rain', 'beam', 'pulse', 'starfield', 'contour',
+    'auto', 'off', 'aurora', 'drift', 'motes', 'scan', 'network', 'rain', 'beam',
 ]
 
 // ── Main component ────────────────────────────────────────────────────────────
