@@ -1,40 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type FxMode =
-    | 'aurora' | 'drift' | 'motes' | 'scan' | 'network'
-    | 'rain' | 'beam'
-    | 'auto' | 'off'
-
-const ALL_MODES: FxMode[] = [
-    'aurora', 'drift', 'motes', 'scan', 'network', 'rain', 'beam',
-    'auto', 'off',
-]
-
-const VALID_MODES = new Set<string>(ALL_MODES)
+type FxEffect = 'aurora' | 'drift' | 'motes' | 'scan' | 'network' | 'rain' | 'beam'
 
 // Sun=scan Mon=beam Tue=network Wed=drift Thu=motes Fri=rain Sat=aurora
-const DAY_FX: Exclude<FxMode, 'auto' | 'off'>[] = [
-    'scan', 'beam', 'network', 'drift', 'motes', 'rain', 'aurora',
-]
+const DAY_FX: FxEffect[] = ['scan', 'beam', 'network', 'drift', 'motes', 'rain', 'aurora']
 
-const LS_KEY = 'lt_fx'
-
-function resolveEffect(mode: FxMode): Exclude<FxMode, 'auto' | 'off'> {
-    if (mode === 'auto') return DAY_FX[new Date().getDay()]
-    if (mode === 'off') return 'aurora' // unreachable but TS happy
-    return mode as Exclude<FxMode, 'auto' | 'off'>
-}
-
-function loadMode(): FxMode {
-    try {
-        const v = localStorage.getItem(LS_KEY)
-        if (v && VALID_MODES.has(v)) return v as FxMode
-    } catch { /* */ }
-    return 'auto'
+function resolveEffect(): FxEffect {
+    return DAY_FX[new Date().getDay()]
 }
 
 // ── CSS keyframes injected once ──────────────────────────────────────────────
@@ -358,7 +334,7 @@ function Beam() {
 
 // ── Effect renderer ───────────────────────────────────────────────────────────
 
-function EffectLayer({ effect }: { effect: Exclude<FxMode, 'auto' | 'off'> }) {
+function EffectLayer({ effect }: { effect: FxEffect }) {
     switch (effect) {
         case 'aurora':  return <Aurora />
         case 'drift':   return <Drift />
@@ -372,122 +348,30 @@ function EffectLayer({ effect }: { effect: Exclude<FxMode, 'auto' | 'off'> }) {
 
 // ── Switcher labels ───────────────────────────────────────────────────────────
 
-const LABELS: Record<FxMode, string> = {
-    aurora: 'Aurora', drift: 'Drift', motes: 'Motes', scan: 'Scan',
-    network: 'Network', rain: 'Rain', beam: 'Beam',
-    auto: 'Auto', off: 'Off',
-}
-
-const SWITCHER_ORDER: FxMode[] = [
-    'auto', 'off', 'aurora', 'drift', 'motes', 'scan', 'network', 'rain', 'beam',
-]
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function LiveBackground() {
-    const [mode, setMode] = useState<FxMode>('auto')
-    const [open, setOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
-    const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]
 
     useEffect(() => {
         ensureCSS()
-        setMode(loadMode())
         setMounted(true)
-    }, [])
-
-    const choose = useCallback((m: FxMode) => {
-        setMode(m)
-        setOpen(false)
-        try { localStorage.setItem(LS_KEY, m) } catch { /* */ }
     }, [])
 
     if (!mounted) return null
 
-    const activeEffect = mode === 'off' ? null : resolveEffect(mode)
-    const activeLabel = mode === 'auto' ? `Auto · ${dayName}` : LABELS[mode]
-
-    const pill: React.CSSProperties = {
-        fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        padding: '4px 10px',
-        borderRadius: 999,
-        border: 'none',
-        cursor: 'pointer',
-        transition: 'background 0.2s, color 0.2s',
-        whiteSpace: 'nowrap',
-    }
+    const effect = resolveEffect()
 
     return (
-        <>
-            {/* Background layer */}
-            <div
-                className="lt-livebg"
-                aria-hidden
-                style={{
-                    position: 'fixed', inset: 0, zIndex: -10,
-                    pointerEvents: 'none',
-                    transition: 'opacity 0.7s ease',
-                    opacity: mode === 'off' ? 0 : 1,
-                }}
-            >
-                {activeEffect && <EffectLayer effect={activeEffect} />}
-            </div>
-
-            {/* Switcher — collapsed pill + expanded tray */}
-            <div style={{
-                position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-                zIndex: 9990, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-            }}>
-                {/* Expanded tray */}
-                {open && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center',
-                        maxWidth: '90vw',
-                        background: 'rgba(7,10,20,0.90)', backdropFilter: 'blur(16px)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 16, padding: '6px 8px',
-                        boxShadow: '0 4px 32px rgba(0,0,0,0.6)',
-                    }}>
-                        {SWITCHER_ORDER.map((m) => {
-                            const active = m === mode
-                            const label = m === 'auto' ? `Auto · ${dayName}` : LABELS[m]
-                            return (
-                                <button
-                                    key={m}
-                                    onClick={() => choose(m)}
-                                    style={{
-                                        ...pill,
-                                        background: active
-                                            ? 'linear-gradient(135deg, #22d3ee, #6366f1)'
-                                            : 'transparent',
-                                        color: active ? '#fff' : 'rgba(255,255,255,0.4)',
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            )
-                        })}
-                    </div>
-                )}
-
-                {/* Collapsed pill — always visible */}
-                <button
-                    onClick={() => setOpen((v) => !v)}
-                    style={{
-                        ...pill,
-                        padding: '5px 14px',
-                        background: 'linear-gradient(135deg, #22d3ee, #6366f1)',
-                        color: '#fff',
-                        boxShadow: '0 2px 16px rgba(34,211,238,0.25)',
-                    }}
-                >
-                    {activeLabel}
-                </button>
-            </div>
-        </>
+        <div
+            className="lt-livebg"
+            aria-hidden
+            style={{
+                position: 'fixed', inset: 0, zIndex: -10,
+                pointerEvents: 'none',
+            }}
+        >
+            <EffectLayer effect={effect} />
+        </div>
     )
 }
