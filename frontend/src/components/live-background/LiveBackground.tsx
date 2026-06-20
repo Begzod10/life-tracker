@@ -310,28 +310,6 @@ function Rain() {
     }))
     return (
         <div className="absolute inset-0 overflow-hidden" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px' }}>
-            {cols.map((col) => (
-                <div key={col.id} style={{
-                    position: 'absolute',
-                    left: col.left,
-                    top: '-15%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '3px',
-                    opacity: 0.18,
-                    color: col.violet ? '#a78bfa' : '#22d3ee',
-                    animation: `lt-mote-rise ${col.duration}s linear ${col.delay}s infinite`,
-                    animationName: 'none',
-                }}>
-                    {col.chars.map((c, j) => (
-                        <span key={j} style={{
-                            opacity: 1 - j * 0.06,
-                            animation: `lt-mote-rise ${col.duration}s linear ${col.delay - j * 0.18}s infinite`,
-                        }}>{c}</span>
-                    ))}
-                </div>
-            ))}
-            {/* Proper falling column animation */}
             <style>{`
                 @keyframes lt-rain-col {
                     0%   { transform: translateY(-15%); opacity: 0; }
@@ -341,7 +319,7 @@ function Rain() {
                 }
             `}</style>
             {cols.map((col) => (
-                <div key={`r-${col.id}`} style={{
+                <div key={col.id} style={{
                     position: 'absolute',
                     left: col.left,
                     top: 0,
