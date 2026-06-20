@@ -2516,8 +2516,8 @@ function PracticePageInner() {
     }
 
     return (
-        <div className="min-h-screen p-4 sm:p-6 lg:p-8">
-            <div className="max-w-2xl mx-auto">
+        <div className="min-h-screen flex flex-col p-4 sm:p-6 lg:p-8 backdrop-blur-[2px] bg-white/[0.015]">
+            <div className="max-w-2xl mx-auto w-full flex flex-col flex-1">
                 {/* Header */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-10">
                     <button
@@ -2571,6 +2571,7 @@ function PracticePageInner() {
                     )}
                 </motion.div>
 
+                <div className="flex-1 flex items-center w-full">
                 <AnimatePresence mode="wait">
                     {/* Mode picker */}
                     {phase === 'pick' && (
@@ -2803,6 +2804,7 @@ function PracticePageInner() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+                </div>
             </div>
         </div>
     )
