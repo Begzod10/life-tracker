@@ -1341,39 +1341,47 @@ export default function ReaderPage() {
                             </button>
                         </div>
                         <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] flex flex-col gap-3 overflow-hidden flex-1 min-h-0">
-                            {/* Highlights card */}
+                            {/* Highlights card — current page only */}
                             <div className="flex flex-col bg-white/[0.02] border border-white/5 rounded-2xl p-4 overflow-hidden min-h-0">
-                                <button
-                                    onClick={() => sidebarHighlights.length > 0 && setShowHighlightsModal(true)}
-                                    className="flex items-center justify-between mb-3 w-full text-left group"
-                                >
+                                <div className="flex items-center justify-between mb-3">
                                     <h2 className="text-sm font-medium text-white flex items-center gap-2">
                                         <Bookmark className="w-4 h-4 text-amber-300" />
                                         Highlights
                                     </h2>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-md transition-colors ${sidebarHighlights.length > 0 ? 'text-amber-300/80 bg-amber-500/10 group-hover:bg-amber-500/20' : 'text-white/40'}`}>
-                                        {sidebarHighlights.length}
-                                    </span>
-                                </button>
-
-                                {sidebarHighlights.length === 0 ? (
-                                    <p className="text-xs text-white/30 leading-relaxed">
-                                        Nothing yet. Select text on the page and tap Highlight to save your first one.
-                                    </p>
-                                ) : (
-                                    <div className="overflow-y-auto -mr-2 pr-2 space-y-2">
-                                        {sidebarHighlights.map(h => (
-                                            <HighlightRow
-                                                key={h.id}
-                                                highlight={h}
-                                                onJump={() => goToPage(h.page)}
-                                                onDelete={() =>
-                                                    deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
-                                                }
-                                            />
-                                        ))}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-white/30">p.{page}</span>
+                                        {sidebarHighlights.length > 0 && (
+                                            <button
+                                                onClick={() => setShowHighlightsModal(true)}
+                                                className="text-xs text-amber-300/60 hover:text-amber-300 transition-colors"
+                                            >
+                                                All {sidebarHighlights.length}
+                                            </button>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+
+                                {(() => {
+                                    const pageHighlights = sidebarHighlights.filter(h => h.page === page)
+                                    return pageHighlights.length === 0 ? (
+                                        <p className="text-xs text-white/30 leading-relaxed">
+                                            No highlights on this page.
+                                        </p>
+                                    ) : (
+                                        <div className="overflow-y-auto -mr-2 pr-2 space-y-2">
+                                            {pageHighlights.map(h => (
+                                                <HighlightRow
+                                                    key={h.id}
+                                                    highlight={h}
+                                                    onJump={() => goToPage(h.page)}
+                                                    onDelete={() =>
+                                                        deleteHighlight.mutate({ bookId: book.id, highlightId: h.id })
+                                                    }
+                                                />
+                                            ))}
+                                        </div>
+                                    )
+                                })()}
                             </div>
 
                             {/* Dictionary card — single-word entries only. Sentences and
