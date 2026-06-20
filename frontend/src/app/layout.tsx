@@ -2,10 +2,9 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import "./globals.css"
 import { QueryProvider } from '@/lib/providers/query-provider'
-import { Header } from '@/components/layouts/header'
-import { Providers } from './providers'
 import { AuthProvider } from '@/lib/providers/auth-provider'
 import { PwaRegister } from '@/components/pwa-register'
+import { LiveBackground } from '@/components/live-background/LiveBackground'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -37,13 +36,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={inter.className}>
+        <LiveBackground />
         <QueryProvider>
           <PwaRegister />
           <AuthProvider>
             {children}
           </AuthProvider>
-          {/* <Providers> */}
-          {/* </Providers> */}
         </QueryProvider>
       </body>
     </html>
