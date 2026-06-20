@@ -148,7 +148,7 @@ function SidebarContent({
             <div className="flex flex-col gap-3 p-4 border-b border-white/5">
                 <div className="flex items-center justify-between">
                     <Link href="/platform" onClick={onNavigate} className="flex items-center gap-2 group">
-                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
                             <LayoutGrid className="h-4 w-4 text-white" />
                         </div>
                         <span className="text-base font-semibold tracking-tight text-white truncate">LifeTrack</span>
@@ -193,7 +193,7 @@ function SidebarContent({
                                     <button
                                         type="button"
                                         onClick={() => toggleSection(section.label!)}
-                                        className="w-full flex items-center justify-between px-3 py-2 mt-2 rounded-lg text-[11px] font-semibold uppercase tracking-wider text-white/30 hover:text-white/50 hover:bg-white/[0.03] transition-colors"
+                                        className="w-full flex items-center justify-between px-3 py-2 mt-2 rounded-lg mono-label text-white/30 hover:text-white/50 hover:bg-white/[0.03] transition-colors"
                                     >
                                         {section.label}
                                         <ChevronDown
@@ -223,14 +223,14 @@ function SidebarContent({
                                                 className={cn(
                                                     'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all',
                                                     active
-                                                        ? 'bg-white/10 text-white shadow-sm shadow-black/20'
-                                                        : 'text-white/55 hover:bg-white/[0.04] hover:text-white'
+                                                        ? 'bg-cyan-500/10 text-white border border-cyan-500/20 shadow-sm shadow-cyan-500/10'
+                                                        : 'text-white/55 hover:bg-white/[0.04] hover:text-white border border-transparent'
                                                 )}
                                             >
                                                 <Icon
                                                     className={cn(
                                                         'h-4 w-4 shrink-0 transition-colors',
-                                                        active ? 'text-indigo-300' : 'text-white/40'
+                                                        active ? 'text-cyan-400' : 'text-white/40'
                                                     )}
                                                 />
                                                 <span className="truncate">{item.name}</span>
@@ -423,7 +423,7 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                     onMouseDown={startResize}
                     className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize group"
                 >
-                    <div className="absolute inset-y-0 right-0 w-px bg-white/5 group-hover:bg-indigo-400/50 group-hover:w-0.5 transition-all" />
+                    <div className="absolute inset-y-0 right-0 w-px bg-white/5 group-hover:bg-cyan-400/50 group-hover:w-0.5 transition-all" />
                 </div>
             </aside>
         </>

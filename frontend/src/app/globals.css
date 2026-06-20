@@ -1,34 +1,67 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-/* Темная тема для всего приложения */
+/* ── Cool HUD / Command-Center theme ───────────────────────────────────────── */
 @theme {
-  /* Colors - темная палитра */
-  --color-background: oklch(0.15 0.02 240);
+  /* Canvas — deep navy */
+  --color-background: #070a14;
   --color-foreground: oklch(0.95 0.01 240);
 
-  --color-card: oklch(0.18 0.02 240);
+  /* Glass card surface */
+  --color-card: rgba(255,255,255,0.035);
   --color-card-foreground: oklch(0.95 0.01 240);
 
-  --color-primary: oklch(0.65 0.25 250);
-  --color-primary-foreground: oklch(0.98 0.01 240);
+  /* Primary → CYAN */
+  --color-primary: #22d3ee;
+  --color-primary-foreground: #020d14;
 
-  --color-secondary: oklch(0.25 0.03 240);
+  --color-secondary: rgba(255,255,255,0.06);
   --color-secondary-foreground: oklch(0.95 0.01 240);
 
-  --color-muted: oklch(0.25 0.02 240);
-  --color-muted-foreground: oklch(0.65 0.02 240);
+  --color-muted: rgba(255,255,255,0.05);
+  --color-muted-foreground: oklch(0.55 0.02 240);
 
-  --color-accent: oklch(0.25 0.03 240);
-  --color-accent-foreground: oklch(0.95 0.01 240);
+  --color-accent: rgba(34,211,238,0.12);
+  --color-accent-foreground: #22d3ee;
 
-  --color-border: oklch(0.25 0.02 240);
-  --color-input: oklch(0.25 0.02 240);
-  --color-ring: oklch(0.65 0.25 250);
+  /* Hairline borders */
+  --color-border: rgba(255,255,255,0.08);
+  --color-input: rgba(255,255,255,0.06);
+  --color-ring: #22d3ee;
 
   /* Radius */
   --radius-sm: 0.25rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
+
+  /* ── Brand + domain tokens ──────────────────────────────────────────────── */
+  /* Brand gradient: cyan → indigo */
+  --brand-from: #22d3ee;
+  --brand-to:   #6366f1;
+
+  /* Domain accent stops (cool spectrum, NO amber/orange/brown) */
+  --domain-goals-from:     #22d3ee;  --domain-goals-to:     #0ea5e9;
+  --domain-timetable-from: #2dd4bf;  --domain-timetable-to: #14b8a6;
+  --domain-finances-from:  #34d399;  --domain-finances-to:  #10b981;
+  --domain-learning-from:  #60a5fa;  --domain-learning-to:  #3b82f6;
+  --domain-news-from:      #818cf8;  --domain-news-to:      #6366f1;
+  --domain-tasks-from:     #a78bfa;  --domain-tasks-to:     #8b5cf6;
+  --domain-habits-from:    #e879f9;  --domain-habits-to:    #d946ef;
+  --domain-health-from:    #fb7185;  --domain-health-to:    #f43f5e;
+  --domain-analytics-from: #818cf8;  --domain-analytics-to: #22d3ee;
+  --domain-social-from:    #f0abfc;  --domain-social-to:    #e879f9;
+
+  /* Glass panel system */
+  --glass-fill:        rgba(255,255,255,0.035);
+  --glass-border:      rgba(255,255,255,0.08);
+  --glass-hover:       rgba(255,255,255,0.15);
+
+  /* HUD cyan glow */
+  --glow-cyan:   0 8px 24px rgba(34,211,238,0.22);
+  --glow-focus:  0 0 0 3px rgba(34,211,238,0.5);
+
+  /* Motion */
+  --ease-hud: cubic-bezier(0.22,1,0.36,1);
 }
 
 /* Sidebar push — desktop only. JS sets --sidebar-w; transitions off during drag. */
@@ -57,14 +90,84 @@
   }
 }
 
-/* Базовые стили */
-* {
-  border-color: var(--color-border);
-}
+/* Base */
+* { border-color: var(--color-border); }
 
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── HUD utilities ─────────────────────────────────────────────────────────── */
+
+/* Mono data label: uppercase, tracked, JetBrains Mono */
+.mono-label {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+/* Tabular number */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Glass panel */
+.glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Corner-bracket card */
+.hcard {
+  position: relative;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 200ms var(--ease-hud), box-shadow 200ms var(--ease-hud), transform 200ms var(--ease-hud);
+}
+.hcard::before,
+.hcard::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: #22d3ee;
+  border-style: solid;
+  opacity: 0.16;
+  transition: opacity 200ms var(--ease-hud);
+}
+.hcard::before { top: -1px; left: -1px; border-width: 1.5px 0 0 1.5px; }
+.hcard::after  { bottom: -1px; right: -1px; border-width: 0 1.5px 1.5px 0; }
+.hcard:hover { border-color: var(--glass-hover); box-shadow: var(--glow-cyan); transform: translateY(-2px); }
+.hcard:hover::before, .hcard:hover::after { opacity: 0.75; }
+
+/* Command-grid background texture */
+.cmd-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 40%, transparent 100%);
+}
+
+/* Domain gradient helpers — apply as inline style or via data-domain */
+[data-domain="goals"]     { --d-from: var(--domain-goals-from);     --d-to: var(--domain-goals-to); }
+[data-domain="timetable"] { --d-from: var(--domain-timetable-from); --d-to: var(--domain-timetable-to); }
+[data-domain="finances"]  { --d-from: var(--domain-finances-from);  --d-to: var(--domain-finances-to); }
+[data-domain="learning"]  { --d-from: var(--domain-learning-from);  --d-to: var(--domain-learning-to); }
+[data-domain="news"]      { --d-from: var(--domain-news-from);      --d-to: var(--domain-news-to); }
+[data-domain="tasks"]     { --d-from: var(--domain-tasks-from);     --d-to: var(--domain-tasks-to); }
+[data-domain="habits"]    { --d-from: var(--domain-habits-from);    --d-to: var(--domain-habits-to); }
+[data-domain="health"]    { --d-from: var(--domain-health-from);    --d-to: var(--domain-health-to); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hcard { transition: none; }
+  .hcard:hover { transform: none; }
 }
 
 /* Кастомный скроллбар */

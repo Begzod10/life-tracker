@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     Calendar,
     ChevronLeft,
@@ -180,7 +181,9 @@ export default function NewsPage() {
                 </div>
             </header>
 
-            <main className="mx-auto max-w-6xl px-4 pb-24 pt-5 sm:px-6">
+            <CommandGrid>
+            <StatusBar section="News" chips={[{ label: 'LIVE', active: true }]} className="mx-auto max-w-6xl px-4 pt-5 sm:px-6" />
+            <main className="mx-auto max-w-6xl px-4 pb-24 pt-3 sm:px-6">
                 {/* ─── Category chips ────────────────────────────────────── */}
                 {selectedCategories.length > 0 && (
                     <div className="mb-5 flex flex-wrap gap-2">
@@ -245,6 +248,7 @@ export default function NewsPage() {
                     </>
                 )}
             </main>
+            </CommandGrid>
         </div>
     )
 }
@@ -328,7 +332,7 @@ interface ArticleCardProps {
 function sourceAvatarColor(name: string): string {
     const colors = [
         'bg-indigo-500/70', 'bg-violet-500/70', 'bg-blue-500/70',
-        'bg-emerald-500/70', 'bg-amber-500/70', 'bg-rose-500/70',
+        'bg-emerald-500/70', 'bg-sky-500/70', 'bg-rose-500/70',
         'bg-cyan-500/70', 'bg-fuchsia-500/70', 'bg-teal-500/70',
     ]
     let h = 0

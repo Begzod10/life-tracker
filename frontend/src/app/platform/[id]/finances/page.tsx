@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter, useParams } from 'next/navigation'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import { ChevronLeft, Plus, Trash2, Edit2, TrendingUp, TrendingDown, Loader2, BarChart3, Wallet, PiggyBank, ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card } from '@/components/ui/card'
@@ -154,7 +155,7 @@ interface SavingsAccount {
 
 // Color mappings
 const categoryColors: Record<string, { bg: string; text: string; badge: string }> = {
-    food: { bg: 'bg-orange-500/10', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-300' },
+    food: { bg: 'bg-teal-500/10', text: 'text-teal-400', badge: 'bg-teal-500/20 text-teal-300' },
     transport: { bg: 'bg-blue-500/10', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300' },
     education: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', badge: 'bg-indigo-500/20 text-indigo-300' },
     entertainment: { bg: 'bg-pink-500/10', text: 'text-pink-400', badge: 'bg-pink-500/20 text-pink-300' },
@@ -168,7 +169,7 @@ const STAT_ACCENTS = {
     income: { border: 'border-emerald-500/20', glow: 'bg-emerald-500/5', icon: 'text-emerald-400', value: 'text-emerald-300' },
     expense: { border: 'border-rose-500/20', glow: 'bg-rose-500/5', icon: 'text-rose-400', value: 'text-rose-300' },
     net: { border: 'border-sky-500/20', glow: 'bg-sky-500/5', icon: 'text-sky-400', value: 'text-white' },
-    savings: { border: 'border-amber-500/20', glow: 'bg-amber-500/5', icon: 'text-amber-400', value: 'text-amber-300' },
+    savings: { border: 'border-cyan-500/20', glow: 'bg-cyan-500/5', icon: 'text-cyan-400', value: 'text-cyan-300' },
 } as const
 
 // Components
@@ -997,7 +998,7 @@ const SalaryTab: React.FC<{ personId: string | number }> = ({ personId }) => {
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-500">Total Spent</p>
-                                    <p className="text-sm text-orange-400">{(salary.total_spent || 0).toLocaleString()} {salary.currency || 'UZS'}</p>
+                                    <p className="text-sm text-rose-400">{(salary.total_spent || 0).toLocaleString()} {salary.currency || 'UZS'}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-500">Remaining Amount</p>
@@ -1082,7 +1083,7 @@ const OverviewTab: React.FC = () => {
                     },
                     {
                         label: 'Net Worth', icon: <PiggyBank className="w-4 h-4" />,
-                        value: fmt((netWorth as any)?.net_worth), color: 'amber',
+                        value: fmt((netWorth as any)?.net_worth), color: 'cyan',
                         loading: nwLoading,
                     },
                 ].map(card => (
@@ -1187,12 +1188,12 @@ const OverviewTab: React.FC = () => {
             {!nwLoading && netWorth && (
                 <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
                     <p className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
-                        <Wallet className="w-4 h-4 text-amber-400" /> Net Worth Breakdown
+                        <Wallet className="w-4 h-4 text-cyan-400" /> Net Worth Breakdown
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <p className="text-xs text-white/40 mb-1">Savings Accounts</p>
-                            <p className="text-base font-semibold text-amber-300">{fmt((netWorth as any).breakdown?.savings_accounts)}</p>
+                            <p className="text-base font-semibold text-cyan-300">{fmt((netWorth as any).breakdown?.savings_accounts)}</p>
                         </div>
                         <div>
                             <p className="text-xs text-white/40 mb-1">Cash in Hand</p>
@@ -2739,7 +2740,7 @@ const SavingsTab: React.FC<{ personId: string }> = ({ personId }) => {
 
     const riskColors: Record<string, string> = {
         low: 'bg-green-500/20 text-green-300',
-        medium: 'bg-yellow-500/20 text-yellow-300',
+        medium: 'bg-violet-500/20 text-violet-300',
         high: 'bg-red-500/20 text-red-300',
     }
 
@@ -2879,8 +2880,9 @@ export default function FinancesPage() {
     const savingsRate = summary ? summary.savings_rate : 0
 
     return (
-        <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-b from-emerald-950/10 via-transparent to-transparent">
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen p-4 sm:p-8">
+            <CommandGrid className="max-w-7xl mx-auto">
+                <StatusBar section="Finances" chips={[{ label: 'SYNCED', active: true }]} className="mb-6" />
                 <FinancesHeader id={params.id} />
 
                 {/* Overview Cards */}
@@ -2963,7 +2965,7 @@ export default function FinancesPage() {
                         </AnimatePresence>
                     </Tabs>
                 </motion.div>
-            </div>
+            </CommandGrid>
         </div>
     )
 }

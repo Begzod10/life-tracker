@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation'
 import { BookOpen, Target, CalendarDays, Newspaper, Brain, ChevronRight, Clock, Wallet } from 'lucide-react'
 import { useDashboardSummary, type DashboardTimeblock } from '@/lib/hooks/use-dashboard'
+import { StatusBar, CommandGrid } from '@/components/hud'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -14,13 +15,13 @@ function greeting(name: string): string {
 
 function accuracyColor(pct: number) {
     if (pct >= 80) return 'text-emerald-400'
-    if (pct >= 60) return 'text-amber-400'
+    if (pct >= 60) return 'text-cyan-400'
     return 'text-red-400'
 }
 
 function priorityColor(p: string) {
     if (p === 'high') return 'bg-red-500/20 text-red-300'
-    if (p === 'medium') return 'bg-amber-500/20 text-amber-300'
+    if (p === 'medium') return 'bg-violet-500/20 text-violet-300'
     return 'bg-white/10 text-white/50'
 }
 
@@ -119,10 +120,11 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen text-white">
-            <div className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6 space-y-6">
+            <CommandGrid className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:px-6 space-y-6">
 
                 {/* Header */}
                 <div>
+                    <StatusBar section="Dashboard" chips={[{ label: 'ONLINE', active: true }]} className="mb-2" />
                     <h1 className="text-2xl font-bold text-white">{greeting(user.name)}</h1>
                     <p className="text-sm text-white/35 mt-0.5">{todayLabel}</p>
                 </div>
@@ -134,7 +136,7 @@ export default function DashboardPage() {
                         className="rounded-xl border border-white/8 bg-white/4 px-4 py-3 text-left hover:bg-white/6 transition-colors"
                     >
                         <p className="text-[11px] text-white/35 uppercase tracking-wider mb-1">Words due</p>
-                        <p className={`text-2xl font-bold ${exercises.words_due_today > 0 ? 'text-amber-400' : 'text-white'}`}>
+                        <p className={`text-2xl font-bold tabular ${exercises.words_due_today > 0 ? 'text-cyan-400' : 'text-white'}`}>
                             {exercises.words_due_today}
                         </p>
                         <p className="text-[11px] text-white/30 mt-0.5">review today</p>
@@ -215,7 +217,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-white/30 mt-1">
                                 {exercises.last_7d_correct}/{exercises.last_7d_total} correct
                                 {exercises.words_due_today > 0 && (
-                                    <span className="text-amber-400 ml-2">· {exercises.words_due_today} due</span>
+                                    <span className="text-cyan-400 ml-2">· {exercises.words_due_today} due</span>
                                 )}
                             </p>
                         </div>
@@ -238,7 +240,7 @@ export default function DashboardPage() {
                                     </div>
                                     <div className="h-1 rounded-full bg-white/10 overflow-hidden">
                                         <div
-                                            className="h-full rounded-full bg-indigo-500/60"
+                                            className="h-full rounded-full bg-cyan-500/60"
                                             style={{ width: `${books.current_book.progress_pct}%` }}
                                         />
                                     </div>
@@ -251,7 +253,7 @@ export default function DashboardPage() {
                             >
                                 <BookOpen className="w-5 h-5 text-white/20 mb-1" />
                                 <p className="text-xs text-white/30">No book in progress</p>
-                                <p className="text-xs text-indigo-400/60 mt-0.5">Open library →</p>
+                                <p className="text-xs text-cyan-400/60 mt-0.5">Open library →</p>
                             </button>
                         )}
                     </div>
@@ -282,7 +284,7 @@ export default function DashboardPage() {
                                     </div>
                                     <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
                                         <div
-                                            className="h-full rounded-full bg-indigo-500/50 transition-all"
+                                            className="h-full rounded-full bg-cyan-500/50 transition-all"
                                             style={{ width: `${g.percentage}%` }}
                                         />
                                     </div>
@@ -365,7 +367,7 @@ export default function DashboardPage() {
                         </div>
                     </div>
                 )}
-            </div>
+            </CommandGrid>
         </div>
     )
 }

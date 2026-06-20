@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     ArrowLeft,
     Scale,
@@ -72,13 +73,13 @@ const useHealthProfile = (id: string) => {
 function getBMIStatus(bmi: number) {
     if (bmi < 18.5) return { label: 'Underweight', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' }
     if (bmi < 25) return { label: 'Normal', color: 'bg-green-500/20 text-green-400 border-green-500/30' }
-    if (bmi < 30) return { label: 'Overweight', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
+    if (bmi < 30) return { label: 'Overweight', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' }
     return { label: 'Obese', color: 'bg-red-500/20 text-red-400 border-red-500/30' }
 }
 
 function getHeartRateColor(hr: number) {
     if (hr >= 60 && hr <= 100) return 'text-green-400'
-    return 'text-yellow-400'
+    return 'text-rose-400'
 }
 
 function getIdealWeightRange(height: number) {
@@ -164,7 +165,8 @@ function HealthProfilePage() {
 
     return (
         <div className="min-h-screen">
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+            <CommandGrid className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+                <StatusBar section="Health" chips={[{ label: 'HEALTH', active: true }]} className="mb-4" />
                 {/* Header */}
                 <motion.div
                     initial="hidden"
@@ -240,7 +242,7 @@ function HealthProfilePage() {
                                         {/* Body Fat */}
                                         <div className="bg-white/[0.02] rounded-lg p-4 border border-white/5">
                                             <div className="flex items-center gap-2 mb-3">
-                                                <TrendingDown className="w-4 h-4 text-orange-400" />
+                                                <TrendingDown className="w-4 h-4 text-rose-400" />
                                                 <span className="text-gray-400 text-sm">Body Fat</span>
                                             </div>
                                             <p className="text-2xl font-bold text-white">{data.body_fat_percentage}%</p>
@@ -332,7 +334,7 @@ function HealthProfilePage() {
                                                 animate={{ opacity: 1 }}
                                             >
                                                 <motion.div
-                                                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                                                    className="h-full bg-gradient-to-r from-cyan-400 to-indigo-500"
                                                     initial={{ width: 0 }}
                                                     animate={{ width: `${(data.sleep_hours / 8) * 100}%` }}
                                                     transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -369,7 +371,7 @@ function HealthProfilePage() {
                                         <div>
                                             <div className="flex items-center justify-between mb-3">
                                                 <div className="flex items-center gap-3">
-                                                    <Flame className="w-4 h-4 text-orange-400" />
+                                                    <Flame className="w-4 h-4 text-rose-400" />
                                                     <span className="text-gray-400">Steps</span>
                                                 </div>
                                                 <span className="text-white font-semibold">
@@ -382,7 +384,7 @@ function HealthProfilePage() {
                                                 animate={{ opacity: 1 }}
                                             >
                                                 <motion.div
-                                                    className="h-full bg-gradient-to-r from-orange-500 to-yellow-500"
+                                                    className="h-full bg-gradient-to-r from-rose-400 to-rose-600"
                                                     initial={{ width: 0 }}
                                                     animate={{ width: `${(data.steps_count / 10000) * 100}%` }}
                                                     transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -411,7 +413,7 @@ function HealthProfilePage() {
                                     {[
                                         { name: 'Strength Training', date: 'Feb 18', icon: Dumbbell, color: 'text-blue-400', duration: '60 min', calories: 320 },
                                         { name: 'Morning Run', date: 'Feb 17', icon: Heart, color: 'text-red-400', duration: '35 min', calories: 280 },
-                                        { name: 'Full Body', date: 'Feb 15', icon: Flame, color: 'text-orange-400', duration: '50 min', calories: 410 },
+                                        { name: 'Full Body', date: 'Feb 15', icon: Flame, color: 'text-rose-400', duration: '50 min', calories: 410 },
                                     ].map((workout, idx) => {
                                         const IconComponent = workout.icon
                                         return (
@@ -431,7 +433,7 @@ function HealthProfilePage() {
                                                 </div>
                                                 <div className="flex items-center gap-3 text-right">
                                                     <span className="text-gray-400">{workout.duration}</span>
-                                                    <Badge className="bg-orange-500/10 text-orange-400 border-0">
+                                                    <Badge className="bg-rose-500/10 text-rose-400 border-0">
                                                         {workout.calories} kcal
                                                     </Badge>
                                                 </div>
@@ -455,7 +457,7 @@ function HealthProfilePage() {
                                 {/* Nutrition Summary */}
                                 <div className="grid grid-cols-4 gap-2 mb-6">
                                     <div className="bg-[#0f0f1a] rounded-lg p-3 text-center border border-white/5">
-                                        <p className="text-amber-400 text-lg font-bold">1,840</p>
+                                        <p className="text-rose-400 text-lg font-bold">1,840</p>
                                         <p className="text-gray-400 text-xs">kcal</p>
                                     </div>
                                     <div className="bg-[#0f0f1a] rounded-lg p-3 text-center border border-white/5">
@@ -467,7 +469,7 @@ function HealthProfilePage() {
                                         <p className="text-gray-400 text-xs">Carbs</p>
                                     </div>
                                     <div className="bg-[#0f0f1a] rounded-lg p-3 text-center border border-white/5">
-                                        <p className="text-orange-400 text-lg font-bold">58g</p>
+                                        <p className="text-teal-400 text-lg font-bold">58g</p>
                                         <p className="text-gray-400 text-xs">Fats</p>
                                     </div>
                                 </div>
@@ -568,7 +570,7 @@ function HealthProfilePage() {
                                             <p className="text-gray-400 text-sm mb-1">Current Weight</p>
                                             <p className="text-lg font-bold text-white">{data.weight} kg</p>
                                             {data.weight > idealWeight.max && (
-                                                <p className="text-yellow-400 text-xs mt-1">
+                                                <p className="text-rose-400 text-xs mt-1">
                                                     -{(data.weight - idealWeight.max).toFixed(1)} kg to ideal range
                                                 </p>
                                             )}
@@ -600,7 +602,7 @@ function HealthProfilePage() {
                         </motion.div>
                     </div>
                 </motion.div>
-            </div>
+            </CommandGrid>
         </div>
     )
 }

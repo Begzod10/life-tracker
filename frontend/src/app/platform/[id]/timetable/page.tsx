@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { StatusBar, CommandGrid } from '@/components/hud'
 import {
     useTimeBlocksByDay,
     useTimeBlocksByDays,
@@ -37,7 +38,7 @@ const CATEGORIES = [
     { value: 'work',     label: 'Work',     color: '#6366f1', from: 'from-indigo-500/30', to: 'to-indigo-600/10', border: 'border-indigo-500/50', text: 'text-indigo-300', dot: 'bg-indigo-400' },
     { value: 'personal', label: 'Personal', color: '#a855f7', from: 'from-purple-500/30', to: 'to-purple-600/10', border: 'border-purple-500/50', text: 'text-purple-300',  dot: 'bg-purple-400' },
     { value: 'health',   label: 'Health',   color: '#10b981', from: 'from-emerald-500/30', to: 'to-emerald-600/10', border: 'border-emerald-500/50', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-    { value: 'learning', label: 'Learning', color: '#f59e0b', from: 'from-amber-500/30', to: 'to-amber-600/10', border: 'border-amber-500/50', text: 'text-amber-300',   dot: 'bg-amber-400' },
+    { value: 'learning', label: 'Learning', color: '#60a5fa', from: 'from-blue-500/30', to: 'to-blue-600/10', border: 'border-blue-500/50', text: 'text-blue-300',   dot: 'bg-blue-400' },
     { value: 'social',   label: 'Social',   color: '#ec4899', from: 'from-pink-500/30', to: 'to-pink-600/10', border: 'border-pink-500/50', text: 'text-pink-300',    dot: 'bg-pink-400' },
     { value: 'other',    label: 'Other',    color: '#64748b', from: 'from-slate-500/30', to: 'to-slate-600/10', border: 'border-slate-500/50', text: 'text-slate-300',   dot: 'bg-slate-400' },
 ]
@@ -133,7 +134,7 @@ function TaskPicker({ personId, value, onChange }: {
                         <button key={task.id} type="button"
                             onClick={() => { onChange(task.id, task.estimated_duration); setOpen(false); setSearch('') }}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/5 transition-colors text-left">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-cyan-400' : 'bg-green-400'}`} />
                             <span className="text-sm text-white truncate flex-1">{task.name}</span>
                             {task.estimated_duration && (
                                 <span className="text-xs text-white/35 shrink-0">{task.estimated_duration}min</span>
@@ -361,7 +362,7 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                                     </div>
                                 ) : (
                                     <div className="space-y-1.5">
-                                        <div className="flex items-center gap-1.5 text-amber-400 text-xs font-medium">
+                                        <div className="flex items-center gap-1.5 text-rose-400 text-xs font-medium">
                                             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                             {conflictedDates.length} of {targetDates.length} dates have conflicts
                                         </div>
@@ -371,7 +372,7 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
                                                 const dayBlocks = (repeatDayResults[idx]?.data ?? []) as TimeBlock[]
                                                 const overlapping = hasOverlap(form.start_time, form.end_time, dayBlocks)
                                                 return (
-                                                    <p key={date} className="text-xs text-amber-300/70">
+                                                    <p key={date} className="text-xs text-rose-300/70">
                                                         {format(parseISO(date), 'EEE, MMM d')}
                                                         {overlapping && (
                                                             <span className="text-white/35"> — "{overlapping.title}"</span>
@@ -688,11 +689,11 @@ function SuggestionsBanner({
         <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 mb-5"
+            className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 mb-5"
         >
             <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-sm font-semibold text-amber-300">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span className="text-sm font-semibold text-rose-300">
                     {suggestions.length} task{suggestions.length !== 1 ? 's' : ''} due this week — not yet scheduled
                 </span>
             </div>
@@ -701,12 +702,12 @@ function SuggestionsBanner({
                     <button
                         key={task.id}
                         onClick={() => onSchedule(task)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs hover:bg-amber-500/20 transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-200 text-xs hover:bg-rose-500/20 transition-all"
                     >
-                        <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-yellow-400' : 'bg-green-400'}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${task.priority === 'high' ? 'bg-red-400' : task.priority === 'medium' ? 'bg-cyan-400' : 'bg-green-400'}`} />
                         {task.name}
                         {task.due_date && (
-                            <span className="text-amber-400/60 ml-0.5">· {task.due_date}</span>
+                            <span className="text-rose-400/50 ml-0.5">· {task.due_date}</span>
                         )}
                     </button>
                 ))}
@@ -797,9 +798,10 @@ export default function TimetablePage() {
     return (
         <div className="min-h-screen text-white">
             {/* Top gradient glow */}
-            <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-indigo-950/30 to-transparent pointer-events-none z-0" />
+            <div className="fixed top-0 left-0 right-0 h-64 bg-gradient-to-b from-teal-950/20 to-transparent pointer-events-none z-0" />
 
-            <div className="relative z-10 max-w-7xl mx-auto px-2 sm:px-6 py-6 sm:py-8">
+            <CommandGrid className="relative z-10 max-w-7xl mx-auto px-2 sm:px-6 py-6 sm:py-8">
+                <StatusBar section="Timetable" chips={[{ label: 'SCHEDULE', active: true }]} className="mb-4 sm:mb-6" />
 
                 {/* ── Header ── */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -897,7 +899,6 @@ export default function TimetablePage() {
                     {/* Sidebar */}
                     <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
                 </div>
-            </div>
 
             {/* Create Modal */}
             <Dialog open={isCreateOpen} onOpenChange={v => { setIsCreateOpen(v); if (!v) setClickedTime(null) }}>
@@ -921,12 +922,12 @@ export default function TimetablePage() {
                     {editingBlock && (
                         <>
                             {editingBlock.is_recurring && (
-                                <label className="flex items-center gap-2 px-1 py-2 text-sm text-amber-400/90 cursor-pointer select-none">
+                                <label className="flex items-center gap-2 px-1 py-2 text-sm text-rose-400/90 cursor-pointer select-none">
                                     <input
                                         type="checkbox"
                                         checked={propagateCategory}
                                         onChange={e => setPropagateCategory(e.target.checked)}
-                                        className="w-4 h-4 accent-amber-400 rounded"
+                                        className="w-4 h-4 accent-cyan-400 rounded"
                                     />
                                     Apply category change to all future recurring blocks
                                 </label>
@@ -941,6 +942,7 @@ export default function TimetablePage() {
                     )}
                 </DialogContent>
             </Dialog>
+            </CommandGrid>
         </div>
     )
 }

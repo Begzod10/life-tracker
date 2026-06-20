@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect, Suspense, useCallback, memo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { StatusBar, CommandGrid, Eyebrow } from '@/components/hud'
 import { format } from 'date-fns' // 👈 В начале файла platform/page.tsx
 import { BaseModal } from '@/components/modals/base-modal'
 import { GoalForm } from '@/components/modals/forms/goal-form'
@@ -46,70 +47,70 @@ const categories: categoryType[] = [
         id: 'goals',
         title: 'Goals',
         icon: Target,
-        color: 'from-blue-500 to-cyan-500',
+        color: 'from-cyan-400 to-sky-500',
         description: 'Track your life objectives'
     },
     {
         id: 'tasks',
         title: 'Tasks',
         icon: CheckSquare,
-        color: 'from-purple-500 to-pink-500',
+        color: 'from-violet-400 to-purple-500',
         description: 'Manage daily to-dos'
     },
     {
         id: 'timetable',
         title: 'Timetable',
         icon: CalendarDays,
-        color: 'from-teal-500 to-cyan-500',
+        color: 'from-teal-400 to-teal-600',
         description: 'Plan your day hour by hour'
     },
     {
         id: 'news',
         title: 'News',
         icon: Newspaper,
-        color: 'from-indigo-500 to-violet-500',
+        color: 'from-indigo-400 to-indigo-600',
         description: 'Daily AI-summarized headlines'
     },
     {
         id: 'finances',
         title: 'Finances',
         icon: DollarSign,
-        color: 'from-green-500 to-emerald-500',
+        color: 'from-emerald-400 to-emerald-600',
         description: 'Control your money'
     },
     {
         id: 'learning',
         title: 'Learning',
         icon: Book,
-        color: 'from-indigo-500 to-blue-500',
+        color: 'from-blue-400 to-blue-600',
         description: 'Expand knowledge'
     },
     {
         id: 'health',
         title: 'Health',
         icon: Heart,
-        color: 'from-red-500 to-orange-500',
+        color: 'from-rose-400 to-rose-600',
         description: 'Monitor fitness'
     },
     {
         id: 'habits',
         title: 'Habits',
         icon: Repeat,
-        color: 'from-yellow-500 to-amber-500',
+        color: 'from-fuchsia-400 to-fuchsia-600',
         description: 'Build routines'
     },
     {
         id: 'analytics',
         title: 'Analytics',
         icon: BarChart3,
-        color: 'from-violet-500 to-purple-500',
+        color: 'from-indigo-400 to-cyan-500',
         description: 'Visualize progress'
     },
     {
         id: 'social',
         title: 'Social',
         icon: Users,
-        color: 'from-pink-500 to-rose-500',
+        color: 'from-fuchsia-300 to-pink-500',
         description: 'Connect with others'
     },
 ]
@@ -205,9 +206,17 @@ function CategoriesGrid({ categories, onSelect }: {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="relative min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8"
+            className="relative min-h-screen p-4 sm:p-6 lg:p-8"
         >
-            <div className="relative z-10 w-full max-w-6xl">
+            <CommandGrid className="w-full max-w-6xl mx-auto">
+                <StatusBar
+                    section="Command Center"
+                    chips={[{ label: 'ONLINE', active: true }]}
+                    className="mb-8"
+                />
+                <div className="mb-6">
+                    <Eyebrow>// Modules</Eyebrow>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {categories.map((category, index) => (
                         <CategoryCard
@@ -218,7 +227,7 @@ function CategoriesGrid({ categories, onSelect }: {
                         />
                     ))}
                 </div>
-            </div>
+            </CommandGrid>
         </motion.div>
     )
 }
@@ -240,41 +249,41 @@ const CategoryCard = memo(function CategoryCard({ category, index, onClick }: {
             transition={{ delay: index * 0.05 }}
             layoutId={`category-${category.id}`}
         >
-            <Card
-                className="relative overflow-hidden bg-white/[0.025] border border-white/5 hover:border-white/15 cursor-pointer transition-all duration-300 h-[160px] sm:h-[200px]"
+            <div
+                className="hcard relative overflow-hidden rounded-xl cursor-pointer h-[160px] sm:h-[200px]"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 onClick={onClick}
             >
-                <div className="relative h-full flex flex-col p-4 sm:p-6">
-                    {/* Icon */}
+                <div className="relative h-full flex flex-col p-4 sm:p-5">
+                    {/* Icon tile */}
                     <motion.div
-                        className={`inline-flex self-start p-3 sm:p-4 rounded-2xl bg-gradient-to-br ${category.color} mb-auto`}
-                        animate={{ scale: isHovered ? 1.1 : 1, y: isHovered ? -5 : 0 }}
+                        className={`inline-flex self-start p-2.5 sm:p-3 rounded-xl bg-gradient-to-br ${category.color} mb-auto shadow-lg`}
+                        animate={{ scale: isHovered ? 1.08 : 1, y: isHovered ? -3 : 0 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     >
-                        <Icon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                        <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </motion.div>
 
                     {/* Title & Description */}
                     <div>
-                        <h3 className="text-lg sm:text-xl font-bold text-white mb-1">
+                        <h3 className="text-base sm:text-lg font-semibold text-white mb-0.5 tracking-tight">
                             {category.title}
                         </h3>
-                        <p className="text-xs sm:text-sm text-gray-400">
+                        <p className="mono-label text-white/30">
                             {category.description}
                         </p>
                     </div>
                 </div>
 
-                {/* Shine effect */}
+                {/* One-shot shine sweep on hover */}
                 <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.06] to-transparent"
                     initial={{ x: '-100%' }}
                     animate={{ x: isHovered ? '200%' : '-100%' }}
-                    transition={{ duration: 0.6 }}
+                    transition={{ duration: 0.55, ease: [0.22,1,0.36,1] }}
                 />
-            </Card>
+            </div>
         </motion.div>
     )
 })
