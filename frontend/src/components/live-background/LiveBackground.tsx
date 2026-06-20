@@ -525,6 +525,7 @@ const SWITCHER_ORDER: FxMode[] = [
 
 export function LiveBackground() {
     const [mode, setMode] = useState<FxMode>('auto')
+    const [open, setOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
     const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]
 
@@ -536,12 +537,28 @@ export function LiveBackground() {
 
     const choose = useCallback((m: FxMode) => {
         setMode(m)
+        setOpen(false)
         try { localStorage.setItem(LS_KEY, m) } catch { /* */ }
     }, [])
 
     if (!mounted) return null
 
     const activeEffect = mode === 'off' ? null : resolveEffect(mode)
+    const activeLabel = mode === 'auto' ? `Auto · ${dayName}` : LABELS[mode]
+
+    const pill: React.CSSProperties = {
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: '0.10em',
+        textTransform: 'uppercase',
+        padding: '4px 10px',
+        borderRadius: 999,
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'background 0.2s, color 0.2s',
+        whiteSpace: 'nowrap',
+    }
 
     return (
         <>
@@ -559,44 +576,56 @@ export function LiveBackground() {
                 {activeEffect && <EffectLayer effect={activeEffect} />}
             </div>
 
-            {/* Switcher pill */}
+            {/* Switcher — collapsed pill + expanded tray */}
             <div style={{
                 position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-                zIndex: 9990, display: 'flex', alignItems: 'center', gap: 4,
-                background: 'rgba(7,10,20,0.82)', backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 999, padding: '5px 8px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+                zIndex: 9990, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
             }}>
-                {SWITCHER_ORDER.map((m) => {
-                    const active = m === mode
-                    const label = m === 'auto' ? `Auto · ${dayName}` : LABELS[m]
-                    return (
-                        <button
-                            key={m}
-                            onClick={() => choose(m)}
-                            style={{
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 10,
-                                fontWeight: 600,
-                                letterSpacing: '0.10em',
-                                textTransform: 'uppercase',
-                                padding: '4px 10px',
-                                borderRadius: 999,
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'background 0.2s, color 0.2s',
-                                background: active
-                                    ? 'linear-gradient(135deg, #22d3ee, #6366f1)'
-                                    : 'transparent',
-                                color: active ? '#fff' : 'rgba(255,255,255,0.4)',
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            {label}
-                        </button>
-                    )
-                })}
+                {/* Expanded tray */}
+                {open && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center',
+                        maxWidth: '90vw',
+                        background: 'rgba(7,10,20,0.90)', backdropFilter: 'blur(16px)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 16, padding: '6px 8px',
+                        boxShadow: '0 4px 32px rgba(0,0,0,0.6)',
+                    }}>
+                        {SWITCHER_ORDER.map((m) => {
+                            const active = m === mode
+                            const label = m === 'auto' ? `Auto · ${dayName}` : LABELS[m]
+                            return (
+                                <button
+                                    key={m}
+                                    onClick={() => choose(m)}
+                                    style={{
+                                        ...pill,
+                                        background: active
+                                            ? 'linear-gradient(135deg, #22d3ee, #6366f1)'
+                                            : 'transparent',
+                                        color: active ? '#fff' : 'rgba(255,255,255,0.4)',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
+
+                {/* Collapsed pill — always visible */}
+                <button
+                    onClick={() => setOpen((v) => !v)}
+                    style={{
+                        ...pill,
+                        padding: '5px 14px',
+                        background: 'linear-gradient(135deg, #22d3ee, #6366f1)',
+                        color: '#fff',
+                        boxShadow: '0 2px 16px rgba(34,211,238,0.25)',
+                    }}
+                >
+                    {activeLabel}
+                </button>
             </div>
         </>
     )
