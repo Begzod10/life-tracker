@@ -5,8 +5,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/lib/hooks/use-auth'
-import type { WeatherData } from '@/lib/hooks/use-weather'
-import { WeatherWidget } from '@/components/features/weather/weather-background'
 import {
     BookOpen,
     Dumbbell,
@@ -112,14 +110,12 @@ function SidebarContent({
     hubCategoryParam,
     onNavigate,
     onCollapse,
-    weather,
 }: {
     sections: NavSection[]
     pathname: string
     hubCategoryParam: string | null
     onNavigate?: () => void
     onCollapse?: () => void
-    weather?: WeatherData | null
 }) {
     const [closedSections, setClosedSections] = useState<Set<string>>(
         () => new Set(['Learning', 'Money', 'Life'])
@@ -244,12 +240,6 @@ function SidebarContent({
                 })}
             </nav>
 
-            {weather && (
-                <div className="px-3 pb-3 pt-1">
-                    <WeatherWidget data={weather} />
-                </div>
-            )}
-
             <div className="border-t border-white/5 p-3">
                 <Link
                     href="/platform/profile"
@@ -270,7 +260,7 @@ const DEFAULT_W = 240
 const LS_WIDTH = 'sidebar-w'
 const LS_COLLAPSED = 'sidebar-collapsed'
 
-export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
+export function Sidebar() {
     const params = useParams<{ id: string }>()
     const pathname = usePathname() ?? ''
     const searchParams = useSearchParams()
@@ -399,7 +389,6 @@ export function Sidebar({ weather }: { weather?: WeatherData | null } = {}) {
                     pathname={pathname}
                     hubCategoryParam={hubCategoryParam}
                     onNavigate={() => setMobileOpen(false)}
-                    weather={weather ?? null}
                 />
             </aside>
 
