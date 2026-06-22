@@ -1034,7 +1034,7 @@ export default function ReaderPage() {
         // overflow-x-clip clips horizontal overflow without creating a new
         // scroll container — using overflow-x-hidden here breaks the sticky
         // positioning of the reader bar relative to the viewport.
-        <div className="min-h-screen flex flex-col bg-[#070710] overflow-x-clip">
+        <div className="min-h-screen flex flex-col overflow-x-clip">
             {/* Header */}
             {/* The platform-wide <Header> is sticky top-0 z-50, so we offset
                 this reader-specific bar by its height to stack below it.

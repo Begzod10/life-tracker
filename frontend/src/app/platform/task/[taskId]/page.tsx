@@ -957,7 +957,7 @@ export default function TaskProfilePage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
-            className="min-h-screen bg-background p-3 sm:p-6"
+            className="min-h-screen p-3 sm:p-6"
         >
             <CommandGrid>
             <StatusBar section="Task" chips={[{ label: 'DETAIL', active: true }]} className="mb-2" />

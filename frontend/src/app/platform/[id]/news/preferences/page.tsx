@@ -51,8 +51,8 @@ export default function NewsPreferencesPage() {
     const tier2 = (categoriesQuery.data ?? []).filter(c => c.mode === 'search')
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black text-white">
-            <header className="sticky top-[52px] sm:top-[68px] z-40 border-b border-white/5 bg-slate-950/80 backdrop-blur-xl">
+        <div className="min-h-screen text-white">
+            <header className="sticky top-[52px] sm:top-[68px] z-40 border-b border-white/5 bg-[#070a14]/80 backdrop-blur-xl">
                 <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
                     <Link
                         href={`/platform/${platformId}/news`}
