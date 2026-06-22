@@ -51,6 +51,21 @@ const MODE_OPTIONS: { id: ExerciseMode; label: string; hint: string }[] = [
     { id: 'grammar_drill', label: 'Grammar drill', hint: 'Error fix' },
 ]
 
+const SPECIFIC_TYPE_OPTIONS: { id: ExerciseMode; label: string; hint: string }[] = [
+    { id: 'meaning_mc',      label: 'Meaning MC',       hint: 'Word → definition' },
+    { id: 'reverse_mc',      label: 'Reverse MC',       hint: 'Definition → word' },
+    { id: 'spelling',        label: 'Spelling',         hint: 'Type the word' },
+    { id: 'anagram',         label: 'Anagram',          hint: 'Unscramble letters' },
+    { id: 'collocation_mc',  label: 'Collocation',      hint: 'Natural word pairs' },
+    { id: 'match',           label: 'Match',            hint: 'Pair words & meanings' },
+    { id: 'cloze_bank',      label: 'Cloze bank',       hint: 'Fill from word bank' },
+    { id: 'word_formation',  label: 'Word formation',   hint: 'Noun/adj/adv forms' },
+    { id: 'synonym_antonym', label: 'Synonym/Antonym',  hint: 'Same or opposite' },
+    { id: 'odd_one_out',     label: 'Odd one out',      hint: 'Find the misfit' },
+    { id: 'paraphrase',      label: 'Paraphrase',       hint: 'Rewrite the sentence' },
+    { id: 'sentence',        label: 'Sentence',         hint: 'Use word in context' },
+]
+
 export function SetupPhase({
     source, setSource,
     mode, setMode,
@@ -136,6 +151,27 @@ export function SetupPhase({
                         </div>
                     </section>
                 )}
+
+                {/* Specific type */}
+                <section>
+                    <h2 className="text-xs uppercase tracking-wide text-white/40 mb-3">Or pick a specific type</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {SPECIFIC_TYPE_OPTIONS.map((opt) => (
+                            <button
+                                key={opt.id}
+                                onClick={() => setMode(opt.id)}
+                                className={`px-3 py-3 rounded-lg border text-left transition-colors ${
+                                    mode === opt.id
+                                        ? 'border-cyan-500/50 bg-cyan-500/10 text-white'
+                                        : 'border-white/10 hover:border-white/20 bg-white/2.5 text-white/70'
+                                }`}
+                            >
+                                <div className="text-sm font-medium">{opt.label}</div>
+                                <div className="text-[11px] text-white/40 mt-0.5">{opt.hint}</div>
+                            </button>
+                        ))}
+                    </div>
+                </section>
 
                 {/* Source */}
                 <section>
