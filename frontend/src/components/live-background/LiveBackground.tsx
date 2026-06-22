@@ -369,6 +369,7 @@ export function LiveBackground() {
             style={{
                 position: 'fixed', inset: 0, zIndex: -10,
                 pointerEvents: 'none',
+                background: '#070a14',
             }}
         >
             <EffectLayer effect={effect} />
