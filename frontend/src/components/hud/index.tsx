@@ -139,8 +139,7 @@ export function SegmentedProgress({ segments, filled, className }: SegmentedProg
 export function CommandGrid({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
     return (
         <div className={cn('relative', className)} {...rest}>
-            <div className="cmd-grid pointer-events-none absolute inset-0 z-0" aria-hidden />
-            <div className="relative z-10">{children}</div>
+            {children}
         </div>
     )
 }
