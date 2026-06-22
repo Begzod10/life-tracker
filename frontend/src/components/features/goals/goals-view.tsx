@@ -89,7 +89,7 @@ function CardsView({
     onRestore,
     isDeletedView
 }: Omit<GoalsViewProps, 'viewMode' | 'isLoading'>) {
-    console.log(goals, "goals");
+
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

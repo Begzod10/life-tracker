@@ -57,18 +57,6 @@ function ensureCSS() {
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
-@keyframes lt-pulse-ring {
-  0%   { transform: scale(0.6); opacity: 0.7; }
-  100% { transform: scale(2.8); opacity: 0; }
-}
-@keyframes lt-star-twinkle {
-  0%,100% { opacity: var(--star-base-opacity, 0.5); }
-  50% { opacity: calc(var(--star-base-opacity, 0.5) * 0.3); }
-}
-@keyframes lt-contour-drift {
-  0%   { background-position: 0 0; }
-  100% { background-position: 80px 120px; }
-}
 @media (prefers-reduced-motion: reduce) {
   .lt-livebg * { animation: none !important; transition: none !important; }
 }

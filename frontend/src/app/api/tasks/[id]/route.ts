@@ -34,7 +34,7 @@ export async function PATCH(
     const body = await request.json()
 
     // В реальности здесь было бы обновление в БД
-    console.log(`Updating task ${id} with data:`, body)
+
 
     // Возвращаем обновленные данные (mock)
     return NextResponse.json({
@@ -51,7 +51,7 @@ export async function DELETE(
     const id = (await context.params).id
 
     // В реальности удаление из БД
-    console.log(`Deleting task ${id}`)
+
 
     return NextResponse.json({ success: true })
 }
