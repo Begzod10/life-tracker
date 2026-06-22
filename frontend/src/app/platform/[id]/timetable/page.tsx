@@ -35,10 +35,10 @@ const TOTAL_HOURS  = HOUR_END - HOUR_START
 const PX_PER_HOUR  = 80
 
 const CATEGORIES = [
-    { value: 'work',     label: 'Work',     color: '#6366f1', from: 'from-indigo-500/30', to: 'to-indigo-600/10', border: 'border-indigo-500/50', text: 'text-indigo-300', dot: 'bg-indigo-400' },
+    { value: 'work',     label: 'Work',     color: '#f97316', from: 'from-orange-500/30', to: 'to-orange-600/10', border: 'border-orange-500/50', text: 'text-orange-300', dot: 'bg-orange-400' },
     { value: 'personal', label: 'Personal', color: '#a855f7', from: 'from-purple-500/30', to: 'to-purple-600/10', border: 'border-purple-500/50', text: 'text-purple-300',  dot: 'bg-purple-400' },
     { value: 'health',   label: 'Health',   color: '#10b981', from: 'from-emerald-500/30', to: 'to-emerald-600/10', border: 'border-emerald-500/50', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-    { value: 'learning', label: 'Learning', color: '#60a5fa', from: 'from-blue-500/30', to: 'to-blue-600/10', border: 'border-blue-500/50', text: 'text-blue-300',   dot: 'bg-blue-400' },
+    { value: 'learning', label: 'Learning', color: '#22d3ee', from: 'from-cyan-500/30', to: 'to-cyan-600/10', border: 'border-cyan-500/50', text: 'text-cyan-300',   dot: 'bg-cyan-400' },
     { value: 'social',   label: 'Social',   color: '#ec4899', from: 'from-pink-500/30', to: 'to-pink-600/10', border: 'border-pink-500/50', text: 'text-pink-300',    dot: 'bg-pink-400' },
     { value: 'other',    label: 'Other',    color: '#64748b', from: 'from-slate-500/30', to: 'to-slate-600/10', border: 'border-slate-500/50', text: 'text-slate-300',   dot: 'bg-slate-400' },
 ]
