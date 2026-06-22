@@ -11,10 +11,10 @@ import { API_ENDPOINTS } from '@/lib/api/endpoints'
 import { StatusBar, CommandGrid } from '@/components/hud'
 
 const CATEGORY_COLORS: Record<string, { bg: string; bar: string; text: string }> = {
-    work:     { bg: 'bg-indigo-500/15',  bar: 'bg-indigo-500',  text: 'text-indigo-300' },
+    work:     { bg: 'bg-orange-500/15',  bar: 'bg-orange-500',  text: 'text-orange-300' },
     personal: { bg: 'bg-purple-500/15',  bar: 'bg-purple-500',  text: 'text-purple-300' },
     health:   { bg: 'bg-emerald-500/15', bar: 'bg-emerald-500', text: 'text-emerald-300' },
-    learning: { bg: 'bg-teal-500/15',    bar: 'bg-teal-500',    text: 'text-teal-300' },
+    learning: { bg: 'bg-cyan-500/15',    bar: 'bg-cyan-500',    text: 'text-cyan-300' },
     social:   { bg: 'bg-pink-500/15',    bar: 'bg-pink-500',    text: 'text-pink-300' },
     other:    { bg: 'bg-slate-500/15',   bar: 'bg-slate-500',   text: 'text-slate-300' },
 }
