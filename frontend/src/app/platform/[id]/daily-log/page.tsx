@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Trophy, Flame, ArrowUpCircle, Target, BookHeart, Check, Loader2 } from 'lucide-react'
-import { useDailyLog, useDailyLogUpsert, type DailyLogPayload } from '@/lib/hooks/use-daily-log'
+import { ChevronLeft, ChevronRight, Trophy, Flame, ArrowUpCircle, Target, BookHeart, Check, Loader2, Sparkles, RefreshCw } from 'lucide-react'
+import { useDailyLog, useDailyLogUpsert, useDailyLogAnalyze, type DailyLogPayload } from '@/lib/hooks/use-daily-log'
 
 function toLocalDate(d: Date) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -93,6 +93,7 @@ export default function DailyLogPage() {
 
     const { data: existing, isLoading, error } = useDailyLog(date)
     const upsert = useDailyLogUpsert()
+    const analyze = useDailyLogAnalyze()
 
     useEffect(() => {
         if (existing) {
@@ -264,6 +265,45 @@ export default function DailyLogPage() {
                                     </div>
                                 ))}
                             </div>
+                        </Section>
+
+                        {/* AI Reflection */}
+                        <Section icon={<Sparkles className="w-4 h-4 text-violet-400" />} title="AI Reflection">
+                            {existing?.ai_reflection ? (
+                                <div className="flex flex-col gap-3">
+                                    <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+                                        {existing.ai_reflection}
+                                    </p>
+                                    <button
+                                        onClick={() => analyze.mutate(date)}
+                                        disabled={analyze.isPending}
+                                        className="self-start flex items-center gap-1.5 text-xs text-white/40 hover:text-violet-300 transition-colors disabled:opacity-40"
+                                    >
+                                        <RefreshCw className={`w-3 h-3 ${analyze.isPending ? 'animate-spin' : ''}`} />
+                                        Regenerate
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3">
+                                    <p className="text-sm text-white/40">
+                                        Save your log first, then get a personal AI reflection on your day.
+                                    </p>
+                                    <button
+                                        onClick={() => analyze.mutate(date)}
+                                        disabled={analyze.isPending}
+                                        className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-sm font-medium transition-all disabled:opacity-50"
+                                    >
+                                        {analyze.isPending ? (
+                                            <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                                        ) : (
+                                            <><Sparkles className="w-4 h-4" /> Generate reflection</>
+                                        )}
+                                    </button>
+                                    {analyze.isError && (
+                                        <p className="text-xs text-rose-400">Failed to generate. Make sure your log has some content.</p>
+                                    )}
+                                </div>
+                            )}
                         </Section>
 
                         {/* Save button */}

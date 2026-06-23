@@ -1241,6 +1241,7 @@ class DailyLog(Base):
     intention_1 = Column(String(300), nullable=True)
     intention_2 = Column(String(300), nullable=True)
     intention_3 = Column(String(300), nullable=True)
+    ai_reflection = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

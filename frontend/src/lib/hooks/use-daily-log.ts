@@ -15,6 +15,7 @@ export type DailyLog = {
     intention_1: string | null
     intention_2: string | null
     intention_3: string | null
+    ai_reflection: string | null
     created_at: string
     updated_at: string
 }
@@ -66,6 +67,18 @@ export function useDailyLogUpsert() {
         onSuccess: (data) => {
             qc.setQueryData(keys.byDate(data.date), data)
             qc.invalidateQueries({ queryKey: keys.all })
+        },
+    })
+}
+
+export function useDailyLogAnalyze() {
+    const { request } = useHttp()
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (date: string) =>
+            request<DailyLog>(API_ENDPOINTS.DAILY_LOG.ANALYZE(date), { method: 'POST' }),
+        onSuccess: (data) => {
+            qc.setQueryData(keys.byDate(data.date), data)
         },
     })
 }

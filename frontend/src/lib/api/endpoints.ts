@@ -372,6 +372,7 @@ export const API_ENDPOINTS = {
         LIST: (limit = 30) => `${API_URL}/daily-log/?limit=${limit}`,
         BY_DATE: (date: string) => `${API_URL}/daily-log/${date}`,
         UPSERT: (date: string) => `${API_URL}/daily-log/${date}`,
+        ANALYZE: (date: string) => `${API_URL}/daily-log/${date}/analyze`,
     },
 
     NEWS: {
