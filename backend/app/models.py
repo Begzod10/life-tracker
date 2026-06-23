@@ -1223,3 +1223,26 @@ class UserNewsCategory(Base):
 
     person = relationship("Person", back_populates="news_category_picks")
     category = relationship("NewsCategory", back_populates="picks")
+
+
+class DailyLog(Base):
+    """Evening reflection log — one entry per person per day."""
+    __tablename__ = "daily_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
+    mood = Column(Integer, nullable=True)        # 1-10
+    energy = Column(Integer, nullable=True)      # 1-10
+    journal = Column(Text, nullable=True)
+    wins = Column(Text, nullable=True)
+    challenges = Column(Text, nullable=True)
+    improvements = Column(Text, nullable=True)
+    intention_1 = Column(String(300), nullable=True)
+    intention_2 = Column(String(300), nullable=True)
+    intention_3 = Column(String(300), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    person = relationship("Person", backref="daily_logs")
+    __table_args__ = (UniqueConstraint("person_id", "date", name="uq_daily_log_person_date"),)

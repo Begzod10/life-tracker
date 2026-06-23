@@ -368,6 +368,12 @@ export const API_ENDPOINTS = {
         CATEGORY_BUDGET: (category: string) => `${API_URL}/category-budgets/${encodeURIComponent(category)}`,
     },
 
+    DAILY_LOG: {
+        LIST: (limit = 30) => `${API_URL}/daily-log/?limit=${limit}`,
+        BY_DATE: (date: string) => `${API_URL}/daily-log/${date}`,
+        UPSERT: (date: string) => `${API_URL}/daily-log/${date}`,
+    },
+
     NEWS: {
         CATEGORIES: `${API_URL}/news/categories`,
         ITEMS: (date?: string) => date ? `${API_URL}/news/?date=${date}` : `${API_URL}/news/`,
