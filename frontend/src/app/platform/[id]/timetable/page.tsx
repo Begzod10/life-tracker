@@ -670,8 +670,12 @@ function SuggestionsBanner({
     onSchedule: (task: TaskOption) => void
 }) {
     const today = new Date(); today.setHours(0, 0, 0, 0)
+    const weekStart = new Date(today)
+    const dayOfWeek = today.getDay()
+    weekStart.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)) // Monday
     const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + (6 - today.getDay()))
     const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
+    const weekStartStr = fmtDate(weekStart)
     const weekEndStr = fmtDate(weekEnd)
 
     const scheduledTaskIds = new Set(blocks.map(b => b.task_id).filter(Boolean))
@@ -680,6 +684,7 @@ function SuggestionsBanner({
         !t.completed &&
         !scheduledTaskIds.has(t.id) &&
         t.due_date &&
+        t.due_date >= weekStartStr &&
         t.due_date <= weekEndStr
     ).slice(0, 5)
 
