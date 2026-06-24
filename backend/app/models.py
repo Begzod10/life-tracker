@@ -1246,4 +1246,23 @@ class DailyLog(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     person = relationship("Person", backref="daily_logs")
+
+
+class ParaphraseAttempt(Base):
+    """One paraphrase drill attempt — one technique, one sentence, one try."""
+    __tablename__ = "paraphrase_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id", ondelete="CASCADE"), nullable=False, index=True)
+    technique = Column(String(50), nullable=False)          # e.g. "synonym", "gerund"
+    sentence_id = Column(Integer, nullable=True)            # which PARAPHRASE_SENTENCES entry
+    original_sentence = Column(Text, nullable=False)
+    response = Column(Text, nullable=False)
+    applied_correctly = Column(Boolean, nullable=True)
+    technique_check = Column(Text, nullable=True)           # specific feedback on technique
+    feedback = Column(Text, nullable=True)                  # general feedback
+    model_answer = Column(Text, nullable=True)              # AI-generated correct example
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    person = relationship("Person", backref="paraphrase_attempts")
     __table_args__ = (UniqueConstraint("person_id", "date", name="uq_daily_log_person_date"),)

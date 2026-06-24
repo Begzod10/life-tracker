@@ -793,7 +793,22 @@ def send_daily_summary(self):
                 lines.append("")
 
             # ── Tasks ─────────────────────────────────────────────────────────
-            all_tasks = (
+            # Only tasks that have a timetable block today or were completed today.
+            # Tasks due today but not in the timetable are excluded — they weren't
+            # on today's schedule.
+            block_task_ids_summary = set(
+                row[0]
+                for row in db.query(models.TimeBlock.task_id)
+                .filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date == today,
+                    models.TimeBlock.deleted == False,
+                    models.TimeBlock.task_id.isnot(None),
+                )
+                .all()
+            )
+
+            candidate_tasks = (
                 db.query(models.Task)
                 .join(models.Goal, models.Task.goal_id == models.Goal.id)
                 .filter(
@@ -808,6 +823,7 @@ def send_daily_summary(self):
                 )
                 .all()
             )
+            all_tasks = [t for t in candidate_tasks if t.id in block_task_ids_summary]
 
             if all_tasks:
                 recurring_done_today = set(

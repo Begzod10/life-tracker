@@ -343,6 +343,13 @@ export const API_ENDPOINTS = {
         GRAMMAR_POINTS:      `${API_URL}/essays/task2/grammar/points`,
     },
 
+    PARAPHRASE: {
+        NEXT:    `${API_URL}/essays/paraphrase/next`,
+        GRADE:   `${API_URL}/essays/paraphrase/grade`,
+        HISTORY: (limit = 20) => `${API_URL}/essays/paraphrase/history?limit=${limit}`,
+        STATS:   `${API_URL}/essays/paraphrase/stats`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate
