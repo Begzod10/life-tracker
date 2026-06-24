@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import random as _random
 import re
 from collections import Counter
 from datetime import datetime, timezone
@@ -38,6 +40,7 @@ from app.services.grammar_grading import (
 from app.services.srs_update import (
     GrammarPointState,
     apply_error,
+    apply_drill_result,
     build_drill_queue,
     priority_score,
 )
@@ -707,4 +710,218 @@ def get_task2_analytics(
             {"overall_band": a.overall_band, "created_at": a.created_at.isoformat() if a.created_at else None}
             for a in reversed(recent[:10])
         ],
+    }
+
+
+# ─── Error Hunt sentence bank ────────────────────────────────────────────────
+
+_ERROR_HUNT_SENTENCES: dict[str, list[str]] = {
+    "articles": [
+        "The development of a strong education system is essential for every society.",
+        "A university degree is often seen as a requirement for a well-paid job.",
+        "The government should invest in the public transport to reduce congestion.",
+        "An increase in the renewable energy usage is needed to fight climate change.",
+        "The people who work long hours often suffer from burnout and health problems.",
+    ],
+    "prepositions": [
+        "Many students rely on their teachers for guidance in their academic studies.",
+        "The government should invest in infrastructure to improve quality of life.",
+        "Excessive use of social media has a negative impact on mental health.",
+        "Authorities should allocate more funds to sustainable transport systems.",
+        "Young people need to be aware of the dangers associated with online activity.",
+    ],
+    "subject_verb_agreement": [
+        "The number of people who use social media is increasing every year.",
+        "A group of scientists have published a report on climate change solutions.",
+        "Each of the proposals submitted by the team was carefully evaluated.",
+        "The quality of the products available in local shops has improved recently.",
+        "Neither the government nor private companies are doing enough to reduce pollution.",
+    ],
+    "comparatives_superlatives": [
+        "Modern devices are faster and more efficient than the older models.",
+        "Public transport is cheaper than owning a private vehicle in most cities.",
+        "The most effective solution is to invest in renewable energy sources.",
+        "Smaller class sizes lead to better educational outcomes for students.",
+        "Living in a rural area is often more peaceful than living in a city.",
+    ],
+    "complex_sentences": [
+        "While technology has many benefits, it also presents significant challenges.",
+        "Although automation creates job losses, it also generates new opportunities.",
+        "Even though cities are crowded, many people prefer urban lifestyles.",
+        "Whereas some people prefer remote work, others thrive in office environments.",
+        "Despite the benefits of globalisation, many local traditions are disappearing.",
+    ],
+    "tense_consistency": [
+        "The researcher collected the data and then analysed the results carefully.",
+        "Many students study hard but struggled to perform well in examinations.",
+        "The government introduced new policies and monitored their effectiveness.",
+        "Scientists discovered the link between diet and health and published their findings.",
+        "The company launched a new product and received positive feedback from customers.",
+    ],
+    "word_order": [
+        "It is widely believed that education is the key to social mobility.",
+        "Rarely do governments invest enough in mental health services.",
+        "Only by working together can we solve the problem of climate change.",
+        "Never before has technology played such a central role in daily life.",
+        "Seldom do young people consider the long-term effects of their choices.",
+    ],
+    "punctuation_run_on": [
+        "Technology has transformed communication; people can now connect instantly.",
+        "Many students struggle with time management; they often leave work until the last minute.",
+        "Exercise has numerous benefits. It improves both physical and mental health.",
+        "Online learning is growing rapidly; universities are adapting their programmes.",
+        "Cities face serious pollution problems. Governments must act urgently to address them.",
+    ],
+    "modal_verbs": [
+        "Governments should invest more in renewable energy to combat climate change.",
+        "Students must develop critical thinking skills to succeed in higher education.",
+        "Employers could offer flexible working arrangements to improve productivity.",
+        "Citizens might benefit from better public health education programmes.",
+        "Schools should provide more opportunities for creative expression and arts.",
+    ],
+    "gerund_infinitive": [
+        "Many people avoid using public transport because of overcrowding.",
+        "The government decided to invest in renewable energy infrastructure.",
+        "Students should consider taking a gap year to gain real-world experience.",
+        "Companies have started to adopt more environmentally friendly practices.",
+        "Young people often struggle to find affordable housing in major cities.",
+    ],
+    "passive_voice": [
+        "New environmental regulations have been introduced by the government.",
+        "A significant amount of food is wasted by households every year.",
+        "Children are often influenced by the media and advertising campaigns.",
+        "The new policy was received positively by both businesses and consumers.",
+        "Important decisions about public health are made by elected officials.",
+    ],
+    "countable_uncountable": [
+        "A great deal of research has been conducted into the effects of screen time.",
+        "Much of the information available online is unreliable and misleading.",
+        "Furniture in modern offices is often designed to promote collaboration.",
+        "The amount of traffic on city roads continues to increase each year.",
+        "Little evidence exists to support the claim that longer working hours increase productivity.",
+    ],
+    "plural_singular": [
+        "The main criteria for selecting candidates are experience and qualifications.",
+        "The data collected by researchers suggest a link between diet and mental health.",
+        "Several phenomena have been observed in the field of climate science.",
+        "The media often focuses on negative events rather than positive developments.",
+        "Economic crises can have long-lasting effects on employment and living standards.",
+    ],
+}
+
+# Load grammar_points.json once at module level
+_GP_CATALOG: dict[str, dict] = {}
+try:
+    _catalog_path = os.path.join(os.path.dirname(__file__), "..", "assets", "grammar_points.json")
+    with open(_catalog_path, encoding="utf-8") as _f:
+        _GP_CATALOG = {p["id"]: p for p in json.load(_f)}
+except Exception as _e:
+    logger.warning("Failed to load grammar_points.json: %s", _e)
+
+
+# ─── GET /grammar/error-hunt ─────────────────────────────────────────────────
+
+@router.get("/grammar/error-hunt")
+def get_error_hunt(
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return a sentence with an injected grammar error for the user to find and correct."""
+    _require_enabled()
+
+    from app.services.exercise_types import _inject_error  # lazy-safe re-import
+
+    now = datetime.now(timezone.utc)
+
+    # Pick grammar point by SRS priority
+    rows = (
+        db.query(models.UserGrammarPoint)
+        .filter(models.UserGrammarPoint.person_id == current_user.id)
+        .all()
+    )
+
+    category_id: Optional[str] = None
+    if rows:
+        states = [_db_to_state(r) for r in rows]
+        queue = build_drill_queue(states, limit=1, now=now)
+        if queue:
+            category_id = queue[0].grammar_point_id
+
+    # Fall back to a random category from the sentence bank
+    if category_id is None or category_id not in _ERROR_HUNT_SENTENCES:
+        category_id = _random.choice(list(_ERROR_HUNT_SENTENCES.keys()))
+
+    sentences = _ERROR_HUNT_SENTENCES[category_id]
+    correct_sentence = _random.choice(sentences)
+
+    # Try to inject an error; if it fails, try another sentence
+    errored_sentence: Optional[str] = None
+    for _ in range(len(sentences)):
+        candidate = _random.choice(sentences)
+        result = _inject_error(candidate, position=_random.randint(0, 4), category=category_id)
+        if result and result != candidate:
+            correct_sentence = candidate
+            errored_sentence = result
+            break
+
+    if errored_sentence is None:
+        raise HTTPException(status_code=503, detail="Could not generate error for this grammar point. Try again.")
+
+    gp = _GP_CATALOG.get(category_id, {})
+
+    return {
+        "grammar_point_id": category_id,
+        "grammar_point_name": gp.get("name", category_id.replace("_", " ").title()),
+        "rule": gp.get("rule", ""),
+        "errored_sentence": errored_sentence,
+        "correct_sentence": correct_sentence,
+    }
+
+
+# ─── POST /grammar/error-hunt/grade ─────────────────────────────────────────
+
+class ErrorHuntGradeIn(BaseModel):
+    grammar_point_id: str
+    correct_sentence: str
+    student_response: str
+
+
+@router.post("/grammar/error-hunt/grade")
+def grade_error_hunt(
+    body: ErrorHuntGradeIn,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Grade an error-hunt response and update grammar SRS."""
+    _require_enabled()
+
+    correct_normalized = body.correct_sentence.strip().lower()
+    student_normalized = body.student_response.strip().lower()
+    is_correct = correct_normalized == student_normalized
+
+    now = datetime.now(timezone.utc)
+
+    row = _get_or_create_grammar_point(db, current_user.id, body.grammar_point_id)
+    state = _db_to_state(row)
+
+    if is_correct:
+        apply_drill_result(state, correct=True, now=now)
+    else:
+        apply_error(state, severity="major", count=1, now=now)
+
+    _state_to_db(row, state)
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Error-hunt SRS update failed (non-fatal): %s", exc)
+
+    gp = _GP_CATALOG.get(body.grammar_point_id, {})
+
+    return {
+        "is_correct": is_correct,
+        "correct_sentence": body.correct_sentence,
+        "grammar_point_id": body.grammar_point_id,
+        "grammar_point_name": gp.get("name", body.grammar_point_id.replace("_", " ").title()),
+        "rule": gp.get("rule", ""),
     }

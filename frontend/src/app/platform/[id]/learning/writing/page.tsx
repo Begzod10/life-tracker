@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { StatusBar, CommandGrid } from '@/components/hud'
-import { ArrowLeft, PenLine, Sparkles, Plus, Trash2, Clock, Target as TargetIcon, TrendingUp, AlertCircle, BookOpen } from 'lucide-react'
+import { ArrowLeft, PenLine, Sparkles, Plus, Trash2, Clock, Target as TargetIcon, TrendingUp, AlertCircle, BookOpen, FileQuestion, Search, PencilLine } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FormField, SelectInput, TextInput, TextareaInput } from '@/components/modals/form-components'
@@ -135,6 +135,30 @@ export default function WritingListPage() {
                         >
                             <BookOpen className="w-4 h-4 mr-2" />
                             Paraphrase
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.push(`/platform/${params.id}/learning/writing/gap-fill`)}
+                            className="text-emerald-300/70 hover:text-emerald-200 border border-emerald-500/20 bg-emerald-500/5"
+                        >
+                            <FileQuestion className="w-4 h-4 mr-2" />
+                            Gap Fill
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.push(`/platform/${params.id}/learning/writing/error-hunt`)}
+                            className="text-rose-300/70 hover:text-rose-200 border border-rose-500/20 bg-rose-500/5"
+                        >
+                            <Search className="w-4 h-4 mr-2" />
+                            Error Hunt
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => router.push(`/platform/${params.id}/learning/writing/mini-build`)}
+                            className="text-violet-300/70 hover:text-violet-200 border border-violet-500/20 bg-violet-500/5"
+                        >
+                            <PencilLine className="w-4 h-4 mr-2" />
+                            Mini Build
                         </Button>
                         <Button
                             onClick={() => { setShowNew(true); setGeneratedPrompt(null); setExistingMatch(null); setError(null); }}

@@ -350,6 +350,25 @@ export const API_ENDPOINTS = {
         STATS:   `${API_URL}/essays/paraphrase/stats`,
     },
 
+    GAP_FILL: {
+        NEXT:    `${API_URL}/essays/gap-fill/next`,
+        GRADE:   `${API_URL}/essays/gap-fill/grade`,
+        HISTORY: (limit = 20) => `${API_URL}/essays/gap-fill/history?limit=${limit}`,
+        STATS:   `${API_URL}/essays/gap-fill/stats`,
+    },
+
+    ERROR_HUNT: {
+        NEXT:  `${API_URL}/essays/task2/grammar/error-hunt`,
+        GRADE: `${API_URL}/essays/task2/grammar/error-hunt/grade`,
+    },
+
+    MINI_BUILD: {
+        START:   `${API_URL}/essays/mini-build/start`,
+        GRADE:   `${API_URL}/essays/mini-build/grade`,
+        HISTORY: (limit = 20) => `${API_URL}/essays/mini-build/history?limit=${limit}`,
+        STATS:   `${API_URL}/essays/mini-build/stats`,
+    },
+
     TIMETABLE: {
         STATS: (weeks = 4, fromDate?: string, toDate?: string) =>
             fromDate && toDate

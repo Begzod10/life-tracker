@@ -1265,4 +1265,47 @@ class ParaphraseAttempt(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     person = relationship("Person", backref="paraphrase_attempts")
-    __table_args__ = (UniqueConstraint("person_id", "date", name="uq_daily_log_person_date"),)
+
+
+class GapFillAttempt(Base):
+    """One vocab gap-fill attempt — word form and/or preposition."""
+    __tablename__ = "gap_fill_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id", ondelete="CASCADE"), nullable=False, index=True)
+    word_id = Column(Integer, ForeignKey("dictionary_words.id", ondelete="SET NULL"), nullable=True)
+    word = Column(String(200), nullable=False)
+    gap_type = Column(String(30), nullable=False)        # word_form_only | preposition_only | both
+    sentence = Column(Text, nullable=False)              # gapped sentence as shown to user
+    word_form_answer = Column(String(100), nullable=True)
+    word_form_distractor = Column(String(100), nullable=True)
+    word_form_response = Column(String(100), nullable=True)
+    word_form_correct = Column(Boolean, nullable=True)
+    preposition_answer = Column(String(50), nullable=True)
+    preposition_response = Column(String(50), nullable=True)
+    preposition_correct = Column(Boolean, nullable=True)
+    explanation = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    person = relationship("Person", backref="gap_fill_attempts")
+
+
+class MiniBuildAttempt(Base):
+    """Mini intro drill: 2-sentence intro using required vocab words."""
+    __tablename__ = "mini_build_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id", ondelete="CASCADE"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    question_type = Column(String(50), nullable=True)
+    required_words = Column(JSON, nullable=True)         # list of {"word": str, "definition": str}
+    response = Column(Text, nullable=False)
+    paraphrase_score = Column(Integer, nullable=True)    # 0-3
+    vocab_score = Column(Integer, nullable=True)         # 0-2
+    position_score = Column(Integer, nullable=True)      # 0-2
+    total_score = Column(Integer, nullable=True)         # 0-7
+    feedback = Column(Text, nullable=True)
+    model_answer = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    person = relationship("Person", backref="mini_build_attempts")
