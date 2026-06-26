@@ -1269,13 +1269,24 @@ def send_weekly_review(self):
                 models.Goal.status == "active",
             ).all()
 
-            # This week's blocks
-            blocks = db.query(models.TimeBlock).filter(
-                models.TimeBlock.person_id == person.id,
-                models.TimeBlock.date >= week_start,
-                models.TimeBlock.date <= today,
-                models.TimeBlock.deleted == False,
-            ).all()
+            # This week's blocks (excluding frozen days)
+            frozen_this_week = {
+                row.date
+                for row in db.query(models.FrozenDay).filter(
+                    models.FrozenDay.person_id == person.id,
+                    models.FrozenDay.date >= week_start,
+                    models.FrozenDay.date <= today,
+                ).all()
+            }
+            blocks = [
+                b for b in db.query(models.TimeBlock).filter(
+                    models.TimeBlock.person_id == person.id,
+                    models.TimeBlock.date >= week_start,
+                    models.TimeBlock.date <= today,
+                    models.TimeBlock.deleted == False,
+                ).all()
+                if b.date not in frozen_this_week
+            ]
 
             total_b = len(blocks)
             done_b  = sum(1 for b in blocks if b.is_completed)

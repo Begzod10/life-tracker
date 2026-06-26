@@ -226,16 +226,27 @@ def compute_weekly_stats(
     one Tashkent-local Monday→Sunday window. Pure DB calls — no router/HTTP.
     """
     week_end = week_start + timedelta(days=6)
-    blocks = (
-        db.query(models.TimeBlock)
-        .filter(
-            models.TimeBlock.person_id == person.id,
-            models.TimeBlock.deleted == False,  # noqa: E712
-            models.TimeBlock.date >= week_start,
-            models.TimeBlock.date <= week_end,
+    frozen_dates: set = {
+        row.date
+        for row in db.query(models.FrozenDay).filter(
+            models.FrozenDay.person_id == person.id,
+            models.FrozenDay.date >= week_start,
+            models.FrozenDay.date <= week_end,
+        ).all()
+    }
+    blocks = [
+        b for b in (
+            db.query(models.TimeBlock)
+            .filter(
+                models.TimeBlock.person_id == person.id,
+                models.TimeBlock.deleted == False,  # noqa: E712
+                models.TimeBlock.date >= week_start,
+                models.TimeBlock.date <= week_end,
+            )
+            .all()
         )
-        .all()
-    )
+        if b.date not in frozen_dates
+    ]
 
     total_blocks     = len(blocks)
     completed_blocks = sum(1 for b in blocks if b.is_completed)
@@ -290,6 +301,14 @@ def compute_weekly_stats(
     streak = 0
     cursor = today
     horizon = today - timedelta(days=90)
+    frozen_streak: set = {
+        row.date
+        for row in db.query(models.FrozenDay).filter(
+            models.FrozenDay.person_id == person.id,
+            models.FrozenDay.date >= horizon,
+            models.FrozenDay.date <= today,
+        ).all()
+    }
     seen_dates: set[date] = set()
     streak_rows = (
         db.query(models.TimeBlock.date)
@@ -301,7 +320,8 @@ def compute_weekly_stats(
         ).all()
     )
     for (d,) in streak_rows:
-        seen_dates.add(d)
+        if d not in frozen_streak:
+            seen_dates.add(d)
     while cursor in seen_dates:
         streak += 1
         cursor -= timedelta(days=1)
