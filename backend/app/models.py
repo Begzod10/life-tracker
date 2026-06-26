@@ -656,6 +656,20 @@ class TimeBlock(Base):
     task = relationship("Task", backref="time_blocks")
 
 
+class FrozenDay(Base):
+    """A date whose timetable blocks are locked from create/edit/delete."""
+    __tablename__ = "frozen_days"
+
+    id        = Column(Integer, primary_key=True, index=True)
+    person_id = Column(Integer, ForeignKey("person.id"), nullable=False)
+    date      = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("person_id", "date", name="uq_frozen_day_person_date"),)
+
+    person = relationship("Person")
+
+
 class CategoryBudget(Base):
     """Weekly hour target per timetable category."""
     __tablename__ = "category_budgets"

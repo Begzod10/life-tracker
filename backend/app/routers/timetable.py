@@ -11,6 +11,21 @@ from app.dependencies import get_current_user
 router = APIRouter(prefix="/timetable", tags=["timetable"])
 
 
+def _is_day_frozen(db: Session, person_id: int, day: date) -> bool:
+    return db.query(models.FrozenDay).filter(
+        models.FrozenDay.person_id == person_id,
+        models.FrozenDay.date == day,
+    ).first() is not None
+
+
+def _require_day_unfrozen(db: Session, person_id: int, day: date) -> None:
+    if _is_day_frozen(db, person_id, day):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=f"Day {day} is frozen. Unfreeze it first to make changes.",
+        )
+
+
 @router.get("/", response_model=List[schemas.TimeBlock])
 def get_time_blocks(
     date_from: Optional[date] = Query(None),
@@ -28,6 +43,68 @@ def get_time_blocks(
     if date_to:
         q = q.filter(models.TimeBlock.date <= date_to)
     return q.order_by(models.TimeBlock.date, models.TimeBlock.start_time).all()
+
+
+# ── Freeze / Unfreeze ─────────────────────────────────────────────────────────
+
+@router.get("/frozen-days")
+def get_frozen_days(
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Return list of frozen date strings for the current user."""
+    q = db.query(models.FrozenDay).filter(models.FrozenDay.person_id == current_user.id)
+    if date_from:
+        q = q.filter(models.FrozenDay.date >= date_from)
+    if date_to:
+        q = q.filter(models.FrozenDay.date <= date_to)
+    return [str(r.date) for r in q.all()]
+
+
+@router.post("/freeze")
+def freeze_day(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Freeze a day — blocks create/update/delete on all its time blocks."""
+    date_str = body.get("date")
+    if not date_str:
+        raise HTTPException(status_code=400, detail="date is required")
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    existing = db.query(models.FrozenDay).filter(
+        models.FrozenDay.person_id == current_user.id,
+        models.FrozenDay.date == target,
+    ).first()
+    if existing:
+        return {"frozen": True, "date": date_str}
+
+    db.add(models.FrozenDay(person_id=current_user.id, date=target))
+    db.commit()
+    return {"frozen": True, "date": date_str}
+
+
+@router.delete("/freeze/{frozen_date}")
+def unfreeze_day(
+    frozen_date: date,
+    db: Session = Depends(get_db),
+    current_user: models.Person = Depends(get_current_user),
+):
+    """Unfreeze a day — restores full create/update/delete access."""
+    row = db.query(models.FrozenDay).filter(
+        models.FrozenDay.person_id == current_user.id,
+        models.FrozenDay.date == frozen_date,
+    ).first()
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"frozen": False, "date": str(frozen_date)}
 
 
 @router.get("/stats")
@@ -175,6 +252,7 @@ def create_time_block(
     current_user: models.Person = Depends(get_current_user),
 ):
     """Create a new time block."""
+    _require_day_unfrozen(db, current_user.id, block.date)
     if block.start_time >= block.end_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -203,6 +281,8 @@ def update_time_block(
     ).first()
     if not db_block:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
+
+    _require_day_unfrozen(db, current_user.id, db_block.date)
 
     update_data = block.model_dump(exclude_unset=True, by_alias=True)
     start = update_data.get("start_time", db_block.start_time)
@@ -241,6 +321,7 @@ def delete_time_block(
     ).first()
     if not db_block:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time block not found")
+    _require_day_unfrozen(db, current_user.id, db_block.date)
     db_block.deleted = True
     db.commit()
     return {"message": "Time block deleted"}

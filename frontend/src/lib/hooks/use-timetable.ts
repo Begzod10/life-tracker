@@ -195,6 +195,37 @@ export function useCategoryBudgetDelete() {
     })
 }
 
+// ── Frozen Days ───────────────────────────────────────────────────────────────
+
+export function useFrozenDays(dateFrom?: string, dateTo?: string) {
+    const { request } = useHttp()
+    return useQuery<string[]>({
+        queryKey: ['timetable', 'frozen-days', dateFrom ?? '', dateTo ?? ''],
+        queryFn: () => request(API_ENDPOINTS.TIMETABLE.FROZEN_DAYS(dateFrom, dateTo)),
+        staleTime: 0,
+    })
+}
+
+export function useFreezeDay() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (d: string) =>
+            request(API_ENDPOINTS.TIMETABLE.FREEZE_DAY, { method: 'POST', body: { date: d } }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timetable', 'frozen-days'] }),
+    })
+}
+
+export function useUnfreezeDay() {
+    const { request } = useHttp()
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: (d: string) =>
+            request(API_ENDPOINTS.TIMETABLE.UNFREEZE_DAY(d), { method: 'DELETE' }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['timetable', 'frozen-days'] }),
+    })
+}
+
 // ── Bulk Reschedule ──────────────────────────────────────────────────────────
 
 export function useBulkReschedule() {

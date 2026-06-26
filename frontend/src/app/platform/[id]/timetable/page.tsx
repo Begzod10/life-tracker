@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
     Plus, ChevronLeft, ChevronRight, Check, Trash2, Clock,
     Loader2, Link as LinkIcon, X, Search, RefreshCw, BarChart3, BarChart2,
-    AlertTriangle, CheckCircle2, Pencil,
+    AlertTriangle, CheckCircle2, Pencil, Lock, Unlock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -23,6 +23,9 @@ import {
     useTimeBlockUpdate,
     useTimeBlockDelete,
     useTimeBlockToggle,
+    useFrozenDays,
+    useFreezeDay,
+    useUnfreezeDay,
     type TimeBlock,
     type TimeBlockPayload,
 } from '@/lib/hooks/use-timetable'
@@ -419,8 +422,8 @@ function BlockForm({ initial, personId, onSubmit, onCancel, isLoading, existingB
 }
 
 // ─── TimeBlockCard ────────────────────────────────────────────────────────────
-function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
-    block: TimeBlock; taskTitle?: string
+function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle, frozen }: {
+    block: TimeBlock; taskTitle?: string; frozen?: boolean
     onEdit: (b: TimeBlock) => void; onDelete: (b: TimeBlock) => void; onToggle: (b: TimeBlock) => void
 }) {
     const cat    = getCat(block.category)
@@ -445,7 +448,7 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
                     : isMissed
                         ? 'bg-red-500/10 border-red-500/30'
                         : `bg-gradient-to-br ${cat.from} ${cat.to} ${cat.border}`}`}
-            onClick={() => onEdit(block)}>
+            onClick={() => !frozen && onEdit(block)}>
             <div className="flex items-start justify-between gap-1 h-full">
                 <div className="flex-1 min-w-0">
                     <p className={`font-semibold truncate leading-tight ${isShort ? 'text-xs' : 'text-sm'} ${block.is_completed ? 'line-through text-white/35' : isMissed ? 'text-red-300' : 'text-white'}`}>
@@ -465,15 +468,17 @@ function TimeBlockCard({ block, taskTitle, onEdit, onDelete, onToggle }: {
                     )}
                 </div>
                 <div className="flex gap-0.5 transition-opacity shrink-0 opacity-0 group-hover:opacity-100">
-                    {/* Toggle (mark done) always allowed */}
+                    {/* Toggle (mark done) always allowed, even on frozen days */}
                     <button onClick={e => { e.stopPropagation(); onToggle(block) }}
                         className={`p-1 rounded-lg transition-colors ${block.is_completed ? 'text-emerald-400 bg-emerald-500/15' : 'text-white/35 hover:text-emerald-400 hover:bg-emerald-500/15'}`}>
                         <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={e => { e.stopPropagation(); onEdit(block) }} className="p-1 rounded-lg text-white/35 hover:text-indigo-400 hover:bg-indigo-500/15 transition-colors">
-                        <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    {!isPast && (
+                    {!frozen && (
+                        <button onClick={e => { e.stopPropagation(); onEdit(block) }} className="p-1 rounded-lg text-white/35 hover:text-indigo-400 hover:bg-indigo-500/15 transition-colors">
+                            <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    {!frozen && !isPast && (
                         <button onClick={e => { e.stopPropagation(); onDelete(block) }} className="p-1 rounded-lg text-white/35 hover:text-red-400 hover:bg-red-500/15 transition-colors">
                             <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -521,23 +526,30 @@ function CurrentTimeIndicator({ day }: { day: string }) {
 }
 
 // ─── Week Strip ───────────────────────────────────────────────────────────────
-function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d: string) => void }) {
+function WeekStrip({ currentDay, onSelect, frozenDays }: { currentDay: string; onSelect: (d: string) => void; frozenDays?: string[] }) {
     const parsed = parseISO(currentDay)
     const weekStart = startOfWeek(parsed, { weekStartsOn: 1 })
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+    const frozenSet = new Set(frozenDays ?? [])
 
     return (
         <div className="flex gap-1">
             {days.map(d => {
-                const key   = format(d, 'yyyy-MM-dd')
-                const isAct = isSameDay(d, parsed)
-                const isTod = isToday(d)
+                const key     = format(d, 'yyyy-MM-dd')
+                const isAct   = isSameDay(d, parsed)
+                const isTod   = isToday(d)
+                const isFrozen = frozenSet.has(key)
                 return (
                     <button key={key} onClick={() => onSelect(key)}
-                        className={`flex flex-col items-center px-3 py-2 rounded-xl transition-all text-center min-w-[46px]
+                        className={`relative flex flex-col items-center px-3 py-2 rounded-xl transition-all text-center min-w-[46px]
                             ${isAct ? 'bg-gradient-to-br from-violet-500 to-sky-400 shadow-lg shadow-violet-500/30 text-white' : isTod ? 'bg-white/8 text-white border border-white/15' : 'text-white/40 hover:text-white hover:bg-white/5'}`}>
                         <span className="text-[10px] font-semibold uppercase tracking-wider">{format(d, 'EEE')}</span>
                         <span className={`text-base font-bold leading-tight mt-0.5 ${isAct || isTod ? 'text-white' : ''}`}>{format(d, 'd')}</span>
+                        {isFrozen && (
+                            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-sky-400 rounded-full flex items-center justify-center">
+                                <Lock className="w-1.5 h-1.5 text-white" />
+                            </span>
+                        )}
                     </button>
                 )
             })}
@@ -546,7 +558,7 @@ function WeekStrip({ currentDay, onSelect }: { currentDay: string; onSelect: (d:
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void }) {
+function DaySummary({ blocks, taskMap, onAddNew, frozen }: { blocks: TimeBlock[]; taskMap: Record<number, string>; onAddNew: () => void; frozen?: boolean }) {
     const total     = blocks.length
     const done      = blocks.filter(b => b.is_completed).length
     const missed    = blocks.filter(b => b.is_missed).length
@@ -649,10 +661,12 @@ function DaySummary({ blocks, taskMap, onAddNew }: { blocks: TimeBlock[]; taskMa
                     )}
             </div>
 
-            <button onClick={onAddNew}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white font-semibold text-sm transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40">
-                <Plus className="w-4 h-4" />Add Block
-            </button>
+            {!frozen && (
+                <button onClick={onAddNew}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white font-semibold text-sm transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40">
+                    <Plus className="w-4 h-4" />Add Block
+                </button>
+            )}
         </div>
     )
 }
@@ -740,6 +754,19 @@ export default function TimetablePage() {
     const deleteBlock = useTimeBlockDelete()
     const toggleBlock = useTimeBlockToggle()
 
+    const parsedDay  = parseISO(currentDay)
+    const weekStart  = format(startOfWeek(parsedDay, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    const weekEndStr = format(addDays(startOfWeek(parsedDay, { weekStartsOn: 1 }), 6), 'yyyy-MM-dd')
+    const { data: frozenDays = [] } = useFrozenDays(weekStart, weekEndStr)
+    const freezeDay   = useFreezeDay()
+    const unfreezeDay = useUnfreezeDay()
+    const isFrozen    = frozenDays.includes(currentDay)
+
+    const handleToggleFreeze = () => {
+        if (isFrozen) unfreezeDay.mutate(currentDay)
+        else freezeDay.mutate(currentDay)
+    }
+
     const taskMap = useMemo(() =>
         Object.fromEntries((tasks as TaskOption[]).map(t => [t.id, t.name])), [tasks])
 
@@ -787,7 +814,6 @@ export default function TimetablePage() {
         setEditingBlock(null)
     }
 
-    const parsedDay  = parseISO(currentDay)
     const isTodayDay = isToday(parsedDay)
     const [preStart, preEnd] = (clickedTime ?? '__').split('__')
 
@@ -846,7 +872,7 @@ export default function TimetablePage() {
                                 </button>
                             )}
                         </div>
-                        <WeekStrip currentDay={currentDay} onSelect={setCurrentDay} />
+                        <WeekStrip currentDay={currentDay} onSelect={setCurrentDay} frozenDays={frozenDays} />
                     </div>
                 </div>
 
@@ -858,6 +884,32 @@ export default function TimetablePage() {
                     onSchedule={handleSuggestTask}
                 />
 
+                {/* ── Frozen Banner ── */}
+                <AnimatePresence>
+                    {isFrozen && (
+                        <motion.div
+                            key="frozen-banner"
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-sky-500/30 bg-sky-500/8 mb-5"
+                        >
+                            <Lock className="w-4 h-4 text-sky-400 shrink-0" />
+                            <div className="flex-1">
+                                <span className="text-sm font-semibold text-sky-300">Day is frozen</span>
+                                <span className="text-sm text-sky-400/60 ml-2">Add, edit, and delete are disabled. You can still mark blocks as done.</span>
+                            </div>
+                            <button
+                                onClick={handleToggleFreeze}
+                                disabled={unfreezeDay.isPending}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-semibold hover:bg-sky-500/25 transition-all disabled:opacity-50"
+                            >
+                                <Unlock className="w-3 h-3" />Unfreeze
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
                 {/* ── Body ── */}
                 <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5 items-start">
 
@@ -867,12 +919,28 @@ export default function TimetablePage() {
                         <div className="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-white/6 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 text-xs text-white/35 min-w-0">
                                 <Clock className="w-3.5 h-3.5 shrink-0" />
-                                <span className="truncate">Click timeline to add a block</span>
+                                <span className="truncate">{isFrozen ? 'Day is frozen — unfreeze to edit' : 'Click timeline to add a block'}</span>
                             </div>
-                            <button onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
-                                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white text-xs font-semibold transition-all shadow-md shadow-violet-500/30 shrink-0">
-                                <Plus className="w-3.5 h-3.5" />Add
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    onClick={handleToggleFreeze}
+                                    disabled={freezeDay.isPending || unfreezeDay.isPending}
+                                    title={isFrozen ? 'Unfreeze day' : 'Freeze day'}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-50
+                                        ${isFrozen
+                                            ? 'border-sky-500/40 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25'
+                                            : 'border-white/10 bg-white/5 text-white/45 hover:text-white hover:border-white/20'}`}
+                                >
+                                    {isFrozen ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                    {isFrozen ? 'Unfreeze' : 'Freeze'}
+                                </button>
+                                {!isFrozen && (
+                                    <button onClick={() => { setClickedTime(null); setIsCreateOpen(true) }}
+                                        className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 text-white text-xs font-semibold transition-all shadow-md shadow-violet-500/30">
+                                        <Plus className="w-3.5 h-3.5" />Add
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="px-1.5 sm:px-4 py-3 sm:py-4 overflow-y-auto max-h-[calc(100vh-240px)]">
@@ -881,7 +949,7 @@ export default function TimetablePage() {
                                 : (
                                     <div className="relative" style={{ height: TOTAL_HOURS * PX_PER_HOUR }}>
                                         <TimelineRuler />
-                                        <div ref={timelineRef} className="absolute inset-0 ml-[48px] sm:ml-[74px] cursor-crosshair" onClick={handleTimelineClick} />
+                                        <div ref={timelineRef} className={`absolute inset-0 ml-[48px] sm:ml-[74px] ${isFrozen ? 'cursor-not-allowed' : 'cursor-crosshair'}`} onClick={isFrozen ? undefined : handleTimelineClick} />
                                         <div className="absolute inset-0 ml-[48px] sm:ml-[74px] pointer-events-none">
                                             <CurrentTimeIndicator day={currentDay} />
                                         </div>
@@ -890,6 +958,7 @@ export default function TimetablePage() {
                                                 {blocks.map(block => (
                                                     <div key={block.id} className="pointer-events-auto">
                                                         <TimeBlockCard block={block} taskTitle={block.task_id ? taskMap[block.task_id] : undefined}
+                                                            frozen={isFrozen}
                                                             onEdit={setEditingBlock} onDelete={b => deleteBlock.mutateAsync({ id: b.id, date: b.date })}
                                                             onToggle={b => toggleBlock.mutateAsync({ id: b.id, date: b.date })} />
                                                     </div>
@@ -902,7 +971,7 @@ export default function TimetablePage() {
                     </div>
 
                     {/* Sidebar */}
-                    <DaySummary blocks={blocks} taskMap={taskMap} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
+                    <DaySummary blocks={blocks} taskMap={taskMap} frozen={isFrozen} onAddNew={() => { setClickedTime(null); setIsCreateOpen(true) }} />
                 </div>
 
             {/* Create Modal */}
@@ -918,8 +987,8 @@ export default function TimetablePage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Edit Modal */}
-            <Dialog open={!!editingBlock} onOpenChange={v => { if (!v) { setEditingBlock(null); setPropagateCategory(false) } }}>
+            {/* Edit Modal — suppressed when day is frozen */}
+            <Dialog open={!!editingBlock && !isFrozen} onOpenChange={v => { if (!v) { setEditingBlock(null); setPropagateCategory(false) } }}>
                 <DialogContent className="bg-[#13131f] border border-white/10 text-white max-w-md rounded-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-white font-semibold">Edit Time Block</DialogTitle>

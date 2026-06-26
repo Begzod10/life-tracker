@@ -390,6 +390,15 @@ export const API_ENDPOINTS = {
         GENERATE_CONCLUSION: `${API_URL}/timetable/conclusions/generate`,
         AUTO_SCHEDULE: (goalId: string | number) => `${API_URL}/timetable/auto-schedule/${goalId}`,
         BULK_RESCHEDULE: `${API_URL}/timetable/bulk-reschedule`,
+        FROZEN_DAYS: (dateFrom?: string, dateTo?: string) => {
+            const params = new URLSearchParams()
+            if (dateFrom) params.append('date_from', dateFrom)
+            if (dateTo) params.append('date_to', dateTo)
+            const qs = params.toString()
+            return `${API_URL}/timetable/frozen-days${qs ? `?${qs}` : ''}`
+        },
+        FREEZE_DAY: `${API_URL}/timetable/freeze`,
+        UNFREEZE_DAY: (d: string) => `${API_URL}/timetable/freeze/${d}`,
         CATEGORY_BUDGETS: `${API_URL}/category-budgets/`,
         CATEGORY_BUDGET: (category: string) => `${API_URL}/category-budgets/${encodeURIComponent(category)}`,
     },
