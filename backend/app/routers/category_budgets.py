@@ -23,13 +23,24 @@ def get_budgets(
         models.CategoryBudget.person_id == current_user.id,
     ).all()
 
-    # Compute actual hours this week per category
-    blocks = db.query(models.TimeBlock).filter(
-        models.TimeBlock.person_id == current_user.id,
-        models.TimeBlock.date >= week_start,
-        models.TimeBlock.date <= today,
-        models.TimeBlock.deleted == False,
-    ).all()
+    # Compute actual hours this week per category (excluding frozen days)
+    frozen_this_week = {
+        row.date
+        for row in db.query(models.FrozenDay).filter(
+            models.FrozenDay.person_id == current_user.id,
+            models.FrozenDay.date >= week_start,
+            models.FrozenDay.date <= today,
+        ).all()
+    }
+    blocks = [
+        b for b in db.query(models.TimeBlock).filter(
+            models.TimeBlock.person_id == current_user.id,
+            models.TimeBlock.date >= week_start,
+            models.TimeBlock.date <= today,
+            models.TimeBlock.deleted == False,
+        ).all()
+        if b.date not in frozen_this_week
+    ]
 
     actual: dict[str, float] = defaultdict(float)
     for b in blocks:
