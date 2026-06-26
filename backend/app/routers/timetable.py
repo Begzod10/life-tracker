@@ -128,12 +128,24 @@ def get_timetable_stats(
         date_from = today - timedelta(weeks=weeks)
         date_to = today + timedelta(weeks=weeks)
 
-    blocks = db.query(models.TimeBlock).filter(
-        models.TimeBlock.person_id == current_user.id,
-        models.TimeBlock.deleted == False,
-        models.TimeBlock.date >= date_from,
-        models.TimeBlock.date <= date_to,
-    ).all()
+    frozen_dates = {
+        row.date
+        for row in db.query(models.FrozenDay).filter(
+            models.FrozenDay.person_id == current_user.id,
+            models.FrozenDay.date >= date_from,
+            models.FrozenDay.date <= date_to,
+        ).all()
+    }
+
+    blocks = [
+        b for b in db.query(models.TimeBlock).filter(
+            models.TimeBlock.person_id == current_user.id,
+            models.TimeBlock.deleted == False,
+            models.TimeBlock.date >= date_from,
+            models.TimeBlock.date <= date_to,
+        ).all()
+        if b.date not in frozen_dates
+    ]
 
     def duration_hours(b) -> float:
         def to_min(t) -> int:
