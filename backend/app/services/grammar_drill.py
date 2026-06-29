@@ -79,12 +79,19 @@ def generate_drill_pairs(
                 ],
                 "temperature": 0.85,
                 "max_tokens": 1400,
-                "response_format": {"type": "json_object"},
             },
             timeout=28.0,
         )
         resp.raise_for_status()
-        raw: dict = json.loads(resp.json()["choices"][0]["message"]["content"])
+        content = resp.json()["choices"][0]["message"]["content"]
+        # Strip markdown code fences if the model wraps JSON in ```json ... ```
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("```", 2)[1]
+            if stripped.startswith("json"):
+                stripped = stripped[4:]
+            stripped = stripped.rsplit("```", 1)[0]
+        raw: dict = json.loads(stripped)
     except Exception as exc:
         _log.warning("grammar_drill AI generation failed (%s): %s", category, exc)
         return {}

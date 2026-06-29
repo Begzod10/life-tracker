@@ -822,27 +822,28 @@ export default function ArticleProfilePage() {
                 </AnimatePresence>
 
                 <div className="max-w-2xl mx-auto">
-                    {/* Top bar */}
-                    <div className="flex items-center justify-between mb-6 gap-3">
-                        <motion.button
-                            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-                            onClick={back}
-                            className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm shrink-0"
-                        >
-                            <ArrowLeft className="w-4 h-4" /> Back
-                        </motion.button>
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                            <ReadingToolbar
-                                fontSize={fontSize}
-                                onIncrease={increase}
-                                onDecrease={decrease}
-                                quickTarget={quickTarget}
-                                onTargetToggle={() => setFolderPickerOpen(true)}
-                            />
-                        </motion.div>
-                    </div>
+                    {/* Sticky header: back nav + source card */}
+                    <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 bg-[#0a0a14]/95 backdrop-blur-sm border-b border-white/[0.06]">
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between pt-4 pb-4 gap-3">
+                            <motion.button
+                                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                                onClick={back}
+                                className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm shrink-0"
+                            >
+                                <ArrowLeft className="w-4 h-4" /> Back
+                            </motion.button>
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                                <ReadingToolbar
+                                    fontSize={fontSize}
+                                    onIncrease={increase}
+                                    onDecrease={decrease}
+                                    quickTarget={quickTarget}
+                                    onTargetToggle={() => setFolderPickerOpen(true)}
+                                />
+                            </motion.div>
+                        </div>
 
-                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                         {/* Source profile card */}
                         <div className="flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-white/[0.03]">
                             <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white ${avatarBg}`}>
@@ -864,7 +865,9 @@ export default function ArticleProfilePage() {
                                 {item.category_label}
                             </span>
                         </div>
+                    </div>
 
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pt-6">
                         {/* Hero image */}
                         {item.image_url && (
                             // eslint-disable-next-line @next/next/no-img-element

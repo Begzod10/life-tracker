@@ -688,11 +688,10 @@ def build_question(
                 "correct_answer": None}
 
     if exercise_type == "error_correction":
-        # Use word's stored examples first; fall back to category templates in grammar drill.
+        # Use word's stored examples only — static fallback templates removed because
+        # they don't contain the target word and make every word in a session share
+        # the same sentence. AI generation in exercises.py handles the no-examples case.
         source = examples[0] if examples else None
-        if source is None and grammar_focus:
-            category = grammar_focus[0]
-            source = _DRILL_FALLBACK_SENTENCES.get(category, _DRILL_FALLBACK_SENTENCES["articles"])
         if source:
             category = grammar_focus[0] if grammar_focus else None
             errored = _inject_error(source, position, category)
