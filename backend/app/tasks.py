@@ -1192,8 +1192,18 @@ def retry_undelivered_conclusions(self):
     failed = 0
     try:
         TASHKENT = timedelta(hours=5)
-        today = (datetime.utcnow() + TASHKENT).date()
+        now_tashkent = datetime.utcnow() + TASHKENT
+        today = now_tashkent.date()
         cutoff = today - timedelta(days=1)
+
+        # Don't retry today's conclusion before the scheduled send time (22:30 Tashkent).
+        # The scheduled task handles today; retry only fixes missed past-day deliveries
+        # or today after 22:30 if the scheduled task's Telegram call failed.
+        CONCLUSION_HOUR = 22
+        CONCLUSION_MINUTE = 30
+        today_eligible = now_tashkent.hour > CONCLUSION_HOUR or (
+            now_tashkent.hour == CONCLUSION_HOUR and now_tashkent.minute >= CONCLUSION_MINUTE
+        )
 
         rows = (
             db.query(models.DailyConclusion)
@@ -1205,6 +1215,9 @@ def retry_undelivered_conclusions(self):
         )
 
         for row in rows:
+            # Skip today's row if it's not yet time for the scheduled conclusion send
+            if row.date == today and not today_eligible:
+                continue
             person = db.query(models.Person).filter(models.Person.id == row.person_id).first()
             if not person:
                 continue

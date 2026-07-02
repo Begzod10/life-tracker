@@ -417,7 +417,7 @@ def trigger_conclusion(
     import logging
     log = logging.getLogger(__name__)
     try:
-        result = generate_conclusion_for_person(db, current_user, today, force=force)
+        result = generate_conclusion_for_person(db, current_user, today, force=force, send_telegram=False)
     except Exception as e:
         log.exception("trigger_conclusion failed for person %s", current_user.id)
         db.rollback()
