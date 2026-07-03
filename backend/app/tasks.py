@@ -1506,6 +1506,18 @@ def carryover_missed_tasks(self):
                     ).first()
                     if existing:
                         continue
+                else:
+                    # No task_id — deduplicate by title so recurring blocks without a
+                    # linked task don't stack a new carry-over every night they're missed.
+                    bare_title = block.title.lstrip("↩ ")
+                    existing = db.query(models.TimeBlock).filter(
+                        models.TimeBlock.person_id == person.id,
+                        models.TimeBlock.date == tomorrow,
+                        models.TimeBlock.deleted == False,
+                        models.TimeBlock.title.in_([bare_title, f"↩ {bare_title}"]),
+                    ).first()
+                    if existing:
+                        continue
 
                 dur = block.end_time and block.start_time and (
                     _to_minutes(block.end_time) - _to_minutes(block.start_time)
