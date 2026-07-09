@@ -10,284 +10,32 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
-import string
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services.books_helpers import (
+    _DEDUP_STRIP,
+    _extract_pdf_metadata,
+    _highlight_counts_for,
+    _lookup_definition,
+    _norm_word_for_dedup,
+    _own_book_or_404,
+    _serialize_book,
+    _serialize_highlight,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/books", tags=["books"])
-
-# Strip-set used for "is this the same word?" comparison. The stored word
-# keeps its original form (commas, parentheses, etc.) — this is purely for
-# dedup. Includes whitespace so trailing newlines from PDF selections don't
-# cause false misses.
-_DEDUP_STRIP = string.punctuation + string.whitespace
-
-
-def _norm_word_for_dedup(s: str) -> str:
-    """Lowercase, trim, and strip leading/trailing punctuation+whitespace."""
-    return (s or "").strip().strip(_DEDUP_STRIP).lower()
-
-
-def _ai_word_lookup(word: str, context: Optional[str] = None) -> tuple[str, str]:
-    """Return (definition, translation) for an English word or phrase using
-    the AI provider chain in ``app.tasks``. Tries up to two passes — the
-    second pass strips trailing punctuation/quotes and asks the model for
-    just plain prose, which is what saves multi-word phrases like
-    "plow through water." when the first JSON attempt comes back empty.
-    Returns ("", "") if the model is unconfigured or every attempt fails.
-    """
-    try:
-        from app.tasks import _generate_text  # local import to avoid cycle
-    except Exception:
-        return ("", "")
-
-    cleaned = (word or "").strip().strip(_DEDUP_STRIP)
-    safe_word = cleaned.replace('"', "'") or (word or "").strip()
-    if not safe_word:
-        return ("", "")
-    ctx_line = f'\nContext: "{context.strip()}"' if context and context.strip() else ""
-
-    # ── Attempt 1: strict JSON ─────────────────────────────────────────
-    prompt_json = (
-        f'Generate a dictionary entry for the English word/phrase: "{safe_word}"'
-        f'{ctx_line}\n\n'
-        'Rules:\n'
-        '- If the word is a common noun/verb/adj, give a normal definition + translation.\n'
-        '- If it is a proper noun (person, place, brand), the definition should '
-        "name what it refers to in <= 12 words; translation should just be a "
-        "transliteration in Uzbek + Russian (e.g. \"Bogues / Богус\").\n"
-        '- If it is a multi-word phrase, define the phrase itself, not the '
-        'first word — e.g. "plow through water" -> a definition for the '
-        'whole phrase.\n'
-        '- Drop trailing punctuation from the headword when reasoning, but '
-        'keep the answer concise.\n\n'
-        'Return ONLY a single JSON object, no prose:\n'
-        '{\n'
-        '  "definition": "<one short English sentence, under 22 words>",\n'
-        '  "translation": "<Uzbek translation> / <Russian translation>"\n'
-        '}'
-    )
-    definition, translation = _try_ai_json(prompt_json, safe_word)
-    if definition:
-        return (definition, translation)
-
-    # ── Attempt 2: plain-prose fallback ────────────────────────────────
-    # Some models choke on phrases when forced to emit strict JSON. Asking
-    # for one short sentence with no formatting is much more reliable for
-    # multi-word inputs, and we still get a usable definition (translation
-    # may be empty but the placeholder bug — empty definition — is fixed).
-    prompt_plain = (
-        f'Define the English word or phrase "{safe_word}" in one short '
-        f'sentence, under 22 words. Reply with the definition only — '
-        f'no quotes, no labels, no JSON.{ctx_line}'
-    )
-    try:
-        plain = _generate_text(prompt_plain, max_tokens=80, temperature=0.2)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_ai_word_lookup: plain-prose fallback failed: %s", exc)
-        return ("", "")
-    plain = (plain or "").strip().strip('"').strip("'").strip()
-    if plain and len(plain) >= 4:
-        return (plain, "")
-    return ("", "")
-
-
-def _try_ai_json(prompt: str, word: str) -> tuple[str, str]:
-    """Run one JSON-formatted AI call and parse the response. Centralized
-    so the retry path in :func:`_ai_word_lookup` doesn't duplicate the
-    parsing logic. Returns ("", "") on any failure.
-    """
-    try:
-        from app.tasks import _generate_text  # local import to avoid cycle
-    except Exception:
-        return ("", "")
-    try:
-        text = _generate_text(prompt, max_tokens=180, temperature=0.3)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_try_ai_json: AI call failed for %r: %s", word, exc)
-        return ("", "")
-    if not text:
-        return ("", "")
-
-    import json
-    # Models occasionally wrap the JSON in code fences or commentary.
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return ("", "")
-    try:
-        data = json.loads(match.group(0))
-    except Exception:  # noqa: BLE001
-        return ("", "")
-
-    definition = str(data.get("definition") or "").strip()
-    translation = str(data.get("translation") or "").strip()
-    if not definition:
-        logger.info(
-            "_try_ai_json: parsed but definition empty for %r — raw=%r",
-            word,
-            text[:200],
-        )
-    return (definition, translation)
-
-
-# Wikimedia's REST APIs now reject requests with no User-Agent (HTTP 403),
-# per their robot policy at https://w.wiki/4wJS. Their guidance is to send
-# an identifying UA that includes a contact URL so they can reach you when
-# something breaks. dictionaryapi.dev doesn't require this but accepts it
-# fine, so we send the same UA to every upstream.
-_LOOKUP_USER_AGENT = (
-    "LifeTrackerDictionaryBot/1.0 "
-    "(+https://github.com/Begzod10/life-tracker; contact: rimefara22@gmail.com)"
-)
-
-
-def _http_get_json(url: str, *, timeout: float = 8.0, headers: Optional[dict] = None, attempts: int = 2):
-    """GET ``url`` with one retry on transient failure (timeout / connection
-    reset). Returns the parsed JSON body, or ``None`` if every attempt fails
-    or the body isn't valid JSON. Always sends a polite identifying
-    ``User-Agent`` so upstream filters (Wikimedia, etc.) don't 403 us.
-    Designed so the dictionary fallback chain can't silently drop a word
-    just because one upstream had a network blip.
-    """
-    import requests
-    merged_headers = {"User-Agent": _LOOKUP_USER_AGENT}
-    if headers:
-        merged_headers.update(headers)
-    last_exc: Optional[Exception] = None
-    for attempt in range(max(1, attempts)):
-        try:
-            resp = requests.get(url, timeout=timeout, headers=merged_headers)
-            if resp.status_code != 200:
-                logger.info(
-                    "_http_get_json: %s returned HTTP %s",
-                    url,
-                    resp.status_code,
-                )
-                return None
-            return resp.json()
-        except Exception as exc:  # noqa: BLE001
-            last_exc = exc
-            continue
-    if last_exc is not None:
-        logger.warning("_http_get_json: all attempts failed for %s: %s", url, last_exc)
-    return None
-
-
-def _dictionary_api_lookup(word: str) -> str:
-    """Free English-only fallback when the AI returns nothing. Uses
-    dictionaryapi.dev (no auth, modest rate limits) so common nouns/verbs
-    like "hallmarks" still get a definition. Returns "" on any error or
-    if the API has nothing — never raises.
-    """
-    try:
-        clean = (word or "").strip().strip(_DEDUP_STRIP)
-        if len(clean) < 2:
-            return ""
-        data = _http_get_json(
-            f"https://api.dictionaryapi.dev/api/v2/entries/en/{clean}",
-        )
-        if not isinstance(data, list) or not data:
-            return ""
-        for entry in data:
-            for meaning in (entry.get("meanings") or []):
-                for d in (meaning.get("definitions") or []):
-                    text = (d.get("definition") or "").strip()
-                    if text:
-                        return text
-        return ""
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_dictionary_api_lookup failed for %r: %s", word, exc)
-        return ""
-
-
-def _wiktionary_lookup(word: str) -> str:
-    """Second free fallback using Wiktionary's REST API. Wiktionary has
-    much broader coverage than dictionaryapi.dev — e.g. it knows "dunk"
-    while dictionaryapi.dev returns 404. Strips inline HTML tags from
-    the definition so it renders as plain text in the UI. Returns "" on
-    any error / unknown response shape.
-    """
-    try:
-        clean = (word or "").strip().strip(_DEDUP_STRIP)
-        if len(clean) < 2:
-            return ""
-        data = _http_get_json(
-            f"https://en.wiktionary.org/api/rest_v1/page/definition/{clean}",
-            headers={"Accept": "application/json"},
-        )
-        if data is None:
-            return ""
-        # Successful response is {lang_code: [entries]}. Errors come back
-        # as a flat dict with "type"/"title"/"detail". We only want the
-        # English ("en") entries.
-        if not isinstance(data, dict):
-            return ""
-        entries = data.get("en")
-        if not isinstance(entries, list):
-            return ""
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            for defn in (entry.get("definitions") or []):
-                if not isinstance(defn, dict):
-                    continue
-                raw = (defn.get("definition") or "").strip()
-                if not raw:
-                    continue
-                # Wiktionary embeds inline HTML in definitions: <a>/<i>/<b>/
-                # <span> tags around linked words, and occasionally a whole
-                # <style>…CSS…</style> block injected by MediaWiki's
-                # TemplateStyles extension. Strip whole <style>/<script>
-                # blocks (contents and all), then strip any remaining tags,
-                # so what ships to the UI is clean prose.
-                cleaned = re.sub(
-                    r"<(style|script)[^>]*>.*?</\1>",
-                    "",
-                    raw,
-                    flags=re.IGNORECASE | re.DOTALL,
-                )
-                cleaned = re.sub(r"<[^>]+>", "", cleaned)
-                text = re.sub(r"\s+", " ", cleaned).strip()
-                if text:
-                    return text
-        return ""
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("_wiktionary_lookup failed for %r: %s", word, exc)
-        return ""
-
-
-def _lookup_definition(word: str, context: Optional[str] = None) -> tuple[str, str]:
-    """Run the full definition-fetch chain in priority order:
-        1. AI (OpenAI → Groq) — best at proper nouns + context awareness
-        2. dictionaryapi.dev — common dictionary words
-        3. Wiktionary — broadest coverage incl. slang, plurals, "dunk"
-
-    Returns ``(definition, translation)``. Translation is only ever set
-    by the AI path; the two dictionary APIs are English-only.
-    """
-    ai_definition, ai_translation = _ai_word_lookup(word, context=context)
-    if ai_definition:
-        return (ai_definition, ai_translation)
-    definition = _dictionary_api_lookup(word)
-    if not definition:
-        definition = _wiktionary_lookup(word)
-    return (definition, ai_translation)
-
-
-# ─── Storage ─────────────────────────────────────────────────────────────────
 
 UPLOAD_ROOT = Path(os.environ.get(
     "BOOKS_UPLOAD_DIR",
@@ -308,83 +56,6 @@ def _safe_filename(raw: str) -> str:
     base = os.path.basename(raw or "")
     base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
     return base[:120] or f"book-{uuid.uuid4().hex[:8]}.pdf"
-
-
-# ─── PDF metadata extraction ─────────────────────────────────────────────────
-
-def _extract_pdf_metadata(path: Path) -> dict:
-    """Best-effort title/author/page-count lookup. Falls back to empty strings
-    so a bad PDF still uploads — the user can edit metadata afterwards."""
-    out = {"title": None, "author": None, "total_pages": 0}
-    try:
-        from pypdf import PdfReader
-        reader = PdfReader(str(path))
-        out["total_pages"] = len(reader.pages)
-        meta = reader.metadata or {}
-        title = (meta.title or "").strip() if hasattr(meta, "title") else ""
-        author = (meta.author or "").strip() if hasattr(meta, "author") else ""
-        if title:
-            out["title"] = title
-        if author:
-            out["author"] = author
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("PDF metadata extraction failed for %s: %s", path, exc)
-    return out
-
-
-# ─── Serialization ───────────────────────────────────────────────────────────
-
-def _serialize_book(book: models.Book, highlight_count: int = 0) -> dict:
-    progress = 0
-    if book.total_pages and book.total_pages > 0:
-        progress = round(min(book.current_page, book.total_pages) / book.total_pages * 100)
-    return {
-        "id": book.id,
-        "title": book.title,
-        "author": book.author,
-        "total_pages": book.total_pages,
-        "current_page": book.current_page,
-        "status": book.status,
-        "cover_url": book.cover_url,
-        "isbn": book.isbn,
-        "tags": book.tags,
-        "notes": book.notes,
-        "file_size_bytes": book.file_size_bytes,
-        "last_opened_at": book.last_opened_at,
-        "finished_at": book.finished_at,
-        "created_at": book.created_at,
-        "updated_at": book.updated_at,
-        "progress_percent": progress,
-        "highlight_count": highlight_count,
-        "resume_text": book.resume_text,
-        "resume_page": book.resume_page,
-    }
-
-
-def _own_book_or_404(db: Session, user_id: int, book_id: int) -> models.Book:
-    book = db.query(models.Book).filter(
-        models.Book.id == book_id,
-        models.Book.person_id == user_id,
-        models.Book.deleted == False,
-    ).first()
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return book
-
-
-def _highlight_counts_for(db: Session, user_id: int, book_ids: List[int]) -> dict[int, int]:
-    if not book_ids:
-        return {}
-    rows = (
-        db.query(models.BookHighlight.book_id, func.count(models.BookHighlight.id))
-        .filter(
-            models.BookHighlight.person_id == user_id,
-            models.BookHighlight.book_id.in_(book_ids),
-        )
-        .group_by(models.BookHighlight.book_id)
-        .all()
-    )
-    return {bid: count for bid, count in rows}
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -409,7 +80,6 @@ def list_books(
 
     counts = _highlight_counts_for(db, current_user.id, [b.id for b in books])
 
-    # by_status across ALL books (not just filtered) so the tab badges stay stable
     all_status_rows = (
         db.query(models.Book.status, func.count(models.Book.id))
         .filter(
@@ -459,7 +129,7 @@ async def upload_book(
     try:
         with dest.open("wb") as out:
             while True:
-                chunk = await file.read(1 << 20)  # 1 MiB chunks
+                chunk = await file.read(1 << 20)
                 if not chunk:
                     break
                 bytes_written += len(chunk)
@@ -473,7 +143,7 @@ async def upload_book(
                 out.write(chunk)
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Failed to write uploaded PDF")
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Could not save file") from exc
@@ -539,7 +209,6 @@ def update_book(
 
     book.last_opened_at = datetime.utcnow()
 
-    # Auto-flip status when the user finishes the book.
     if (
         "status" not in data
         and book.total_pages > 0
@@ -551,7 +220,6 @@ def update_book(
     elif data.get("status") == "done" and not book.finished_at:
         book.finished_at = datetime.utcnow()
 
-    # Implicit reading session when current_page moves forward.
     if page_changed and book.current_page > prev_page:
         session_row = models.ReadingSession(
             book_id=book.id,
@@ -603,7 +271,6 @@ def stream_book_file(
     book = _own_book_or_404(db, current_user.id, book_id)
     abs_path = (UPLOAD_ROOT / book.file_path).resolve()
 
-    # Defense-in-depth: refuse paths that climbed outside UPLOAD_ROOT.
     try:
         abs_path.relative_to(UPLOAD_ROOT.resolve())
     except ValueError:
@@ -613,9 +280,6 @@ def stream_book_file(
     if not abs_path.exists():
         raise HTTPException(status_code=404, detail="Book file missing")
 
-    # FileResponse already handles If-Modified-Since + ETag; for PDF.js we
-    # want simple full-content responses with caching turned off so the
-    # viewer never reads a stale prefix.
     return FileResponse(
         path=str(abs_path),
         media_type="application/pdf",
@@ -626,27 +290,6 @@ def stream_book_file(
 
 # ─── Highlights ──────────────────────────────────────────────────────────────
 
-def _serialize_highlight(
-    h: models.BookHighlight,
-    translation: Optional[str] = None,
-    definition: Optional[str] = None,
-) -> dict:
-    return {
-        "id": h.id,
-        "book_id": h.book_id,
-        "page": h.page,
-        "text": h.text,
-        "note": h.note,
-        "kind": h.kind,
-        "color": h.color,
-        "dictionary_word_id": h.dictionary_word_id,
-        "translation": translation,
-        "definition": definition,
-        "source_sentence": h.source_sentence,
-        "created_at": h.created_at,
-    }
-
-
 @router.get("/{book_id}/highlights")
 def list_highlights(
     book_id: int,
@@ -654,9 +297,6 @@ def list_highlights(
     current_user: models.Person = Depends(get_current_user),
 ):
     _own_book_or_404(db, current_user.id, book_id)
-    # Outer-join against DictionaryWord so vocab highlights bring their
-    # English definition + bilingual translation along. Non-vocab highlights
-    # and unlinked rows get null for both.
     rows = (
         db.query(
             models.BookHighlight,
@@ -691,21 +331,11 @@ def create_highlight(
 
     dictionary_word_id: Optional[int] = None
     if payload.save_to_dictionary:
-        # Treat the selection as one vocabulary entry. Use the first
-        # space-trimmed word/phrase under 80 chars; fall back to whole text.
         raw = (payload.text or "").strip()
         token = raw if len(raw) <= 80 else raw.split("\n", 1)[0][:80]
         if not token:
             raise HTTPException(status_code=400, detail="Selection is empty")
 
-        # Look for an existing entry for this user, case-insensitively, across
-        # ALL modules. Two-stage strategy:
-        #   1) Cheap SQL lower() equality — handles the common case fast and
-        #      lets the DB use the (person_id, word) index pair.
-        #   2) On miss, normalize both sides by stripping surrounding
-        #      punctuation/whitespace so "AGILITY," matches an earlier
-        #      saved "agility". Only runs when Stage 1 fails, so it doesn't
-        #      penalize the common path.
         existing = (
             db.query(models.DictionaryWord)
             .filter(
@@ -731,10 +361,6 @@ def create_highlight(
                     None,
                 )
 
-        # A sentence-kind save (phrase selection) is itself a sentence;
-        # otherwise the reader sends the surrounding sentence in
-        # payload.source_sentence. Fall back to whichever is longer so
-        # we always store the strongest available cloze stem.
         sentence_candidate = (payload.source_sentence or "").strip()
         if not sentence_candidate and len((payload.text or "").strip()) > len(token):
             sentence_candidate = (payload.text or "").strip()
@@ -742,9 +368,6 @@ def create_highlight(
 
         if existing:
             dictionary_word_id = existing.id
-            # Populate source columns lazily — if the row was created
-            # before this feature shipped (or via manual add) and the
-            # reader now has a richer sentence/page for it, fill it in.
             updated = False
             if existing.source_book_id is None:
                 existing.source_book_id = book.id
@@ -758,8 +381,6 @@ def create_highlight(
             if updated:
                 db.flush()
         else:
-            # Try AI → dictionaryapi.dev → Wiktionary. dictionaryapi.dev
-            # misses words like "dunk"; Wiktionary catches the long tail.
             ai_definition, ai_translation = _lookup_definition(
                 token, context=payload.note or payload.text
             )
@@ -783,8 +404,6 @@ def create_highlight(
             db.flush()
             dictionary_word_id = word.id
 
-    # Avoid duplicate vocab highlights for the same (book, page, text, word)
-    # — clicking Save twice in the dialog shouldn't pile up rows.
     if payload.kind == "vocab" and dictionary_word_id is not None:
         dup = (
             db.query(models.BookHighlight)
@@ -843,11 +462,6 @@ def refresh_highlight_definition(
     db: Session = Depends(get_db),
     current_user: models.Person = Depends(get_current_user),
 ):
-    """Re-run the AI + dictionary lookup for an existing vocab highlight.
-    Useful when the original save landed on the placeholder definition
-    because the AI was rate-limited / returned junk. Only overwrites when
-    the new lookup actually produces something — never blanks a row.
-    """
     _own_book_or_404(db, current_user.id, book_id)
     hl = (
         db.query(models.BookHighlight)
